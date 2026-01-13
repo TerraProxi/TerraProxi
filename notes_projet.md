@@ -1,319 +1,409 @@
-# 
+# Projet OpenInnov - TerraProxi
 
-## Comment tout s’emboîte (le “lien entre tout”)
+- Serveur Ubuntu chez OVH
+- Enregistrement DNS sur Cloudflare => [terraproxy.fr](<https://dash.cloudflare.com/27bbad26272f997b6ca73887f244d633/terraproxi.fr>)
+- Caddy pour le htpps et routage (pas Nginx)
+- 3 conteneurs via docker-compose: app front, app back (auth, api, gateway), db
+  - back écoute en 3002
+  - front écoute en 80
+- DB PostgreSQL jamais exposée
 
-Le chemin réel quand un user sur téléphone crée un compte
+---
 
-1. Téléphone → https://api.tondomaine
- (TLS Let’s Encrypt)
+# 🌐 Comment tout s’emboîte (le lien réel entre les briques)
 
-2. Reverse proxy reçoit → redirige vers backend (container)
+Quand un utilisateur crée un compte depuis son téléphone :
 
-3. Backend vérifie / crée l’utilisateur → écrit en DB via réseau interne
+```
+Téléphone
+   |
+HTTPS (TLS)
+   |
+gateway.terraproxi.fr   ← Caddy (reverse proxy + TLS)
+   |
+   | (réseau Docker interne)
+   v
+Back (API / Auth / Gateway – port 3002)
+   |
+   | (réseau Docker interne)
+   v
+PostgreSQL (db)
+```
 
-4. DB répond → backend répond au téléphone
+1. Le téléphone appelle `https://gateway.terraproxi.fr`
+2. Caddy reçoit la requête HTTPS
+3. Caddy la transmet au conteneur `back` (port 3002)
+4. Le backend vérifie/crée l’utilisateur
+5. Le backend parle à PostgreSQL via le réseau interne Docker
+6. PostgreSQL répond au backend
+7. Le backend répond au téléphone
 
-Le téléphone ne parle **jamais** à PostgreSQL.
+👉 **Le téléphone ne parle jamais à PostgreSQL. Il n’y a aucune communication externe avec la base :**
 
-## Plan d’actions (étapes & tâches) — version “base” sans fioritures
+- PostgreSQL ne voit jamais Internet
+- Il ne voit que le backend
+- Le backend ne voit que Caddy
+- Caddy ne voit que le monde extérieur
 
-### Étape 1 — Préparer le serveur (on-prem de préférence)
+C’est une architecture en *couches*.
 
-- Installer Linux + Docker + Docker Compose
-- SSH par clés
-- Firewall : ouvrir 443, (80 optionnel), SSH limité IP, tout le reste fermé
+Le serveur OVH a **trois** rôles :
 
-#### 1.1 Installer Docker + Compose
+| Rôle                    | Où                          |
+| ----------------------- | --------------------------- |
+| Point d’entrée Internet | Caddy (443 et 80)           |
+| Logique applicative     | Conteneur `back`            |
+| Données                 | Conteneur `db` (PostgreSQL) |
 
-Sur Ubuntu/Debian (exemple) :
 
-- Mettre le système à jour
-- Installer Docker Engine + plugin compose (ou docker-compose)
+---
 
-Objectif : docker version et docker compose version doivent répondre.
+# 🧱 Architecture réelle
 
-#### 1.2 Sécuriser l’accès SSH
+| Élément           | Rôle                                                     |
+| ----------------- | -------------------------------------------------------- |
+| Cloudflare DNS    | Fait pointer `gateway.terraproxi.fr` vers le serveur OVH |
+| Caddy             | HTTPS + reverse proxy                                    |
+| back (container)  | API + Auth + logique métier                              |
+| front (container) | Site web                                                 |
+| db (container)    | PostgreSQL                                               |
+| Docker network    | Relie back ↔ db de façon privée                          |
 
-- Créer un utilisateur non-root (ex: deploy)
-- Activer l’auth par clé SSH (pas mot de passe)
-- (Option conseillé) Désactiver login root par SSH
+---
 
-Objectif : tu te connectes en ssh deploy@IP avec ta clé.
+# 🚀 Plan d’actions – version **réelle** et **à jour**
 
-#### 1.3 Firewall minimal
+## Étape 1 — Préparer le serveur OVH
 
-Tu veux :
+### 1.1 Mettre à jour
 
-- ouvrir 443/tcp (HTTPS)
-- ouvrir 80/tcp (utile pour Let’s Encrypt HTTP challenge + redirection)
-- ouvrir 22/tcp (SSH) mais restreint à vos IP si possible
-- tout le reste fermé
+Partir connecté au serveur en root : `ssh IpAddress:PortNUmber`
 
-Avec UFW (simple) :
+```bash
+sudo apt update && sudo apt -y upgrade
+```
 
-- ufw allow 80/tcp
-- ufw allow 443/tcp
-- ufw allow from <ton_IP_publique> to any port 22 proto tcp (et idem pour les IP des membres)
-- ufw enable
+Pourquoi : SSH, sudo, ufw, etc. doivent être à jour avant de verrouiller l’accès.
 
-Vérif :
+### 1.2 Créer les utilisateurs
 
-- depuis ton PC : ssh OK
+a) Création des admins :
 
-- depuis Internet : seul 80/443 répondent
+```bash
+adduser gaetan
+adduser duna
+usermod -aG sudo gaetan
+usermod -aG sudo duna
+```
 
-### Étape 2 — DNS OVH
+b) Création des membres (sans sudo) :
 
-Domaine → A record vers l’IP publique du serveur
+```bash
+adduser theo
+adduser mylow
+```
 
-Objectif : ton domaine pointe vers l’IP publique du serveur.
+c) Installation des clés SSH pour les admins
 
-#### 2.1 Créer les enregistrements DNS
+Sur chaque PC admin :
 
-Chez OVH :
+```bash
+ssh-keygen
+ssh-copy-id gaetan@IP_DU_SERVEUR
+ssh-copy-id duna@IP_DU_SERVEUR
+```
 
-- Record A : api → IPV4_DU_SERVEUR (ex: api.tondomaine.fr)
-- (Option) Record A : @ → IPV4_DU_SERVEUR si tu veux aussi tondomaine.fr
-- Attendre propagation (quelques minutes à quelques heures).
+Tester :
 
-Vérif : ping api.tondomaine.fr (ou nslookup) renvoie l’IP.
+```bash
+ssh gaetan@IP_DU_SERVEUR
+sudo whoami
+```
 
-### Étape 3 — HTTPS (obligatoire)
+Doit afficher `root`.
 
-- Déployer Caddy (le plus simple) ou Nginx+certbot
-- Obtenir cert Let’s Encrypt automatiquement
-- Forcer HTTPS
+d) Vérification qu’au moins un admin peut entrer
 
-Étape 3 — HTTPS avec Nginx + Let’s Encrypt (le plus pertinent pour toi)
+Ne pas continuer pas tant que ça ne marche pas.
 
-Tu connais Nginx : très bien.
-Caddy est plus simple car TLS auto, mais Nginx est parfait et très standard.
+Ouvrir un nouveau terminal :
 
-3.1 Installer Nginx
+```bash
+ssh gaetan@IP_DU_SERVEUR
+sudo whoami
+```
 
-Installer Nginx via apt
+Si possible de se connecter → OK.
 
-Démarrer le service
+e) Désactivation de root et des mots de passe
 
-Vérif :
+```bash
+sudo nano /etc/ssh/sshd_config
+```
 
-ouvrir http://api.tondomaine.fr → page Nginx par défaut (ou au moins réponse HTTP)
+Modifier le fichier de configuration avec :
 
-3.2 Installer Certbot (Let’s Encrypt)
+```bash
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+```
 
-Installer certbot + plugin nginx
+Puis :
 
-Lancer la commande certbot pour ton domaine (ex: api.tondomaine.fr)
+```bash
+sudo systemctl restart ssh
+```
 
-Ça va :
+Tester :
 
-obtenir le certificat
+```bash
+ssh gaetan@IP_DU_SERVEUR
+```
 
-configurer Nginx
+Si possible de se connecter → OK.
 
-activer la redirection HTTP→HTTPS si tu le demandes
+### 1.2 Pare-feu minimal
 
-Vérif :
+On n’ouvre que ce qui est nécessaire :
 
-https://api.tondomaine.fr fonctionne
+```bash
+sudo apt -y install ufw
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 22/tcp
+sudo ufw enable
+sudo ufw status
+```
 
-test rapide : SSL Labs (plus tard) ou juste navigateur sans alerte
+6️⃣ Installer et configurer le pare-feu
 
-3.3 Mettre un reverse proxy vers ton backend Docker
+Maintenant que SSH est sûr :
 
-Tu vas créer un vhost Nginx pour :
+sudo apt -y install ufw
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow OpenSSH
+sudo ufw enable
+sudo ufw status
 
-écouter en 443 (cert Let’s Encrypt)
 
-proxy vers http://127.0.0.1:PORT_BACKEND (ex: 3000)
+Test avant de fermer ta session :
 
-Concept :
+ssh gaetan@IP_DU_SERVEUR
 
-Nginx est “porte d’entrée”
+7️⃣ (Optionnel mais recommandé) Restreindre SSH aux IP des admins
 
-le backend écoute en local (ou sur une interface interne) et n’est pas exposé au public
+Quand tu es sûr que tout marche :
 
-À configurer dans Nginx :
+sudo ufw delete allow OpenSSH
+sudo ufw allow from IP_GAETAN to any port 22 proto tcp
+sudo ufw allow from IP_DUNA to any port 22 proto tcp
 
-proxy_pass http://127.0.0.1:3000;
+8️⃣ Droits des membres
 
-ajouter les headers classiques (X-Forwarded-For, X-Forwarded-Proto, etc.)
+Par défaut :
 
-client_max_body_size si besoin
+theo et mylow :
 
-timeouts basiques (optionnel)
+peuvent se connecter en SSH
 
-3.4 Renouvellement auto des certificats
+ne peuvent pas utiliser sudo
 
-Certbot installe généralement un timer systemd automatique.
-Vérif :
+ne peuvent pas installer de logiciels
 
-systemctl list-timers | grep certbot
+ne peuvent pas toucher au firewall
 
-test : certbot renew --dry-run
+Tu peux vérifier :
 
-Conclusion : pour toi, Nginx + Certbot est le plus pertinent car tu maîtrises déjà, et c’est la stack “classique”.
+sudo -l -U theo
 
-### Étape 4 — Déployer l’app (backend) + DB
 
-docker-compose.yml :
+Doit dire qu’il n’a pas de privilèges.
+### 1.3 Création d'utilisateurs
 
-backend
+| Utilisateur | SSH | sudo | Serveur |
+| ----------- | --- | ---- | ------- |
+| root        | ❌   | ❌    | bloqué  |
+| gaetan      | ✔   | ✔    | admin   |
+| duna        | ✔   | ✔    | admin   |
+| theo        | ✔   | ❌    | membre  |
+| mylow       | ✔   | ❌    | membre  |
 
-postgres + volume
 
-réseau interne
+---
 
-Vérifier que DB n’est pas exposée (pas de port public)
+## Étape 2 — DNS Cloudflare
 
-Mettre les variables d’environnement (DB URL, JWT secret)
+Dans Cloudflare → DNS :
 
-### Étape 5 — Accès admin DB
+| Type | Nom     | IP                |
+| ---- | ------- | ----------------- |
+| A    | gateway | IP du serveur OVH |
+| A    | app     | IP du serveur OVH |
 
-Méthode “docker exec” ou tunnel SSH
-
-Documenter la procédure
-
-### Étape 6 — Redondance “socle”
-
-Stockage redondant (RAID1/NAS/snapshots) pour le volume DB
-
-Vérifier qu’une mise à jour des containers ne détruit pas les données
-
-
-
-
-
-Étape 4 — Déployer backend + PostgreSQL avec Docker Compose
-
-Tu vas créer un dossier projet (sur le serveur) :
-
-/opt/terraproxi/ (par exemple)
-
-4.1 Structure minimale
-
-docker-compose.yml
-
-.env (secrets)
-
-éventuellement un compose.prod.yml plus tard
-
-4.2 Docker Compose : principes à respecter
-
-DB avec volume (pour ne pas perdre les données au redémarrage)
-
-DB sans ports publics (pas de 5432:5432)
-
-Backend et DB sur un réseau interne docker
-
-Backend exposé uniquement en local (127.0.0.1) si possible
-
-Exemple de règles (sans te coller du code ici si tu préfères) :
-
-Backend : ports: "127.0.0.1:3000:3000"
-
-Postgres : pas de ports
-
-Réseau : internal: true (bonne pratique)
-
-Volume : pgdata:/var/lib/postgresql/data
-
-4.3 Variables d’environnement (sécurité)
-
-Dans .env :
-
-POSTGRES_DB=...
-
-POSTGRES_USER=app_user
-
-POSTGRES_PASSWORD=...fort...
-
-JWT_SECRET=...fort...
-
-DATABASE_URL=postgres://app_user:...@postgres:5432/....
-
-⚠️ Ne jamais committer .env dans Git.
-
-4.4 Lancer et vérifier
-
-docker compose up -d
+Au début à mettre en **DNS only (gris)**.
 
 Vérifier :
 
-docker ps → backend et postgres “Up”
+```bash
+dig +short gateway.terraproxi.fr
+dig +short app.terraproxi.fr
+```
 
-docker logs backend → pas d’erreur DB
+---
 
-curl http://127.0.0.1:3000/health (si route health)
+## Étape 3 — Installer Docker + Compose
 
-curl https://api.tondomaine.fr/health via Nginx
+```bash
+sudo apt -y install ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-Étape 5 — Accès admin DB (sans exposer la base aux utilisateurs)
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+| sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-Tu as dit : DB accessible uniquement à :
+sudo apt update
+sudo apt -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
 
-l’application
+---
 
-les admins
+## Étape 4 — Déployer la stack (Caddy + front + back + db)
 
-Sans backup/RAID, on reste simple.
+Créer le dossier :
 
-Option A (la plus simple) : admin via docker exec
+```bash
+sudo mkdir -p /opt/terraproxi
+sudo chown -R $USER:$USER /opt/terraproxi
+cd /opt/terraproxi
+```
 
-Tâches :
+Créer `.env` :
 
-Identifier le conteneur postgres
+```env
+POSTGRES_DB=terraproxi
+POSTGRES_USER=app_user
+POSTGRES_PASSWORD=CHANGE_ME_STRONG
 
-Lancer psql dedans :
+JWT_SECRET=CHANGE_ME_LONG_RANDOM
+DATABASE_URL=postgres://app_user:CHANGE_ME_STRONG@db:5432/terraproxi
+```
 
-docker exec -it <container> psql -U app_user -d <db>
+---
 
-Faire tes commandes SQL
+### `docker-compose.yml`
 
-✅ Avantage : aucun port DB ouvert, pas de tunnel.
+```yaml
+services:
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [back, front]
+    networks: [public, internal]
 
-Option B : tunnel SSH (quand tu veux un client DB local)
+  front:
+    image: IMAGE_FRONT:latest
+    expose: ["80"]
+    networks: [internal]
 
-Tâches :
+  back:
+    image: IMAGE_BACK:latest
+    expose: ["3002"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on: [db]
+    networks: [internal]
 
-S’assurer que postgres n’écoute pas publiquement (pas de port publié)
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
 
-Faire un tunnel :
+networks:
+  public: {}
+  internal:
+    internal: true
 
-ssh -L 5432:localhost:5432 deploy@api.tondomaine.fr
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+```
 
-Sur ton PC : PgAdmin/DBeaver → localhost:5432
+---
 
-✅ Avantage : tu utilises une UI, toujours sans exposer la DB.
+### `Caddyfile`
 
-Étape 6 — “Pas de redondance/backup pour l’instant” : ce que tu fais quand même
+```caddy
+gateway.terraproxi.fr {
+  reverse_proxy back:3002
+}
 
-Même si tu repousses backups/redondance, fais ces 2 mini-actions (ça ne te coûte rien) :
+app.terraproxi.fr {
+  reverse_proxy front:80
+}
+```
 
-Assurer la persistance DB
+---
 
-volume docker obligatoire (sinon tu perds tout à chaque recréation)
+## Étape 5 — Lancer
 
-Valider que “mise à jour app” ne casse pas la DB
-
-simuler une update backend :
-
-docker compose pull (ou rebuild)
-
+```bash
 docker compose up -d
+docker compose ps
+docker logs -n 50 caddy
+```
 
-vérifier que les données sont encore là
+Tester :
 
-Résumé “checklist” (ultra simple)
+```bash
+curl -I https://gateway.terraproxi.fr/health
+```
 
-Serveur : Docker + SSH clé + firewall (80/443 + SSH restreint)
+---
 
-DNS OVH : api.domaine → IP serveur
+## Étape 6 — Sécurité DB
 
-Nginx : reverse proxy + certbot Let’s Encrypt + redirect HTTPS
+Vérifie qu’elle n’est pas exposée :
 
-Compose : backend (local port) + postgres (volume, pas exposé) + réseau interne
+```bash
+sudo ss -lntp | grep 5432
+```
 
-Admin DB : docker exec (ou tunnel SSH)
+→ rien ne doit apparaître côté 0.0.0.0
 
-Vérif : mobile → https://api.domaine → backend → postgres
+Admin DB :
+
+```bash
+docker exec -it $(docker ps -qf "name=db") psql -U app_user -d terraproxi
+```
+
+---
+
+# ✅ Checklist finale
+
+* [ ] Cloudflare pointe vers l’IP OVH
+* [ ] HTTPS OK sur gateway.terraproxi.fr
+* [ ] Docker tourne
+* [ ] Caddy sert le TLS
+* [ ] PostgreSQL n’a aucun port public
+* [ ] L’API répond via Caddy
+* [ ] Les données persistent après `docker compose up -d`
