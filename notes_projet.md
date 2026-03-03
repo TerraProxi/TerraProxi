@@ -201,7 +201,7 @@ ssh gaetan@IP_DU_SERVEUR
 
 Quand tout marche :
 
-```
+```Bash
 sudo ufw delete allow OpenSSH  
 sudo ufw allow from IP_GAETAN to any port 22 proto tcp  
 sudo ufw allow from IP_DUNA to any port 22 proto tcp  
@@ -220,6 +220,11 @@ Vérification : `sudo -l -U theo`
 
 => Doit dire qu’il n’a pas de privilèges.
 
+```Bash
+gaetan@vps-4e6f7de3:~$ sudo -l -U theo
+User theo is not allowed to run sudo on vps-4e6f7de3.
+```
+
 ### Synthèse création des utilisateurs
 
 | Utilisateur | SSH | sudo | Serveur |
@@ -233,9 +238,9 @@ Vérification : `sudo -l -U theo`
 
 ---
 
-## Étape 2 — DNS Cloudflare
+## Étape 2 — Configurer enregistrements A du DNS dans Cloudflare
 
-Dans Cloudflare → DNS :
+Dans Cloudflare → DNS → Ajouter un enregistrement :
 
 | Type | Nom     | IP                |
 | ---- | ------- | ----------------- |
@@ -251,9 +256,18 @@ dig +short gateway.terraproxi.fr
 dig +short app.terraproxi.fr
 ```
 
+→ Résultat :
+
+```bash
+51.254.140.101
+51.254.140.101
+```
+
 ---
 
 ## Étape 3 — Installer Docker + Compose
+
+Sur le serveur OVH, avec user admin, installer Docker + compose :
 
 ```bash
 sudo apt -y install ca-certificates curl gnupg
@@ -268,6 +282,46 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
 
 sudo apt update
 sudo apt -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+Vérifications :
+
+```Bash
+docker version
+docker compose version
+```
+
+Résultats :
+
+```Bash
+Client: Docker Engine - Community
+ Version:           29.2.1
+ API version:       1.53
+ Go version:        go1.25.6
+ Git commit:        a5c7197
+ Built:             Mon Feb  2 17:17:19 2026
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.2.1
+  API version:      1.53 (minimum version 1.44)
+  Go version:       go1.25.6
+  Git commit:       6bc6209
+  Built:            Mon Feb  2 17:17:19 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.1
+  GitCommit:        dea7da592f5d1d2b7755e3a161be07f43fad8f75
+ runc:
+  Version:          1.3.4
+  GitCommit:        v1.3.4-0-gd6d73eb8
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+Docker Compose version v5.1.0
 ```
 
 ---
