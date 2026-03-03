@@ -163,7 +163,7 @@ ssh gaetan@IP_DU_SERVEUR
 
 Si possible de se connecter → OK.
 
-### 1.2 Pare-feu minimal
+### 1.3 Pare-feu minimal
 
 On n’ouvre que ce qui est nécessaire :
 
@@ -178,53 +178,49 @@ sudo ufw enable
 sudo ufw status
 ```
 
-6️⃣ Installer et configurer le pare-feu
+### 1.4 Installer et configurer le pare-feu
 
 Maintenant que SSH est sûr :
 
-sudo apt -y install ufw
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow OpenSSH
-sudo ufw enable
-sudo ufw status
+```bash
+sudo apt -y install ufw  
+sudo ufw default deny incoming  
+sudo ufw default allow outgoing  
+sudo ufw allow 80/tcp  
+sudo ufw allow 443/tcp  
+sudo ufw allow OpenSSH  
+sudo ufw enable  
+sudo ufw status  
+```
 
-
-Test avant de fermer ta session :
+Test avant de fermer la session :
 
 ssh gaetan@IP_DU_SERVEUR
 
-7️⃣ (Optionnel mais recommandé) Restreindre SSH aux IP des admins
+### 1.5 (Optionnel mais recommandé) Restreindre SSH aux IP des admins
 
-Quand tu es sûr que tout marche :
+Quand tout marche :
 
-sudo ufw delete allow OpenSSH
-sudo ufw allow from IP_GAETAN to any port 22 proto tcp
-sudo ufw allow from IP_DUNA to any port 22 proto tcp
+```
+sudo ufw delete allow OpenSSH  
+sudo ufw allow from IP_GAETAN to any port 22 proto tcp  
+sudo ufw allow from IP_DUNA to any port 22 proto tcp  
+```
 
-8️⃣ Droits des membres
+### 1.6 Droits des membres
 
-Par défaut :
+Par défaut theo et mylow :
 
-theo et mylow :
+* peuvent se connecter en SSH
+* ne peuvent pas utiliser sudo
+* ne peuvent pas installer de logiciels
+* ne peuvent pas toucher au firewall
 
-peuvent se connecter en SSH
+Vérification : `sudo -l -U theo`
 
-ne peuvent pas utiliser sudo
+=> Doit dire qu’il n’a pas de privilèges.
 
-ne peuvent pas installer de logiciels
-
-ne peuvent pas toucher au firewall
-
-Tu peux vérifier :
-
-sudo -l -U theo
-
-
-Doit dire qu’il n’a pas de privilèges.
-### 1.3 Création d'utilisateurs
+### Synthèse création des utilisateurs
 
 | Utilisateur | SSH | sudo | Serveur |
 | ----------- | --- | ---- | ------- |
