@@ -163,7 +163,7 @@ ssh gaetan@IP_DU_SERVEUR
 
 Si possible de se connecter → OK.
 
-### 1.2 Pare-feu minimal
+### 1.3 Pare-feu minimal
 
 On n’ouvre que ce qui est nécessaire :
 
@@ -178,53 +178,54 @@ sudo ufw enable
 sudo ufw status
 ```
 
-6️⃣ Installer et configurer le pare-feu
+### 1.4 Installer et configurer le pare-feu
 
 Maintenant que SSH est sûr :
 
-sudo apt -y install ufw
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow OpenSSH
-sudo ufw enable
-sudo ufw status
+```bash
+sudo apt -y install ufw  
+sudo ufw default deny incoming  
+sudo ufw default allow outgoing  
+sudo ufw allow 80/tcp  
+sudo ufw allow 443/tcp  
+sudo ufw allow OpenSSH  
+sudo ufw enable  
+sudo ufw status  
+```
 
-
-Test avant de fermer ta session :
+Test avant de fermer la session :
 
 ssh gaetan@IP_DU_SERVEUR
 
-7️⃣ (Optionnel mais recommandé) Restreindre SSH aux IP des admins
+### 1.5 (Optionnel mais recommandé) Restreindre SSH aux IP des admins
 
-Quand tu es sûr que tout marche :
+Quand tout marche :
 
-sudo ufw delete allow OpenSSH
-sudo ufw allow from IP_GAETAN to any port 22 proto tcp
-sudo ufw allow from IP_DUNA to any port 22 proto tcp
+```Bash
+sudo ufw delete allow OpenSSH  
+sudo ufw allow from IP_GAETAN to any port 22 proto tcp  
+sudo ufw allow from IP_DUNA to any port 22 proto tcp  
+```
 
-8️⃣ Droits des membres
+### 1.6 Droits des membres
 
-Par défaut :
+Par défaut theo et mylow :
 
-theo et mylow :
+* peuvent se connecter en SSH
+* ne peuvent pas utiliser sudo
+* ne peuvent pas installer de logiciels
+* ne peuvent pas toucher au firewall
 
-peuvent se connecter en SSH
+Vérification : `sudo -l -U theo`
 
-ne peuvent pas utiliser sudo
+=> Doit dire qu’il n’a pas de privilèges.
 
-ne peuvent pas installer de logiciels
+```Bash
+gaetan@vps-4e6f7de3:~$ sudo -l -U theo
+User theo is not allowed to run sudo on vps-4e6f7de3.
+```
 
-ne peuvent pas toucher au firewall
-
-Tu peux vérifier :
-
-sudo -l -U theo
-
-
-Doit dire qu’il n’a pas de privilèges.
-### 1.3 Création d'utilisateurs
+### Synthèse création des utilisateurs
 
 | Utilisateur | SSH | sudo | Serveur |
 | ----------- | --- | ---- | ------- |
@@ -237,9 +238,9 @@ Doit dire qu’il n’a pas de privilèges.
 
 ---
 
-## Étape 2 — DNS Cloudflare
+## Étape 2 — Configurer enregistrements A du DNS dans Cloudflare
 
-Dans Cloudflare → DNS :
+Dans Cloudflare → DNS → Ajouter un enregistrement :
 
 | Type | Nom     | IP                |
 | ---- | ------- | ----------------- |
@@ -255,9 +256,18 @@ dig +short gateway.terraproxi.fr
 dig +short app.terraproxi.fr
 ```
 
+→ Résultat :
+
+```bash
+51.254.140.101
+51.254.140.101
+```
+
 ---
 
 ## Étape 3 — Installer Docker + Compose
+
+Sur le serveur OVH, avec user admin, installer Docker + compose :
 
 ```bash
 sudo apt -y install ca-certificates curl gnupg
@@ -272,6 +282,46 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
 
 sudo apt update
 sudo apt -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+
+Vérifications :
+
+```Bash
+docker version
+docker compose version
+```
+
+Résultats :
+
+```Bash
+Client: Docker Engine - Community
+ Version:           29.2.1
+ API version:       1.53
+ Go version:        go1.25.6
+ Git commit:        a5c7197
+ Built:             Mon Feb  2 17:17:19 2026
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.2.1
+  API version:      1.53 (minimum version 1.44)
+  Go version:       go1.25.6
+  Git commit:       6bc6209
+  Built:            Mon Feb  2 17:17:19 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.2.1
+  GitCommit:        dea7da592f5d1d2b7755e3a161be07f43fad8f75
+ runc:
+  Version:          1.3.4
+  GitCommit:        v1.3.4-0-gd6d73eb8
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+Docker Compose version v5.1.0
 ```
 
 ---
