@@ -33,7 +33,7 @@ interface ProfileData {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'orders', label: 'Mes commandes', icon: 'shopping-bag', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte', badge: '3' },
+  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte', badge: '3' },
   { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.red500, iconBg: Colors.red50, section: 'Mon Compte' },
   { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences', badge: '5' },
