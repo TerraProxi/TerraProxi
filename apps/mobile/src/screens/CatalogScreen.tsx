@@ -195,6 +195,7 @@ export function CatalogScreen({ route, navigation }: Props) {
 
       <ScrollView
         horizontal
+        style={styles.pillsScroll}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.pillsContainer}
       >
@@ -350,11 +351,17 @@ const styles = StyleSheet.create({
   pillsContainer: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
+    alignItems: 'center',
     gap: Spacing.sm,
+  },
+  pillsScroll: {
+    flexGrow: 0,
   },
   pill: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
+    minHeight: 40,
+    justifyContent: 'center',
     borderRadius: Radius.full,
     backgroundColor: Colors.white,
     borderWidth: 1,
