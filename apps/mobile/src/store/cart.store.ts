@@ -24,6 +24,11 @@ export interface CartItem {
 
 export type CartAddResult = 'added' | 'updated' | 'conflict'
 
+const computeCartStats = (items: CartItem[]) => ({
+  total: items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+  count: items.reduce((sum, item) => sum + item.quantity, 0),
+})
+
 interface CartStore {
   items: CartItem[]
   producerId: string | null
@@ -41,8 +46,8 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
       producerId: null,
-      get total() { return get().items.reduce((s, i) => s + i.product.price * i.quantity, 0) },
-      get count() { return get().items.reduce((s, i) => s + i.quantity, 0) },
+      total: 0,
+      count: 0,
 
       add: (product, quantity = 1) => {
         const state = get()
@@ -52,46 +57,69 @@ export const useCartStore = create<CartStore>()(
 
         const existing = state.items.find((i) => i.product.id === product.id)
         if (existing) {
+          const nextItems = state.items.map((i) =>
+            i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
+          )
           set({
-            items: state.items.map((i) =>
-              i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
-            ),
+            items: nextItems,
+            ...computeCartStats(nextItems),
           })
           return 'updated'
         }
 
+        const nextItems = [...state.items, { product, quantity }]
         set({
-          items: [...state.items, { product, quantity }],
+          items: nextItems,
           producerId: product.producer_id,
+          ...computeCartStats(nextItems),
         })
         return 'added'
       },
 
-      replaceWith: (product, quantity = 1) => set({
-        items: [{ product, quantity }],
-        producerId: product.producer_id,
-      }),
+      replaceWith: (product, quantity = 1) => {
+        const nextItems = [{ product, quantity }]
+        set({
+          items: nextItems,
+          producerId: product.producer_id,
+          ...computeCartStats(nextItems),
+        })
+      },
 
       remove: (productId) => set((s) => {
         const nextItems = s.items.filter((i) => i.product.id !== productId)
         return {
           items: nextItems,
           producerId: nextItems.length === 0 ? null : s.producerId,
+          ...computeCartStats(nextItems),
         }
       }),
 
-      updateQty: (productId, quantity) => set((s) => ({
-        items: s.items.map((i) =>
+      updateQty: (productId, quantity) => set((s) => {
+        const nextItems = s.items.map((i) =>
           i.product.id === productId ? { ...i, quantity: Math.max(1, quantity) } : i,
-        ),
-      })),
+        )
+        return {
+          items: nextItems,
+          ...computeCartStats(nextItems),
+        }
+      }),
 
-      clear: () => set({ items: [], producerId: null }),
+      clear: () => set({ items: [], producerId: null, total: 0, count: 0 }),
     }),
     {
       name: 'cart-store',
       storage: createJSONStorage(() => secureStorage),
       partialize: (state) => ({ items: state.items, producerId: state.producerId }),
+      merge: (persistedState, currentState) => {
+        const nextState = {
+          ...currentState,
+          ...(persistedState as Partial<CartStore>),
+        }
+        return {
+          ...nextState,
+          ...computeCartStats(nextState.items ?? []),
+        }
+      },
     },
   ),
 )
