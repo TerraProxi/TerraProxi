@@ -1,0 +1,718 @@
+﻿Date[a]
+	03/03/2026
+	Version[b]
+	2
+	
+
+
+
+  
+
+CYCLE D’INNOVATION
+Cahier des Charges Projet
+Sessions 2025-26
+
+
+Niveau d’Apprentissage[c]
+	☐
+	B3
+	☐
+	M1-B1
+	☐
+	M2-SN2
+	Projet 
+	Code
+	2427
+	SGroupe[d]
+	25
+	Alias Projet[e]
+	TerraProxi
+	Liste du(es) membre(s) 
+de l’équipe[f]
+	FAUCHER Gaëtan
+	FREIHUBER Théo
+	LE ROUX Dunvael
+	WIEREZ Mylo
+	
+
+	
+
+	
+
+	
+
+
+
+Table des matières
+
+
+1. Présentation de l’entreprise (startup) et de la Solution        3
+1.1. Les objectifs attendus        8
+1.2. Les cibles (Persona)        9
+Persona 1 – Consommateur        9
+Persona 2 – Producteur        9
+2. Les Solutions Concurrentes        10
+3. Développement de votre Solution        11
+3.1. Caractéristiques, Fonctionnalités et Contraintes        11
+3.2. Découpage Fonctionnel, Stack Technique, Sécurisation et RGPD de votre Solution        13
+4. Charte Graphique de la Solution        16
+5. Les Matériels ou Fournitures nécessaires        17
+6. Les Spécificités et les Livrables de la solution en exploitation        18
+6.1 Spécificités d’exploitation        18
+6.2 Livrables        18
+6.3 Prototype        18
+7. Le Planning et la Gestion du Projet        19
+
+
+________________
+
+
+
+
+1. Présentation de l’entreprise (startup[g]) et de la Solution
+
+
+Date de création
+	2025
+	Activité principale
+	Développement d'applications mobiles et web facilitant la mise en relation entre particuliers et producteurs régionaux.
+	
+
+Logo
+	  
+
+	
+
+
+
+
+
+Description de votre Solution
+	TerraProxi est une plateforme numérique (mobile et web) dédiée à la vente directe de produits locaux. Elle permet de connecter efficacement producteurs et consommateurs grâce à la géolocalisation, à la commande en ligne et à des outils de gestion simplifiés.
+L’objectif est de redonner du pouvoir économique aux producteurs tout en offrant aux consommateurs des produits frais, traçables et accessibles, issus d’une agriculture locale et responsable.
+	
+
+Valeurs véhiculées par l’entreprise
+	* Proximité & lien humain
+* Authenticité & terroir
+* Responsabilité & économie circulaire
+* Transparence & traçabilité
+* Simplicité & accessibilité
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+Produit(s) et/ou Service(s) vendu(s[h]) 
+	Produits vendus :
+* Produits alimentaires locaux (fruits, légumes, produits laitiers, viandes, boissons, épicerie fine)
+* Produits non-alimentaires (artisanat local, fleurs, plantes)
+Services – Consommateurs :
+* Recherche géolocalisée de producteurs
+* Carte interactive
+* Profils producteurs détaillés
+* Réservation et commande en ligne
+* Agenda d’événements locaux
+Services – Producteurs :
+* Boutique en ligne personnalisée
+* Gestion des stocks et commandes
+* Messagerie client-producteur
+* Statistiques de vente et de demande locale
+* Abonnement ou commission sur ventes
+Services additionnels :
+* Module IA d’aide à la prévision des ventes
+* Workflow IA pour recommandations produits
+* Chatbot marketing (support & FAQ)
+* Newsletter automatique générée
+
+
+	
+
+________________
+
+
+
+
+Analyse de l’existant[i] :
+	L’analyse de l’existant pour le projet TerraProxi se concentre sur l’état actuel du marché de la vente directe de produits locaux, les méthodes traditionnelles de mise en relation entre producteurs et consommateurs, ainsi que les difficultés rencontrées par ces deux parties.
+
+1. Contexte du marché de la vente directe locale
+Croissance de la demande
+On observe une augmentation significative de la demande pour des produits frais, locaux et de saison, dont l’origine est clairement identifiable. La crise sanitaire, combinée à une prise de conscience écologique et sociétale, a renforcé l’intérêt des consommateurs pour les circuits courts et la consommation responsable.
+
+
+Fragmentation de l’offre
+L’offre de produits locaux reste très dispersée : marchés de producteurs, ventes à la ferme, AMAP, drives fermiers indépendants. Cette fragmentation complique le parcours d’achat du consommateur, qui doit multiplier les sources d’information et les déplacements pour accéder à une offre complète.
+
+
+Défis pour les producteurs
+Les agriculteurs et producteurs locaux font face à plusieurs contraintes majeures :
+* Manque de visibilité auprès du grand public.
+* Difficultés à communiquer leurs stocks et disponibilités en temps réel.
+* Gestion logistique complexe des commandes, retraits et livraisons.
+* Concurrence des circuits de distribution centralisés (grandes surfaces) exerçant une forte pression sur les prix et les marges.
+2. Outils et solutions actuelles
+Annuaires en ligne et cartes statiques
+Certaines plateformes recensent les producteurs par zone géographique, mais les informations sont souvent incomplètes, peu mises à jour et ne permettent pas d’interaction directe (commande, paiement, réservation).
+
+
+Réseaux sociaux
+Facebook et Instagram sont fréquemment utilisés par les producteurs pour communiquer. Toutefois, ces outils ne constituent pas une solution de gestion intégrée : absence de système de commande, de paiement sécurisé et de suivi des stocks.
+
+
+AMAP et paniers fixes
+Les AMAP permettent une relation de confiance et une fidélisation forte, mais elles imposent des contraintes importantes aux consommateurs (composition fixe, fréquence imposée, faible flexibilité).
+
+
+
+
+3. Manque identifié sur le marché
+Il existe peu de solutions numériques mobiles, unifiées et simples d’utilisation qui :
+* Géolocalisent précisément et en temps réel l’offre de produits locaux.
+* Fournissent aux producteurs un outil complet de gestion (stocks, commandes, communication) avec une faible barrière technologique.
+* Facilitent une transaction directe, transparente et équitable, sans marges excessives.
+	
+
+________________
+
+
+
+
+   1. Les objectifs attendus[j]
+
+
+Objectifs Qualitatifs
+	* Améliorer la visibilité des producteurs locaux
+* Faciliter l’accès aux produits de circuit court
+* Renforcer la confiance via la traçabilité
+* Simplifier la gestion commerciale des producteurs
+	
+
+Objectifs Quantitatifs
+	* 500 utilisateurs actifs la première année
+* 50 producteurs partenaires la première année
+* 5 000 transactions réalisées en 12 mois
+* Taux de satisfaction utilisateur > 85 %
+
+
+	
+
+   2. Les cibles (Persona)
+
+
+Futur(s) Utilisateur[k](s) de votre solution (Persona)
+	Persona 1 – Consommateur
+* Âge : 25–45 ans
+* Profil : urbain/périurbain, sensible à l’écologie
+* Besoin : produits locaux, pratiques et fiables
+Persona 2 – Producteur
+* Âge : 30–60 ans
+* Profil : agriculteur / artisan local
+* Besoin : vendre en direct, gagner du temps, visibilité numérique
+
+
+	________________
+
+
+
+
+2. Les Solutions Concurrentes[l] 
+
+
+Nom 
+	La Ruche qui dit Oui
+	Caractéristiques 
+	* Commande en ligne de produits locaux
+* Système de distribution à date et lieu fixes
+* Catalogue dépendant des producteurs partenaires de chaque ruche
+* Commission prélevée sur chaque vente
+* Notoriété forte et réseau déjà implanté
+* Relation directe producteur-consommateur
+* Paiement sécurisé en ligne
+
+
+	Éléments différenciants[m] 
+	* Faible flexibilité pour les consommateurs (jours et horaires imposés)
+* Peu de maîtrise pour le producteur sur la relation client finale
+* Pas de géolocalisation dynamique par proximité immédiate
+* Modèle de commande groupée peu adapté aux achats spontanés
+
+
+
+
+	
+
+Nom 
+	Marchés locaux
+	Caractéristiques 
+	* Vente physique en face à face
+* Présence à des jours et horaires précis
+* Offre limitée au nombre de producteurs présents
+* Lien humain fort et confiance directe
+* Produits frais et locaux
+* Expérience conviviale
+
+
+	Éléments différenciants[n] 
+	* Contraintes géographiques et horaires importants
+* Manque de visibilité hors jours de marché
+* Aucune anticipation possible des stocks
+* Pas de commande ou paiement en ligne
+
+
+	
+
+________________
+
+
+3. Développement de votre Solution[o]
+   1. Caractéristiques, Fonctionnalités et Contraintes
+
+
+Caractéristiques - Type de solution
+	☐
+	Solution purement Applicative
+	☐
+	Solution Infrastructure Informatique
+	
+
+☐
+	Solution Propriétaire Payante[p]
+	
+
+Caractéristiques - Catégorie(s) de la solution
+	☐
+	Autre (précisez)
+	Plateforme e-commerce locale géolocalisée
+	
+
+Fonctionnalités de la solution 
+	* Authentification utilisateurs
+* Géolocalisation des producteurs
+* Catalogue produits
+* Panier & paiement en ligne
+* Messagerie interne
+* Notifications
+* Back-office producteur
+	
+
+________________
+
+
+
+
+Contraintes[q] de la solution 
+	* Accessibilité numérique
+* Connexion internet requise
+* Respect du RGPD
+* Sécurité des paiements
+
+
+	
+
+________________
+
+
+
+
+   2. Découpage Fonctionnel, Stack Technique, Sécurisation et RGPD de votre Solution
+
+
+Découpage[r] Fonctionnel 
+	* Frontend utilisateur (App Mobile & App Web responsive)
+* Frontend producteur (App Web responsive)
+* Backend API
+* Base de données
+* Module paiement
+* Module IA
+	
+
+Stack[s] Technique 
+	* Frontend Web : React
+* Frontend Mobile : React Native
+* Backend : Bun.js (Elysia.js)
+* Base de données : PostgreSQL
+* Cartographie : OpenStreetMap
+* Paiement : Stripe
+* Hébergement : OVH
+
+
+
+
+
+
+	
+
+________________
+
+
+
+
+Sécurisation[t] 
+	Authentification et accès
+* Authentification via JWT avec renouvellement automatique.
+* Gestion des rôles : consommateurs, producteurs, administrateurs.
+* Protection contre les tentatives de connexion frauduleuses.
+Sécurité des communications
+* Chiffrement des échanges via HTTPS (TLS 1.3).
+* Blocage des connexions non sécurisées.
+Sécurité applicative et données
+* Validation des données côté serveur.
+* Protection contre les injections SQL et attaques XSS/CSRF.
+* Sauvegardes régulières et séparation des environnements (dev/test/prod).
+Paiements et transactions
+* Paiements sécurisés via Stripe (PCI-DSS).
+* Aucune donnée bancaire stockée sur la plateforme.
+Infrastructure
+* Serveurs sécurisés et mises à jour régulières.
+* Surveillance et alertes pour détecter toute activité suspecte.
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+RGPD[u] 
+	Consentement et droits des utilisateurs
+* Consentement explicite pour la collecte et le traitement des données.
+* Possibilité d’exercer le droit à l’oubli et de demander la suppression des données.
+Minimisation et sécurité des données
+* Collecte uniquement des données nécessaires au fonctionnement de la plateforme.
+* Hébergement des données au sein de l’Union Européenne pour garantir la conformité légale.
+Transparence
+* Informations claires sur l’utilisation des données et sur les finalités de traitement.
+	
+
+________________
+
+
+
+
+4. Charte Graphique de la Solution
+
+
+Police (Font) / Typographie
+	* Titre : Montserrat
+* Texte : Open Sans
+
+
+
+
+	
+
+Couleurs[v]
+	
+
+
+
+	RVB (r, v, b)
+	RVB #......
+	Bleu clair
+	
+
+	(118, 204, 214)
+	#76CCD6
+	Vert naturel
+	
+
+	
+
+	#5BAE6A
+	Blanc 
+	
+
+	
+
+	#FFFFFF
+	Gris foncé 
+	
+
+	
+
+	#333333
+	
+
+	
+
+
+
+
+
+
+
+
+
+
+
+5. Les Matériels[w] ou Fournitures nécessaires
+
+
+LIB
+	LINK
+	PU
+	QTE
+	PT
+	Dispo myDiL
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	Total Global TTC (somme des lignes PT)
+	
+
+	
+
+________________
+
+
+
+
+6. Les Spécificités et les Livrables de la solution en exploitation
+
+
+6.1 Spécificités d’exploitation[x]
+	* Maintenance continue
+* Support utilisateur
+* Mises à jour régulières
+	
+
+6.2 Livrables[y]
+	* Application mobile
+* Application web
+* Application back-end
+* Documentation technique
+* Guide utilisateur
+
+
+
+
+	
+
+6.3 Prototype
+	* https://prototype.terraproxi.fr/
+* https://github.com/TerraProxi/Prototype-Front
+
+
+
+
+	
+
+7. Le Planning et la Gestion du Projet 
+
+
+Agenda[z] de phases
+	Le projet TerraProxi est prévu sur 2 ans avec les phases suivantes :
+1. Analyse & conception – 3 mois
+2. Développement & Tests– 18 mois
+3. Déploiement – 2 semaines
+4. Suivi  – 3 mois et +
+
+
+	
+
+________________
+
+
+
+
+Taches[aa] attribuées aux Innov-Member
+	* Gestion projet : Dunvael, Louis
+* Backend : Gaëtan, Mylo, Théo
+* Frontend : Gaëtan, Mylo, Théo
+* IA & data : Louis
+* Infrastructure : Dunvael
+* Tests : Dunvael, Gaëtan, Louis, Mylo, Théo
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+Outil de gestion de projet 
+	
+
+Trello / GitHub / Discord
+
+	
+
+
+
+
+
+
+
+
+
+EPSI-WIS Montpellier
+	  
+
+	Cycle d’Innovation Digitale – Cahier des Charges Projet (modèle v11-2025-001)
+	Sessions 2025-26
+	Page []/[]
+	
+
+[a]Date de création / mise à jour du document, format JJ/MM/AAAA
+[b]Version du document. A chaque délivrance du document, la version doit être incrémentée de +1. A votre charge de conserver l'historique. Dans le dossier Drive, le document présent doit toujours correspondre à la dernière version valide.
+[c]Cochez la bonne case avec :
+- B3 = Bachelor 3ème année (Innov-Minds)
+- M1 = Master 1ère année (Innov-Leads ou Open Innovation)
+- M2 = Master 2ème année (Innov-Leads ou Open Innovation)
+[d]N° issu du Google-Sheet de composition des groupes.
+[e]Votre nom de projet issu du Google-Sheet de composition des groupes.
+[f]Nom - Prénom des personnes composant l’équipe, issus du Google-Sheet de composition des groupes.
+[g]Présentez ici l’entreprise (startup) que vous prévoyez (ou pas) de créer qui portera le projet
+[h]Marque(s), gamme(s) et ligne(s) de produit(s)…
+[i]Si le projet existe déjà, quels sont les problèmes rencontrés actuellement ? Quels sont les manques constatés, les faiblesses ?
+[j]Détaillez le(s) objectif(s) attendu(s) de votre solutions. Ces objectifs peuvent répondre en tout ou partie aux problèmes, faiblesses constatées de l'existant (si existant). Autrement indiquez les objectifs de votre nouvelle solution.
+[k]Décrivez le profil (âge, habitudes, catégories sociales, culturelles, etc.) des futurs utilisateurs de votre solution. Ces derniers peuvent être internes et/ou externes à votre entreprise.
+[l]Indiquez les principales solutions pouvant concurrencer la vôtre et leurs caractéristiques.
+[m]Indiquez les principaux éléments qui vous différencient de la solution concurrente.
+[n]Indiquez les principaux éléments qui vous différencient de la solution concurrente.
+[o]= votre projet
+[p]Solution vendu à l'utilisateur final
+[q]Décrivez toutes les contraintes qui devront être prise en compte dans le développement  de votre solution, comme :
+- Votre solution contiendra-t-elle des droits d’accès ?
+- Votre solution contiendra-t-elle un système d’authentification
+- Faut-il intégrer un outil d’analyse et de statistiques ?
+- Votre solution doit-elle être multilingue ?
+- Etc.
+[r]Décrivez comment sera découpée la solution entre les divers environnements, comme :
+- Application mobile (Android, iOS, etc.)
+- Application/Site WEB (Back, Front, etc.)
+- Application embarquée IoT
+- Etc.
+Ensuite, pour chaque environnement, décrivez les fonctionnalités associées.
+[s]Décrivez toute la stack technique utilisée pour :
+- Le développement sur les divers environnements concernés (décrits dans le découpage fonctionnel)
+- L'infrastructure informatique nécessaire (réseau, télécom., etc.)
+- La/les base(s) de données
+[t]Décrivez comment sont sécurisés les éléments constituant la solution et/ou la solution elle-même. Parmi les points clés, vous devez citez :
+- Echanges entre les divers blocs MVP
+- Protection matérielle et/ou logicielle
+- Etc.
+Si la solution est concerné par un taux de disponibilité élevé, indiquez comment sont gérés :
+- Le PRA (Plan de Reprise d'Activité)
+- Le PCA (Plan de Continuité d'Activité)
+[u]Décrivez comment seront gérés les Données Utilisateurs (toutes les contraintes liées au Règlement Général de Protection des Données)
+[v]Complétez le tableau avec les couleurs utilisées pour votre charte graphique. Référez-vous à l'exemple donné "Bleu clair" pour décrire vos couleurs.
+[w]Remplissez ce tableau si votre projet nécessite du matériel pouvant être fourni par votre myDiL. Pour cela, merci de vous rapprocher de votre coach après avoir complété votre liste.
+
+
+LIB : Libellé du produit
+LINK : Un lien vers un fournisseur que vous avez identifié chez lequel le produit peut-être commandé (Amazon, Aliexpress, etc.)
+PU : Prix TTC d’une unité de produit
+QTE : Quantité d’unité(s) à commander
+PT : Prix TTC Total (PU * QTE)
+Dispo myDiL : à vérifier auprès de votre coach
+
+
+Le Total Global TTC (somme des lignes PT) ne doit pas dépasser 50€TTC.
+[x]Précisez les spécificités connexes à la solution qui seront mise en place/réalisées par vous ou par un prestataire externe pour assurer l'exploitation de la solution comme :
+- Formation à l'utilisation
+- Maintenance applicative
+- Maintenance matérielle
+- Support téléphonique (Hotline)
+- Astreintes et dépannages
+- Rédaction de manuels utilisateurs, administrateurs, etc.
+- Etc.
+[y]Décrivez sous quel format seront proposés les éléments constituant votre solution, comme :
+- Téléchargement sur site marchand/gratuiciel
+- Abonnement (licence) 
+- Livraison d'un package (colis)
+- Etc.
+[z]Définissez un planning prévisionnel des différentes phases (étapes) de création de la solution :
+- Spécifications fonctionnelles
+- Spécifications techniques
+- Définition des phases
+- Pour chaque phase :
+--- Elaboration des prototypes de la phase 'n'
+--- Tests de la phase 'n'
+--- Validation des prototypes de la phase 'n'
+- Création de la version finale
+- Test de la version finale
+- Mise en production
+Dans un premier temps, ce planning doit contenir des durées (jour, semaine, mois) plutôt que des dates fixes, mais au fur et à mesure de la progression, ces durées devront se transformer en dates précises avec Jalons et interactions (avant, après, en même temps, etc. >> Diagramme de Gantt, etc.
+[aa]Indiquez ici les taches, attribuées aux membres Innov-Member (B1 ou SN2), qui pourront être réalisées au cours des Ateliers myDiL.

@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "TerraProxi",
+    "slug": "terraproxi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#5BAE6A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "fr.terraproxi.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TerraProxi utilise votre localisation pour trouver les producteurs près de chez vous."
+      }
+    },
+    "android": {
+      "package": "fr.terraproxi.app",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#5BAE6A"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://gateway.terraproxi.fr/api",
+      "stripePublishableKey": "pk_test_CHANGE_ME"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      "expo-secure-store",
+      ["expo-notifications", { "icon": "./assets/notification-icon.png" }],
+      ["@stripe/stripe-react-native", { "merchantIdentifier": "merchant.fr.terraproxi" }]
+    ]
+  }
+}
