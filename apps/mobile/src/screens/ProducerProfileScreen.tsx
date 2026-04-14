@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions, ActivityIndicator, Linking, Alert, Platform } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
@@ -74,6 +74,47 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 
   const handleMessage = () => {
     navigation.navigate('Conversation', { partnerId: producer.user_id, partnerName: producer.company_name })
+  }
+
+  const handleDirections = async () => {
+    const hasCoordinates = Number.isFinite(producer.latitude) && Number.isFinite(producer.longitude)
+    const destinationLabel = encodeURIComponent(`${producer.company_name}, ${producer.address}`)
+
+    const appUrls = hasCoordinates
+      ? Platform.select({
+          ios: [
+            `maps://?daddr=${producer.latitude},${producer.longitude}`,
+            `comgooglemaps://?daddr=${producer.latitude},${producer.longitude}&directionsmode=driving`,
+          ],
+          android: [`google.navigation:q=${producer.latitude},${producer.longitude}`],
+          default: [],
+        }) ?? []
+      : Platform.select({
+          ios: [
+            `maps://?daddr=${destinationLabel}`,
+            `comgooglemaps://?daddr=${destinationLabel}&directionsmode=driving`,
+          ],
+          android: [`google.navigation:q=${destinationLabel}`],
+          default: [],
+        }) ?? []
+
+    const webFallback = hasCoordinates
+      ? `https://www.google.com/maps/dir/?api=1&destination=${producer.latitude},${producer.longitude}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destinationLabel}`
+
+    try {
+      for (const url of appUrls) {
+        const supported = await Linking.canOpenURL(url)
+        if (supported) {
+          await Linking.openURL(url)
+          return
+        }
+      }
+
+      await Linking.openURL(webFallback)
+    } catch {
+      Alert.alert('Impossible d\'ouvrir la navigation', 'Veuillez vérifier qu\'une application de cartes est installée.')
+    }
   }
 
   return (
@@ -161,7 +202,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
             <Text style={styles.addressText}>{producer.address}</Text>
             <Text style={styles.distanceText}>{producer.distance_km} km de vous</Text>
           </View>
-          <TouchableOpacity style={styles.directionsBtn}>
+          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />
             <Text style={styles.directionsBtnText}>Itinéraire</Text>
           </TouchableOpacity>
