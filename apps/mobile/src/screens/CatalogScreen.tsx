@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   View, Text, FlatList, ScrollView, TextInput, Image,
-  TouchableOpacity, StyleSheet, ActivityIndicator,
+  TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
@@ -38,7 +38,7 @@ interface ApiProduct {
 
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { add, count, total } = useCartStore()
+  const { add, replaceWith, count, total } = useCartStore()
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
   const isProductFavorite = useFavoritesStore((s) => s.isProductFavorite)
 
@@ -49,6 +49,9 @@ export function CatalogScreen({ route, navigation }: Props) {
 
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('Tous')
+  const [recentlyAddedProductId, setRecentlyAddedProductId] = useState<string | null>(null)
+  const [cartNotice, setCartNotice] = useState<string | null>(null)
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -85,14 +88,58 @@ export function CatalogScreen({ route, navigation }: Props) {
     return result
   }, [products, activeCategory, search])
 
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) {
+        clearTimeout(noticeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const showCartNotice = (message: string) => {
+    setCartNotice(message)
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current)
+    }
+    noticeTimerRef.current = setTimeout(() => {
+      setCartNotice(null)
+      setRecentlyAddedProductId(null)
+    }, 1800)
+  }
+
   const handleAdd = (product: ApiProduct) => {
-    add({
+    const cartProduct = {
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
       producer_id: product.producer_id ?? producerId,
-    })
+      image_url: product.image_url ?? product.banner_url,
+    }
+
+    const result = add(cartProduct)
+    if (result === 'conflict') {
+      Alert.alert(
+        'Panier lie a un autre producteur',
+        'Ton panier contient deja des articles d\'un autre producteur. Voulez-vous le vider et ajouter ce produit ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Vider le panier',
+            style: 'destructive',
+            onPress: () => {
+              replaceWith(cartProduct)
+              setRecentlyAddedProductId(product.id)
+              showCartNotice(`${product.name} ajoute au panier`)
+            },
+          },
+        ],
+      )
+      return
+    }
+
+    setRecentlyAddedProductId(product.id)
+    showCartNotice(result === 'updated' ? `Quantite mise a jour: ${product.name}` : `${product.name} ajoute au panier`)
   }
 
   const handleCartPress = () => {
@@ -150,8 +197,15 @@ export function CatalogScreen({ route, navigation }: Props) {
         <Text style={styles.productUnit}>{item.unit}</Text>
         <View style={styles.productBottom}>
           <Text style={styles.productPrice}>{item.price.toFixed(2)} €</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={() => handleAdd(item)}>
-            <MaterialCommunityIcons name="plus" size={18} color={Colors.white} />
+          <TouchableOpacity
+            style={[styles.addBtn, recentlyAddedProductId === item.id && styles.addBtnAdded]}
+            onPress={() => handleAdd(item)}
+          >
+            <MaterialCommunityIcons
+              name={recentlyAddedProductId === item.id ? 'check' : 'plus'}
+              size={18}
+              color={Colors.white}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -192,6 +246,13 @@ export function CatalogScreen({ route, navigation }: Props) {
           onChangeText={setSearch}
         />
       </View>
+
+      {cartNotice && (
+        <View style={styles.noticeBanner}>
+          <MaterialCommunityIcons name="check-circle" size={16} color={Colors.green700} />
+          <Text style={styles.noticeText} numberOfLines={1}>{cartNotice}</Text>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -348,6 +409,25 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
     paddingVertical: 0,
   },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.green50,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.green100,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.green700,
+  },
   pillsContainer: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
@@ -481,6 +561,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addBtnAdded: {
+    backgroundColor: Colors.success,
   },
   cartBar: {
     position: 'absolute',

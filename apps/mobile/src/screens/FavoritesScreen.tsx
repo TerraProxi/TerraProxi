@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, Image, ScrollView,
-  StyleSheet, Dimensions, ActivityIndicator,
+  StyleSheet, Dimensions, ActivityIndicator, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
@@ -46,6 +46,7 @@ export function FavoritesScreen({ navigation }: any) {
   const toggleProducer = useFavoritesStore((s) => s.toggleProducer)
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
   const addToCart = useCartStore((s) => s.add)
+  const replaceWith = useCartStore((s) => s.replaceWith)
 
   useEffect(() => {
     const load = async () => {
@@ -68,13 +69,36 @@ export function FavoritesScreen({ navigation }: any) {
   const favoriteProducts = allProducts.filter((p) => productIds.includes(p.id))
 
   const handleAddToCart = (product: ApiProduct) => {
-    addToCart({
+    const cartProduct = {
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
       producer_id: product.producer_id ?? '',
-    })
+      image_url: product.image_url ?? product.banner_url,
+    }
+
+    const result = addToCart(cartProduct)
+    if (result === 'conflict') {
+      Alert.alert(
+        'Panier lie a un autre producteur',
+        'Ton panier contient deja des articles d\'un autre producteur. Voulez-vous le vider et ajouter ce produit ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Vider le panier',
+            style: 'destructive',
+            onPress: () => {
+              replaceWith(cartProduct)
+              Alert.alert('✓ Ajoute', `${product.name} ajoute au panier`)
+            },
+          },
+        ],
+      )
+      return
+    }
+
+    Alert.alert('✓ Ajoute', result === 'updated' ? `${product.name} quantite mise a jour` : `${product.name} ajoute au panier`)
   }
 
   if (loading) {

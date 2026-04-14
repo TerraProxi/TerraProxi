@@ -1,4 +1,12 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import * as SecureStore from 'expo-secure-store'
+
+const secureStorage = {
+  getItem: (name: string) => SecureStore.getItemAsync(name) ?? null,
+  setItem: (name: string, value: string) => SecureStore.setItemAsync(name, value),
+  removeItem: (name: string) => SecureStore.deleteItemAsync(name),
+}
 
 export interface CartProduct {
   id: string
@@ -14,53 +22,76 @@ export interface CartItem {
   quantity: number
 }
 
+export type CartAddResult = 'added' | 'updated' | 'conflict'
+
 interface CartStore {
   items: CartItem[]
   producerId: string | null
   total: number
   count: number
-  add: (product: CartProduct, quantity?: number) => void
+  add: (product: CartProduct, quantity?: number) => CartAddResult
+  replaceWith: (product: CartProduct, quantity?: number) => void
   remove: (productId: string) => void
   updateQty: (productId: string, quantity: number) => void
   clear: () => void
 }
 
-export const useCartStore = create<CartStore>((set, get) => ({
-  items: [],
-  producerId: null,
-  get total() { return get().items.reduce((s, i) => s + i.product.price * i.quantity, 0) },
-  get count() { return get().items.reduce((s, i) => s + i.quantity, 0) },
+export const useCartStore = create<CartStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      producerId: null,
+      get total() { return get().items.reduce((s, i) => s + i.product.price * i.quantity, 0) },
+      get count() { return get().items.reduce((s, i) => s + i.quantity, 0) },
 
-  add: (product, quantity = 1) => {
-    set((state) => {
-      if (state.producerId && state.producerId !== product.producer_id) {
-        return { items: [{ product, quantity }], producerId: product.producer_id }
-      }
-      const existing = state.items.find((i) => i.product.id === product.id)
-      if (existing) {
-        return {
-          items: state.items.map((i) =>
-            i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
-          ),
+      add: (product, quantity = 1) => {
+        const state = get()
+        if (state.producerId && state.producerId !== product.producer_id) {
+          return 'conflict'
         }
-      }
-      return {
-        items: [...state.items, { product, quantity }],
+
+        const existing = state.items.find((i) => i.product.id === product.id)
+        if (existing) {
+          set({
+            items: state.items.map((i) =>
+              i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
+            ),
+          })
+          return 'updated'
+        }
+
+        set({
+          items: [...state.items, { product, quantity }],
+          producerId: product.producer_id,
+        })
+        return 'added'
+      },
+
+      replaceWith: (product, quantity = 1) => set({
+        items: [{ product, quantity }],
         producerId: product.producer_id,
-      }
-    })
-  },
+      }),
 
-  remove: (productId) => set((s) => ({
-    items: s.items.filter((i) => i.product.id !== productId),
-    producerId: s.items.length === 1 ? null : s.producerId,
-  })),
+      remove: (productId) => set((s) => {
+        const nextItems = s.items.filter((i) => i.product.id !== productId)
+        return {
+          items: nextItems,
+          producerId: nextItems.length === 0 ? null : s.producerId,
+        }
+      }),
 
-  updateQty: (productId, quantity) => set((s) => ({
-    items: s.items.map((i) =>
-      i.product.id === productId ? { ...i, quantity: Math.max(1, quantity) } : i,
-    ),
-  })),
+      updateQty: (productId, quantity) => set((s) => ({
+        items: s.items.map((i) =>
+          i.product.id === productId ? { ...i, quantity: Math.max(1, quantity) } : i,
+        ),
+      })),
 
-  clear: () => set({ items: [], producerId: null }),
-}))
+      clear: () => set({ items: [], producerId: null }),
+    }),
+    {
+      name: 'cart-store',
+      storage: createJSONStorage(() => secureStorage),
+      partialize: (state) => ({ items: state.items, producerId: state.producerId }),
+    },
+  ),
+)

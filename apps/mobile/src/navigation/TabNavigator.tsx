@@ -4,10 +4,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { MapScreen } from '../screens/MapScreen'
 import { ShopListScreen } from '../screens/ShopListScreen'
 import { ScanScreen } from '../screens/ScanScreen'
-import { FavoritesScreen } from '../screens/FavoritesScreen'
 import { UserProfileScreen } from '../screens/UserProfileScreen'
+import { CartScreen } from '../screens/CartScreen'
 import { Colors } from '../theme'
 import { useUiStore } from '../store/ui.store'
+import { useCartStore } from '../store/cart.store'
 
 const Tab = createBottomTabNavigator()
 
@@ -23,6 +24,7 @@ function ScanButton({ onPress }: { onPress: (e: any) => void }) {
 
 export function TabNavigator() {
   const darkMode = useUiStore((s) => s.darkMode)
+  const cartCount = useCartStore((s) => s.count)
 
   return (
     <Tab.Navigator
@@ -73,12 +75,18 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Favoris"
-        component={FavoritesScreen}
+        name="Panier"
+        component={CartScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="heart" size={size || 24} color={color} />
+            <MaterialCommunityIcons name="basket" size={size || 24} color={color} />
           ),
+          tabBarBadge: cartCount > 0 ? cartCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: Colors.primary,
+            color: '#fff',
+            fontWeight: '700',
+          },
         }}
       />
       <Tab.Screen
