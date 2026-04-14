@@ -33,12 +33,16 @@ export function MapScreen() {
   const [region, setRegion] = useState(DEFAULT_REGION)
   const mapRef = useRef<MapView>(null)
 
+  const isValidLocation = (lat: number, lng: number) => lat > 40 && lat < 52 && lng > -6 && lng < 10
+
   useEffect(() => {
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') return
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const r = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
+      const { latitude, longitude } = pos.coords
+      if (!isValidLocation(latitude, longitude)) return
+      const r = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
       setRegion(r)
       mapRef.current?.animateToRegion(r, 800)
     })()
@@ -68,7 +72,13 @@ export function MapScreen() {
     const { status } = await Location.requestForegroundPermissionsAsync()
     if (status !== 'granted') return
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-    const r = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
+    const { latitude, longitude } = pos.coords
+    if (!isValidLocation(latitude, longitude)) {
+      const r = { ...DEFAULT_REGION }
+      mapRef.current?.animateToRegion(r, 800)
+      return
+    }
+    const r = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
     mapRef.current?.animateToRegion(r, 800)
   }
 
