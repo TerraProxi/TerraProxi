@@ -12,11 +12,11 @@ export function HomePage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    productsService.list({ limit: 8, available: 'true' }).then((r) => setProducts(r.data))
+    productsService.list({ limit: 8, available: 'true' }).then((r) => setProducts(r.data)).catch(() => {})
     if (lat && lon) {
-      producersService.list({ lat, lon, radius: 50, limit: 6 }).then((r) => setProducers(r.data))
+      producersService.list({ lat, lon, radius: 50, limit: 6 }).then((r) => setProducers(r.data)).catch(() => {})
     } else {
-      producersService.list({ limit: 6 }).then((r) => setProducers(r.data))
+      producersService.list({ limit: 6 }).then((r) => setProducers(r.data)).catch(() => {})
     }
   }, [lat, lon])
 

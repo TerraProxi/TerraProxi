@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { setupMockInterceptor } from './mock.interceptor'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -29,5 +30,7 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+setupMockInterceptor(api)
 
 export default api

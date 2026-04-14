@@ -60,27 +60,29 @@ export function ShopListScreen({ navigation }: any) {
         />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-        {FILTERS.map((f) => {
-          const active = activeFilter === f.key
-          return (
-            <TouchableOpacity
-              key={f.key}
-              onPress={() => setActiveFilter(f.key)}
-              style={[styles.filterPill, active && styles.filterPillActive]}
-            >
-              <MaterialCommunityIcons
-                name={f.icon}
-                size={16}
-                color={active ? Colors.white : Colors.primary}
-              />
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      <View style={styles.filterRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          {FILTERS.map((f) => {
+            const active = activeFilter === f.key
+            return (
+              <TouchableOpacity
+                key={f.key}
+                onPress={() => setActiveFilter(f.key)}
+                style={[styles.filterPill, active && styles.filterPillActive]}
+              >
+                <MaterialCommunityIcons
+                  name={f.icon}
+                  size={14}
+                  color={active ? Colors.white : Colors.primary}
+                />
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
 
       <FlatList
         data={filtered}
@@ -128,12 +130,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray50,
   },
   header: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.white,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xxxl,
-    paddingBottom: Spacing.xxl,
-    borderBottomLeftRadius: Radius.xl,
-    borderBottomRightRadius: Radius.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray100,
   },
   headerTitle: {
     fontSize: 26,
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.lg,
     marginHorizontal: Spacing.xl,
-    marginTop: -Spacing.lg,
+    marginTop: Spacing.md,
     marginBottom: Spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -168,19 +170,26 @@ const styles = StyleSheet.create({
     color: Colors.gray900,
   },
   filterRow: {
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  filterContent: {
     paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+    justifyContent: 'center',
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: Radius.full,
     backgroundColor: Colors.white,
     borderWidth: 1.5,
     borderColor: Colors.gray200,
-    marginRight: Spacing.sm,
+    flexShrink: 0,
   },
   filterPillActive: {
     backgroundColor: Colors.primary,
