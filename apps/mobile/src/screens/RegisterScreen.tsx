@@ -61,7 +61,7 @@ export function RegisterScreen() {
             <Text style={styles.label}>{f.label}</Text>
             <TextInput
               style={styles.input}
-              value={(form as Record<string, string>)[f.key]}
+              value={(form as unknown as Record<string, string>)[f.key]}
               onChangeText={(v) => set(f.key, v)}
               keyboardType={f.type}
               secureTextEntry={f.secure}

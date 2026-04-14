@@ -1,103 +1,408 @@
-import { useEffect, useState } from 'react'
-import {
-  View, Text, ScrollView, FlatList, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator,
-} from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import api from '../services/api'
-import { useCartStore } from '../store/cart.store'
+import { Colors, Spacing, Radius } from '../theme'
+import { useMockStore } from '../store/mock.store'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
 
-interface Producer {
-  id: string; user_id: string; company_name: string
-  description?: string; city?: string; is_verified: boolean
-}
-interface Product {
-  id: string; name: string; price: number; unit: string
-  stock: number; is_available: boolean; producer_id: string; category: string
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const [producer, setProducer] = useState<Producer | null>(null)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const add = useCartStore((s) => s.add)
+  const { producers, toggleFavoriteProducer, isFavoriteProducer } = useMockStore()
 
-  useEffect(() => {
-    Promise.all([
-      api.get<Producer>(`/producers/${producerId}`),
-      api.get<Product[]>('/products', { params: { producer_id: producerId, available: 'true' } }),
-    ]).then(([pRes, prRes]) => {
-      setProducer(pRes.data)
-      setProducts(prRes.data)
-      navigation.setOptions({ title: pRes.data.company_name })
-    }).finally(() => setLoading(false))
-  }, [producerId])
+  const producer = producers.find((p) => p.id === producerId)
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 60 }} color="#5BAE6A" size="large" />
-  if (!producer) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Producteur introuvable</Text></View>
-
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#F6F9F6' }}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.name}>{producer.company_name}{producer.is_verified ? ' ✅' : ''}</Text>
-        {producer.city && <Text style={styles.city}>📍 {producer.city}</Text>}
-        {producer.description && <Text style={styles.desc}>{producer.description}</Text>}
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Conversation', { partnerId: producer.user_id, partnerName: producer.company_name })}
-          style={styles.contactBtn}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700' }}>💬 Contacter</Text>
+  if (!producer) {
+    return (
+      <View style={styles.errorContainer}>
+        <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
+        <Text style={styles.errorTitle}>Producteur introuvable</Text>
+        <Text style={styles.errorSub}>Ce producteur n'existe pas ou a été supprimé.</Text>
+        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.errorBtnText}>Retour</Text>
         </TouchableOpacity>
       </View>
+    )
+  }
 
-      {/* Produits */}
-      <View style={{ padding: 16 }}>
-        <Text style={styles.sectionTitle}>Produits disponibles ({products.length})</Text>
-        {products.length === 0 ? (
-          <Text style={{ color: '#9CA3AF' }}>Aucun produit disponible.</Text>
-        ) : (
-          products.map((p) => (
-            <View key={p.id} style={styles.productRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.productName}>{p.name}</Text>
-                <Text style={styles.productPrice}>{Number(p.price).toFixed(2)} € / {p.unit}</Text>
-                <Text style={{ fontSize: 12, color: p.stock > 0 ? '#5BAE6A' : '#DC2626' }}>
-                  {p.stock > 0 ? `${p.stock} disponible${p.stock > 1 ? 's' : ''}` : 'Rupture'}
-                </Text>
-              </View>
-              {p.stock > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    add({ id: p.id, name: p.name, price: p.price, unit: p.unit, producer_id: p.producer_id })
-                    Alert.alert('✓ Ajouté', `${p.name} ajouté au panier`)
-                  }}
-                  style={styles.addBtn}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>+ Panier</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))
-        )}
+  const favorite = isFavoriteProducer(producer.id)
+
+  const handleShop = () => {
+    navigation.navigate('Catalog', { producerId: producer.id })
+  }
+
+  const handleMessage = () => {
+    navigation.navigate('Conversation', { partnerId: producer.id, partnerName: producer.name })
+  }
+
+  return (
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.coverContainer}>
+        <Image source={{ uri: producer.coverImage }} style={styles.coverImage} />
+        <View style={styles.coverGradient} />
+        <View style={styles.topNav}>
+          <TouchableOpacity style={styles.topNavBtn} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.white} />
+          </TouchableOpacity>
+          <View style={styles.topNavRight}>
+            <TouchableOpacity style={styles.topNavBtn} onPress={() => toggleFavoriteProducer(producer.id)}>
+              <MaterialCommunityIcons
+                name={favorite ? 'heart' : 'heart-outline'}
+                size={22}
+                color={favorite ? Colors.danger : Colors.white}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.topNavBtn}>
+              <MaterialCommunityIcons name="share-variant-outline" size={20} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
+
+      <View style={styles.contentCard}>
+        <View style={styles.avatarContainer}>
+          <Image source={{ uri: producer.avatar }} style={styles.avatar} />
+          <View style={styles.verifiedBadge}>
+            <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
+          </View>
+        </View>
+
+        <Text style={styles.producerName}>{producer.name}</Text>
+        <Text style={styles.producerMeta}>Depuis 2015 • Certifié Bio</Text>
+
+        <View style={styles.ratingBadge}>
+          <MaterialCommunityIcons name="star" size={18} color={Colors.yellow500} />
+          <Text style={styles.ratingText}>{producer.rating}</Text>
+          <Text style={styles.reviewCount}>({producer.reviewCount} avis)</Text>
+        </View>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.shopBtn} onPress={handleShop}>
+            <MaterialCommunityIcons name="storefront" size={20} color={Colors.white} />
+            <Text style={styles.shopBtnText}>Voir Boutique</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
+            <MaterialCommunityIcons name="chat-outline" size={20} color={Colors.primary} />
+            <Text style={styles.messageBtnText}>Message</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <MaterialCommunityIcons name="information-outline" size={22} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>À propos</Text>
+        </View>
+        <View style={styles.aboutCard}>
+          <Text style={styles.aboutText}>{producer.description}</Text>
+          <View style={styles.categoryPills}>
+            {producer.categories.map((cat) => (
+              <View key={cat} style={styles.categoryPill}>
+                <Text style={styles.categoryPillText}>{cat}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <MaterialCommunityIcons name="map-marker-outline" size={22} color={Colors.primary} />
+          <Text style={styles.sectionTitle}>Localisation</Text>
+        </View>
+        <View style={styles.locationCard}>
+          <View style={styles.mapPlaceholder}>
+            <MaterialCommunityIcons name="map-marker" size={56} color={Colors.gray300} />
+          </View>
+          <View style={styles.locationInfo}>
+            <Text style={styles.addressText}>{producer.address}</Text>
+            <Text style={styles.distanceText}>{producer.distance} km de vous</Text>
+          </View>
+          <TouchableOpacity style={styles.directionsBtn}>
+            <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />
+            <Text style={styles.directionsBtnText}>Itinéraire</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  header:      { backgroundColor: '#EBF8F0', padding: 20, borderBottomWidth: 1, borderBottomColor: '#E2EEE2' },
-  name:        { fontSize: 24, fontWeight: '800', color: '#333', marginBottom: 4 },
-  city:        { fontSize: 14, color: '#9CA3AF', marginBottom: 8 },
-  desc:        { fontSize: 14, color: '#555', lineHeight: 20, marginBottom: 12 },
-  contactBtn:  { backgroundColor: '#76CCD6', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 12 },
-  productRow:  { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2EEE2', flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  productName: { fontWeight: '700', fontSize: 14, color: '#333', marginBottom: 2 },
-  productPrice: { fontSize: 16, fontWeight: '700', color: '#5BAE6A', marginBottom: 2 },
-  addBtn:      { backgroundColor: '#76CCD6', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.gray50,
+  },
+  coverContainer: {
+    height: 256,
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  coverGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  topNav: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 50,
+    paddingHorizontal: Spacing.lg,
+  },
+  topNavBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topNavRight: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  contentCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    marginTop: -48,
+    marginHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 64 + Spacing.lg,
+    paddingBottom: Spacing.xl,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 10,
+  },
+  avatarContainer: {
+    position: 'absolute',
+    top: -64,
+    alignSelf: 'center',
+  },
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 4,
+    borderColor: Colors.white,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -2,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+  },
+  producerName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.dark,
+    textAlign: 'center',
+  },
+  producerMeta: {
+    fontSize: 14,
+    color: Colors.gray600,
+    marginTop: Spacing.xs,
+    textAlign: 'center',
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.yellow50,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.md,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.dark,
+  },
+  reviewCount: {
+    fontSize: 13,
+    color: Colors.gray600,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.xl,
+    gap: Spacing.md,
+    width: '100%',
+  },
+  shopBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  shopBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  messageBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  messageBtnText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  sectionContainer: {
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.dark,
+  },
+  aboutCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  aboutText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: Colors.gray700,
+  },
+  categoryPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  categoryPill: {
+    backgroundColor: Colors.green50,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xs,
+  },
+  categoryPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.green700,
+  },
+  locationCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xxl,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  mapPlaceholder: {
+    height: 160,
+    backgroundColor: Colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationInfo: {
+    padding: Spacing.lg,
+  },
+  addressText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.dark,
+  },
+  distanceText: {
+    fontSize: 13,
+    color: Colors.gray600,
+    marginTop: Spacing.xs,
+  },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  directionsBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.gray50,
+    padding: Spacing.xxxl,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.dark,
+    marginTop: Spacing.lg,
+  },
+  errorSub: {
+    fontSize: 14,
+    color: Colors.gray600,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  errorBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.xxxl,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.xl,
+  },
+  errorBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
 })
