@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, ScrollView, Image, TouchableOpacity,
-  StyleSheet, Alert,
+  StyleSheet, Alert, TextInput,
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
@@ -16,11 +16,49 @@ type Nav = StackNavigationProp<RootStackParamList>
 
 type DeliveryMode = 'delivery' | 'pickup'
 
+type AddressForm = {
+  street: string
+  postalCode: string
+  city: string
+  extra: string
+}
+
+const DEFAULT_ADDRESS: AddressForm = {
+  street: '12 Rue de la Republique',
+  postalCode: '34000',
+  city: 'Montpellier',
+  extra: '',
+}
+
+const normalizePostalCode = (value: string) => value.replace(/\D/g, '').slice(0, 5)
+
+const getAddressValidationError = (address: AddressForm): string | null => {
+  if (address.street.trim().length < 6) {
+    return 'Veuillez renseigner un numero et une rue valides.'
+  }
+  if (!/^\d{5}$/.test(address.postalCode.trim())) {
+    return 'Le code postal doit contenir exactement 5 chiffres.'
+  }
+  if (address.city.trim().length < 2) {
+    return 'Veuillez renseigner une ville valide.'
+  }
+  return null
+}
+
+const formatAddressForApi = (address: AddressForm) => {
+  const extra = address.extra.trim()
+  const line1 = extra ? `${address.street.trim()}, ${extra}` : address.street.trim()
+  return `${line1}, ${address.postalCode.trim()} ${address.city.trim()}`
+}
+
 export function CartScreen() {
   const { items, total, producerId, remove, updateQty, clear } = useCartStore()
   const { isAuthenticated } = useAuthStore()
   const nav = useNavigation<Nav>()
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery')
+  const [deliveryAddress, setDeliveryAddress] = useState<AddressForm>(DEFAULT_ADDRESS)
+  const [addressDraft, setAddressDraft] = useState<AddressForm>(DEFAULT_ADDRESS)
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
 
   const deliveryFee = deliveryMode === 'delivery' ? 5.0 : 0
   const tva = (total + deliveryFee) * 0.055
@@ -40,16 +78,52 @@ export function CartScreen() {
     if (!producerId || !items.length) return
 
     try {
-      const { data: order } = await api.post('/orders', {
+      const payload: Record<string, unknown> = {
         producer_id: producerId,
         items: items.map((i) => ({ product_id: i.product.id, quantity: i.quantity })),
         delivery_mode: deliveryMode,
-      })
+      }
+
+      if (deliveryMode === 'delivery') {
+        const validationError = getAddressValidationError(deliveryAddress)
+        if (validationError) {
+          Alert.alert('Adresse invalide', validationError)
+          return
+        }
+        payload.delivery_address = formatAddressForApi(deliveryAddress)
+      }
+
+      const { data: order } = await api.post('/orders', payload)
       clear()
       nav.navigate('Checkout', { orderId: order.id })
     } catch {
       Alert.alert('Erreur', 'Impossible de créer la commande')
     }
+  }
+
+  const handleStartEditAddress = () => {
+    setAddressDraft({ ...deliveryAddress })
+    setIsEditingAddress(true)
+  }
+
+  const handleCancelEditAddress = () => {
+    setAddressDraft({ ...deliveryAddress })
+    setIsEditingAddress(false)
+  }
+
+  const handleSaveAddress = () => {
+    const validationError = getAddressValidationError(addressDraft)
+    if (validationError) {
+      Alert.alert('Adresse invalide', validationError)
+      return
+    }
+    setDeliveryAddress({
+      street: addressDraft.street.trim(),
+      postalCode: addressDraft.postalCode.trim(),
+      city: addressDraft.city.trim(),
+      extra: addressDraft.extra.trim(),
+    })
+    setIsEditingAddress(false)
   }
 
   if (items.length === 0) {
@@ -156,12 +230,65 @@ export function CartScreen() {
               <MaterialCommunityIcons name="map-marker" size={22} color={Colors.primary} />
               <View style={styles.addressInfo}>
                 <Text style={styles.addressTitle}>Domicile</Text>
-                <Text style={styles.addressText}>12 Rue de la République, 34000 Montpellier</Text>
+                {isEditingAddress ? (
+                  <View style={styles.addressForm}>
+                    <TextInput
+                      style={styles.addressField}
+                      value={addressDraft.street}
+                      onChangeText={(street) => setAddressDraft((prev) => ({ ...prev, street }))}
+                      placeholder="Numero et rue"
+                      placeholderTextColor={Colors.gray400}
+                    />
+                    <View style={styles.addressInlineRow}>
+                      <TextInput
+                        style={[styles.addressField, styles.addressPostalField]}
+                        value={addressDraft.postalCode}
+                        onChangeText={(postalCode) => setAddressDraft((prev) => ({ ...prev, postalCode: normalizePostalCode(postalCode) }))}
+                        placeholder="Code postal"
+                        keyboardType="number-pad"
+                        placeholderTextColor={Colors.gray400}
+                      />
+                      <TextInput
+                        style={[styles.addressField, styles.addressCityField]}
+                        value={addressDraft.city}
+                        onChangeText={(city) => setAddressDraft((prev) => ({ ...prev, city }))}
+                        placeholder="Ville"
+                        placeholderTextColor={Colors.gray400}
+                      />
+                    </View>
+                    <TextInput
+                      style={styles.addressField}
+                      value={addressDraft.extra}
+                      onChangeText={(extra) => setAddressDraft((prev) => ({ ...prev, extra }))}
+                      placeholder="Complement (batiment, etage...)"
+                      placeholderTextColor={Colors.gray400}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <Text style={styles.addressText}>{deliveryAddress.street}</Text>
+                    <Text style={styles.addressText}>{deliveryAddress.postalCode} {deliveryAddress.city}</Text>
+                    {deliveryAddress.extra ? (
+                      <Text style={styles.addressText}>{deliveryAddress.extra}</Text>
+                    ) : null}
+                  </>
+                )}
               </View>
             </View>
-            <TouchableOpacity>
-              <Text style={styles.modifyLink}>Modifier</Text>
-            </TouchableOpacity>
+            {isEditingAddress ? (
+              <View style={styles.addressActions}>
+                <TouchableOpacity onPress={handleCancelEditAddress}>
+                  <Text style={styles.cancelLink}>Annuler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveAddress}>
+                  <Text style={styles.modifyLink}>Enregistrer</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={handleStartEditAddress}>
+                <Text style={styles.modifyLink}>Modifier</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -385,6 +512,19 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  addressForm: {
+    marginTop: 6,
+    gap: 8,
+  },
+  addressInlineRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addressActions: {
+    alignItems: 'flex-end',
+    gap: 8,
+    marginLeft: 10,
+  },
   addressTitle: {
     fontSize: 14,
     fontWeight: '600',
@@ -394,10 +534,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.gray500,
   },
+  addressField: {
+    minHeight: 40,
+    fontSize: 12,
+    color: Colors.dark,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    borderRadius: 10,
+    backgroundColor: Colors.gray50,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  addressPostalField: {
+    flex: 0.9,
+  },
+  addressCityField: {
+    flex: 1.6,
+  },
   modifyLink: {
     fontSize: 13,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  cancelLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gray500,
   },
   summaryCard: {
     backgroundColor: Colors.white,
