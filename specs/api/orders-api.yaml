@@ -1,0 +1,389 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Orders
+  version: 1.0.0
+  description: |
+    API de gestion des commandes
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Orders
+    description: Gestion des commandes de produits
+security:
+  - bearerAuth: []
+paths:
+  /orders:
+    post:
+      summary: Créer une commande
+      description: |
+        Crée une commande à partir du panier.
+        Validation du stock et décrémentation automatique.
+        Les produits doivent être disponibles pour le producteur spécifié.
+      operationId: createOrder
+      tags:
+        - Orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - producer_id
+                - items
+              properties:
+                producer_id:
+                  type: string
+                  description: Producteur de la commande
+                  example: prod-001
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - product_id
+                      - quantity
+                    properties:
+                      product_id:
+                        type: string
+                        description: Identifiant du produit
+                        example: sku-001
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        description: Quantité
+                        example: 2
+                notes:
+                  type: string
+                  description: Notes pour le producteur (optionnel)
+                  example: Répéter la livraison
+      responses:
+        '201':
+          description: Commande créée avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Requête invalide (produit indisponible ou stock insuffisant)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: La commande doit contenir au moins un article
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: La commande ne peut être réalisée que par le consommateur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Produit introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur interne
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Liste des commandes
+      description: |
+        Liste les commandes selon le rôle de l'utilisateur :
+        - CONSUMER : Voir ses commandes
+        - PRODUCER : Voir les commandes pour ses produits
+      operationId: listOrders
+      tags:
+        - Orders
+      parameters:
+        - name: status
+          in: query
+          description: Filtre par statut (optionnel)
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, PAID, PREPARING, READY, COMPLETED, CANCELLED]
+            example: PENDING
+        - name: limit
+          in: query
+          description: Nombre maximum de résultats
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 20
+        - name: offset
+          in: query
+          description: Pagination
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            example: 0
+      responses:
+        '200':
+          description: Liste des commandes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}:
+    get:
+      summary: Détail d'une commande
+      description: |
+        Récupère les détails d'une commande.
+        Accès uniquement au consommateur concerné ou au producteur.
+      operationId: getOrderById
+      tags:
+        - Orders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identifiant de la commande
+          schema:
+            type: string
+            example: order-001
+      responses:
+        '200':
+          description: Détail de la commande avec items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          description: Non authentifié ou accès non autorisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès non autorisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Commande introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: Mettre à jour le statut
+      description: |
+        Met à jour le statut d'une commande.
+        Seul le producteur peut modifier le statut (sauf annulation qui peut être faite par le consommateur).
+      operationId: updateOrderStatus
+      tags:
+        - Orders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identifiant de la commande
+          schema:
+            type: string
+            example: order-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: Statut mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Autorisation insuffisante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Commande introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [PENDING, PAID, PREPARING, READY, COMPLETED, CANCELLED]
+    Order:
+      type: object
+      required:
+        - id
+        - consumer_id
+        - producer_id
+        - status
+        - total_price
+        - items
+        - created_at
+      properties:
+        id:
+          type: string
+          example: order-001
+        consumer_id:
+          type: string
+          description: Identifiant du consommateur
+          example: user-001
+        producer_id:
+          type: string
+          description: Identifiant du producteur
+          example: prod-001
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+          example: PENDING
+        total_price:
+          type: number
+          format: float
+          minimum: 0
+          description: Prix total en euros
+          example: 13.00
+        stripe_payment_id:
+          type: string
+          example: pi_3abc123xyz
+          nullable: true
+        notes:
+          type: string
+          example: Répéter la livraison
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: 2025-04-01T10:00:00Z
+        items:
+          type: array
+          description: Articles de la commande
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    OrderItem:
+      type: object
+      required:
+        - id
+        - order_id
+        - product_id
+        - quantity
+        - unit_price
+        - product
+      properties:
+        id:
+          type: string
+          example: item-001
+        order_id:
+          type: string
+          example: order-001
+        product_id:
+          type: string
+          example: sku-001
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        unit_price:
+          type: number
+          format: float
+          minimum: 0
+          example: 6.5
+        product:
+          $ref: '#/components/schemas/Product'
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          example: Commande introuvable
+        status:
+          type: integer
+          example: 404
+          enum: [400, 401, 403, 404, 409, 500]
+        details:
+          type: object
+          additionalProperties: true
+          example:
+            field: quantity
+            message: Stock insuffisant

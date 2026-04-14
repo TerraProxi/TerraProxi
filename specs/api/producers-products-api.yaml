@@ -1,0 +1,633 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Producteurs et Produits
+  version: 1.0.0
+  description: |
+    API pour la gestion des producteurs et de leur catalogue de produits biologiques et locaux.
+    Permet aux consommateurs de découvrir les producteurs géolocalisés, affiner les produits et accéder aux détails.
+
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+
+tags:
+  - name: Producers
+    description: Gestion des profils de producteurs
+
+tags:
+  - name: Products
+    description: Catalogue de produits des producteurs
+
+security:
+  - bearerAuth: []
+
+paths:
+  /producers:
+    get:
+      summary: Liste des producteurs
+      description: |
+        Récupère la liste des producteurs avec options de géolocalisation.
+        En mode sans géolocalisation : retourne les derniers producteurs.
+        Avec géolocalisation : filtre et trie par distance du centre.
+
+        **Mode Mock (fallback)** : Les données sont retournées en mémoire quand la BDD Postgres est indisponible.
+      operationId: listProducers
+      tags:
+        - Producers
+      parameters:
+        - name: lat
+          in: query
+          description: Latitude du centre de recherche (depuis le GPS de l'utilisateur)
+          required: false
+          schema:
+            type: number
+            example: 43.6
+        - name: lon
+          in: query
+          description: Longitude du centre de recherche
+          required: false
+          schema:
+            type: number
+            example: 3.88
+        - name: radius
+          in: query
+          description: Rayon de recherche en km (défaut: 30)
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+            example: 50
+        - name: search
+          in: query
+          description: Terme de recherche (match du nom ou de la description)
+          required: false
+          schema:
+            type: string
+            example: fraise
+        - name: limit
+          in: query
+          description: Nombre maximum de résultats (défaut: 20)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 20
+        - name: offset
+          in: query
+          description: Nombre de résultats à sauter (pagination)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            example: 0
+      responses:
+        '200':
+          description: Liste des producteurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Producer'
+        '400':
+          description: Requête invalide (paramètres invalides)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Créer ou mettre à jour le profil producteur
+      description: |
+        Crée le profil complet d'un producteur. Si le profil existe déjà pour l'utilisateur,
+        les données sont mises à jour de manière idempotente.
+
+        **Contraintes selon le rôle :**
+        - Consommateur : 401 Unauthorized
+        - Producteur : OK (création ou mise à jour)
+      operationId: createOrUpdateProducer
+      tags:
+        - Producers
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - company_name
+              properties:
+                company_name:
+                  type: string
+                  minLength: 1
+                  example: Ferme des Garrigues
+                description:
+                  type: string
+                  example: Exploitation familiale au cœur du Pic Saint-Loup.
+                  minLength: 1
+                address:
+                  type: string
+                  example: Route de Ganges, Saint-Gély-du-Fesc
+                  minLength: 1
+                city:
+                  type: string
+                  minLength: 1
+                  example: Saint-Gély-du-Fesc
+                postal_code:
+                  type: string
+                  minLength: 5
+                  maxLength: 5
+                  example: 34780
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                  example: 43.6938
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                  example: 3.8049
+                website_url:
+                  type: string
+                  format: uri
+                  example: https://ferme-des-garrigues.fr
+      responses:
+        '201':
+          description: Profil créé ou mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producer'
+        '400':
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié ou mauvais rôle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur interne
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /producers/{id}:
+    get:
+      summary: Fiche producteur
+      description: Récupère les détails complets d'un producteur spécifique
+      operationId: getProducerById
+      tags:
+        - Producers
+      parameters:
+        - $ref: '#/components/parameters/ProducerId'
+      responses:
+        '200':
+          description: Détails du producteur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producer'
+        '404':
+          description: Producteur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products:
+    get:
+      summary: Liste des produits
+      description: |
+        Récupère le catalogue des produits avec plusieurs filtres.
+
+        **Mode Mock (fallback)** : Les produits sont retournés en mémoire quand la BDD Postgres est indisponible.
+      operationId: listProducts
+      tags:
+        - Products
+      parameters:
+        - name: producer_id
+          in: query
+          description: Filtre par producteur (optionnel)
+          required: false
+          schema:
+            type: string
+            example: prod-001
+        - name: category
+          in: query
+          description: Filtre par catégorie (optionnel)
+          required: false
+          schema:
+            type: string
+            example: Légumes
+        - name: available
+          in: query
+          description: Filtrer uniquement les produits disponibles (true/false)
+          required: false
+          schema:
+            type: boolean
+            allowEmptyValue: false
+            example: true
+        - name: search
+          in: query
+          description: Terme de recherche
+          required: false
+          schema:
+            type: string
+            example: tomate
+        - name: limit
+          in: query
+          description: Nombre maximum de résultats (défaut: 40)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 40
+        - name: offset
+          in: query
+          description: Pagination (défaut: 0)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            example: 0
+      responses:
+        '200':
+          description: Liste des produits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '400':
+          description: Requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Créer un produit pour ce producteur
+      description: |
+        Ajoute un nouveau produit au catalogue du producteur connecté.
+
+        **Contraintes selon le rôle :**
+        - Consommateur : 401 Unauthorized
+        - Producteur : OK (création du produit)
+      operationId: createProduct
+      tags:
+        - Products
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Produit créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié ou mauvais rôle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /products/{id}:
+    get:
+      summary: Détail d'un produit
+      description: Récupère le détail complet d'un produit spécifique
+      operationId: getProductById
+      tags:
+        - Products
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Détail du produit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Produit introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+        Génére lors de l'inscription ou de la connexion.
+
+  parameters:
+    ProducerId:
+      name: id
+      in: path
+      required: true
+      description: UUID ou identifiant du producteur
+      schema:
+        type: string
+        example: prod-001
+      style: simple
+
+    ProductId:
+      name: id
+      in: path
+      required: true
+      description: SKU ou identifiant du produit
+      schema:
+        type: string
+        example: sku-001
+      style: simple
+
+  schemas:
+    Producer:
+      type: object
+      required:
+        - id
+        - user_id
+        - company_name
+        - latitude
+        - longitude
+        - is_verified
+        - first_name
+        - last_name
+        - rating
+        - review_count
+        - categories
+        - is_open
+      properties:
+        id:
+          type: string
+          example: prod-001
+          description: Identifiant unique du producteur
+        user_id:
+          type: string
+          description: ID de l'utilisateur associé
+          example: user-prod-001
+        company_name:
+          type: string
+          minLength: 1
+          description: Nom de l'entreprise du producteur
+          example: Ferme des Garrigues
+        description:
+          type: string
+          description: Description de l'activité du producteur
+          example: |
+            Exploitation familiale au cœur du Pic Saint-Loup.
+            Nous cultivons des variétés anciennes sans pesticides.
+        address:
+          type: string
+          description: Adresse du lieu de production
+          example: Route de Ganges, Saint-Gély-du-Fesc
+        city:
+          type: string
+          description: Ville
+          example: Saint-Gély-du-Fesc
+        postal_code:
+          type: string
+          description: Code postal
+          pattern: '^\d{5}$'
+          example: 34780
+        latitude:
+          type: number
+          format: float
+          minimum: -90.0
+          maximum: 90.0
+          description: Latitude en degrés (WGS84)
+          example: 43.6938
+        longitude:
+          type: number
+          format: float
+          minimum: -180.0
+          maximum: 180.0
+          description: Longitude en degrés (WGS84)
+          example: 3.8049
+        website_url:
+          type: string
+          format: uri
+          description: Site web optionnel
+          example: https://ferme-des-garrigues.fr
+        banner_url:
+          type: string
+          format: uri
+          description: URL de la bannière de présentation
+          example: https://images.unsplash.com/photo-1464226184884...
+        is_verified:
+          type: boolean
+          description: Indique si le producteur est vérifié Bio
+          example: true
+        first_name:
+          type: string
+          example: Jean
+        last_name:
+          type: string
+          example: Dupont
+        rating:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 5
+          description: Note moyenne (1 à 5)
+          example: 4.8
+        review_count:
+          type: integer
+          minimum: 0
+          description: Nombre d'avis
+          example: 120
+        distance_km:
+          type: number
+          format: float
+          minimum: 0
+          description: Distance depuis le centre de recherche (3 destinationViewController)
+          example: 2.5
+        categories:
+          type: array
+          items:
+            type: string
+          description: Catégories de l'activité
+          example:
+            - Légumes
+            - Œufs
+        is_open:
+          type: boolean
+          description: Indique si la boutique est ouverte
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Date de création
+          example: 2025-04-01T10:00:00Z
+
+    Product:
+      type: object
+      required:
+        - id
+        - producer_id
+        - name
+        - price
+        - stock
+        - unit
+        - category
+        - is_available
+      properties:
+        id:
+          type: string
+          example: sku-001
+        producer_id:
+          type: string
+          description: Producteur propriétaire du produit
+          example: prod-001
+        name:
+          type: string
+          minLength: 1
+          description: Nom du produit
+          example: Œufs Plein Air
+        description:
+          type: string
+          description: Description du produit
+          example: Œufs de poules élevées en plein air.
+        price:
+          type: number
+          format: float
+          minimum: 0
+          description: Prix unitaire en euros
+          example: 6.5
+        stock:
+          type: integer
+          minimum: 0
+          description: Quantité disponible
+          example: 25
+        unit:
+          type: string
+          description: Unité de vente (kg, boîte, pièce, L...)
+          example: boîte de 12
+        category:
+          type: string
+          description: Catégorie du produit
+          example: DAIRY
+        image_url:
+          type: string
+          format: uri
+          description: URL de l'image du produit
+          example: https://images.unsplash.com/photo-1582722134903...
+        is_available:
+          type: boolean
+          description: Indique si le produit est disponible
+          example: true
+        is_bestseller:
+          type: boolean
+          description: Indique si c'est un produit vedette
+          example: false
+        is_seasonal:
+          type: boolean
+          description: Indique si c'est un produit de saison
+          example: false
+        producer_name:
+          type: string
+          description: Nom du producteur (jointure implicite)
+          example: Ferme des Garrigues
+        created_at:
+          type: string
+          format: date-time
+          description: Date de création
+          example: 2025-04-01T08:20:00Z
+
+    ProductInput:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          required:
+            - producer_id
+      properties:
+        producer_id:
+          type: string
+          description: Producteur propriétaire (requis pour la création)
+          example: prod-001
+
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          description: Message d'erreur
+          example: Producteur introuvable
+        status:
+          type: integer
+          description: Code HTTP
+          example: 404
+          enum: [400, 401, 403, 404, 500]
+        details:
+          type: object
+          additionalProperties: true
+          description: Détails supplémentaires (optionnel)
+          example:
+            field: email
+            message: Email déjà utilisé

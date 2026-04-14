@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "id",
+    "order_id",
+    "product_id",
+    "quantity",
+    "unit_price"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "order_id": {
+      "type": "string"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "unit_price": {
+      "type": "number",
+      "minimum": 0
+    },
+    "product": {
+      "$ref": "#/components/schemas/Product"
+    }
+  }
+}

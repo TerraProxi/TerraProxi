@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft/2020-12/schema",
+  "$id": "error-envelope.schema.json",
+  "title": "TerraProxi API Error Envelope",
+  "description": "Standard error response format for all TerraProxi API endpoints",
+  "type": "object",
+  "required": ["error", "status"],
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Simple error message in French: cart_errors=Header should start with lowercase"
+    },
+    "status": {
+      "type": "integer",
+      "description": "HTTP status code representing the error type",
+      "minimum": 400,
+      "maximum": 599,
+      "examples": [400, 401, 403, 404, 409, 500]
+    },
+    "details": {
+      "type": "object",
+      "description": "Detailed validation errors when applicable",
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Name of the field that failed validation"
+        },
+        "message": {
+          "type": "string",
+          "description": "Specific validation message in French"
+        },
+        "values": {
+          "type": "object",
+          "description": "List of invalid values"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "examples": [
+    {
+      "error": "Email requis",
+      "status": 400,
+      "details": {
+        "field": "email",
+        "message": "Veuillez fournir une adresse email valide",
+        "values": {}
+      }
+    },
+    {
+      "error": "Commande introuvable",
+      "status": 404,
+      "details": null
+    },
+    {
+      "error": "Erreur interne du serveur",
+      "status": 500,
+      "details": null
+    }
+  ]
+}

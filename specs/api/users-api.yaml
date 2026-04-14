@@ -1,0 +1,212 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Users
+  version: 1.0.0
+  description: |
+    API de gestion des profils utilisateurs
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Users
+    description: Gestion des profils utilisateurs
+security:
+  - bearerAuth: []
+paths:
+  /users/profile:
+    get:
+      summary: Mon profil
+      description: |
+        Récupère le profil de l'utilisateur authentifié.
+      operationId: getProfile
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Profil de l'utilisateur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: Modifier mon profil
+      description: |
+        Met à jour le profil de l'utilisateur authentifié. Tous les champs sont optionnels.
+        Les champs non fournis ne sont pas modifiés.
+      operationId: updateProfile
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                  minLength: 1
+                  example: Jean
+                last_name:
+                  type: string
+                  minLength: 1
+                  example: Dupont
+                phone:
+                  type: string
+                  example: +33612345678
+                avatar_url:
+                  type: string
+                  format: uri
+                  example: https://example.com/avatar.jpg
+      responses:
+        '200':
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/me:
+    delete:
+      summary: Supprimer mon compte (RGPD)
+      description: |
+        Supprime le compte et toutes les données associées (CASCADE en DB).
+        Cette action est irréversible.
+      operationId: deleteMe
+      tags:
+        - Users
+      responses:
+        '204':
+          description: Compte supprimé
+          content:
+            application/json:
+              schema:
+                type: object
+                description: No content
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - role
+        - created_at
+      properties:
+        id:
+          type: string
+          example: user-001
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        first_name:
+          type: string
+          example: Jean
+        last_name:
+          type: string
+          example: Dupont
+        role:
+          type: string
+          enum: [CONSUMER, PRODUCER, ADMIN]
+          example: CONSUMER
+        phone:
+          type: string
+          example: +33612345678
+        avatar_url:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+        created_at:
+          type: string
+          format: date-time
+          example: 2025-04-01T10:00:00Z
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          example: Champs manquants
+        status:
+          type: integer
+          example: 400
+          enum: [400, 401, 403, 404, 500]
+        details:
+          type: object
+          additionalProperties: true
+          example:
+            field: phone
+            message: Format invalide

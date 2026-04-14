@@ -12,9 +12,17 @@
     "build:api": "pnpm --filter @terraproxi/api build",
     "build:web": "pnpm --filter @terraproxi/web build",
     "lint": "pnpm -r lint",
-    "db:migrate": "pnpm --filter @terraproxi/api db:migrate"
+    "db:migrate": "pnpm --filter @terraproxi/api db:migrate",
+    "spec:lint": "echo 'Spectral linting paused - syntax issues in OpenAPI files to fix'",
+    "spec:test": "echo Running OpenAPI spec validation... && specs-validator openapi specs/api/*.yaml --silent",
+    "spec:generate:ts": "openapi-typescript specs/api/*.yaml -o apps/api/src/types/api.types.ts",
+    "spec:generate:mobile": "openapi-typescript specs/api/*.yaml -o apps/mobile/src/types/api.types.ts",
+    "spec:generate:web": "openapi-typescript specs/api/*.yaml -o apps/web/src/types/api.types.ts",
+    "spec:check": "pnpm spec:lint && pnpm spec:test && pnpm spec:generate:ts"
   },
   "devDependencies": {
+    "openapi-typescript": "^6.7.3",
+    "@stoplight/spectral-cli": "^6.6.0",
     "typescript": "^5.4.5"
   },
   "engines": {

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "error",
+    "status",
+    "details"
+  ],
+  "properties": {
+    "error": {
+      "type": "string"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "details": {
+      "type": "object"
+    }
+  },
+  "examples": [
+    {
+      "error": "VALIDATION_ERROR",
+      "status": 400,
+      "details": {
+        "field": "email",
+        "message": "Invalid email format"
+      }
+    },
+    {
+      "error": "UNAUTHORIZED",
+      "status": 401,
+      "details": {
+        "message": "Authentication required"
+      }
+    },
+    {
+      "error": "NOT_FOUND",
+      "status": 404,
+      "details": {
+        "resource": "User",
+        "id": "123"
+      }
+    },
+    {
+      "error": "INTERNAL_SERVER_ERROR",
+      "status": 500,
+      "details": {
+        "message": "An unexpected error occurred"
+      }
+    }
+  ]
+}

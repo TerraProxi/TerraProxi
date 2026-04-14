@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "id",
+    "producer_id",
+    "name",
+    "price",
+    "stock",
+    "unit",
+    "category",
+    "is_available",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "producer_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "price": {
+      "type": "number",
+      "minimum": 0
+    },
+    "stock": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unit": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "FRUITS_VEGETABLES",
+        "DAIRY",
+        "MEAT",
+        "BEVERAGES",
+        "FINE_GROCERY",
+        "CRAFTS",
+        "FLOWERS_PLANTS",
+        "OTHER"
+      ]
+    },
+    "image_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "is_available": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer_name": {
+      "type": "string"
+    },
+    "is_bestseller": {
+      "type": "boolean"
+    },
+    "is_seasonal": {
+      "type": "boolean"
+    }
+  }
+}

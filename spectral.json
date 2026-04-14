@@ -1,0 +1,11 @@
+{
+  "extends": ["@stoplight/spectral-rulesets/oas/strict"],
+  "rules": {
+    "info-null": "off",
+    "info-description": "warn",
+    "springschema-required": "warn",
+    "info-contact": "warn",
+    "info-license-url": "warn",
+    "info-contact-url": "warn"
+  }
+}

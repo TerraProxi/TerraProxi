@@ -1,0 +1,327 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Producers
+  version: 1.0.0
+  description: |
+    API de gestion des producteurs et accès au catalogue géolocalisé
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Producers
+    description: Gestion des profils de producteurs et catalogue géolocalisé
+security:
+  - bearerAuth: []
+paths:
+  /producers:
+    get:
+      summary: Liste des producteurs (géolocalisée)
+      description: |
+        Récupère la liste des producteurs avec options de géolocalisation.
+        En mode sans géolocalisation : retourne les derniers producteurs.
+        Avec géolocalisation : filtre et trie par distance du centre.
+      operationId: listProducers
+      tags:
+        - Producers
+      parameters:
+        - name: lat
+          in: query
+          description: Latitude du centre de recherche (depuis le GPS de l'utilisateur)
+          required: false
+          schema:
+            type: number
+            example: 43.6
+        - name: lon
+          in: query
+          description: Longitude du centre de recherche
+          required: false
+          schema:
+            type: number
+            example: 3.88
+        - name: radius
+          in: query
+          description: Rayon de recherche en km (défaut: 30, max: 100)
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+            example: 50
+        - name: limit
+          in: query
+          description: Nombre maximum de résultats (défaut: 20, max: 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 20
+        - name: offset
+          in: query
+          description: Nombre de résultats à sauter (pagination, défaut: 0)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            example: 0
+        - name: search
+          in: query
+          description: Terme de recherche (match du nom ou de la description)
+          required: false
+          schema:
+            type: string
+            example: fraise
+      responses:
+        '200':
+          description: Liste des producteurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Producer'
+        '400':
+          description: Requête invalide (paramètres invalides)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Créer ou mettre à jour le profil producteur
+      description: |
+        Crée le profil complet d'un producteur. Si le profil existe déjà pour l'utilisateur,
+        les données sont mises à jour de manière idempotente.
+        Rôle requis: PRODUCER
+      operationId: createOrUpdateProducer
+      tags:
+        - Producers
+      security:
+        - bearerAuth: ['- PRODUCER']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - company_name
+              properties:
+                company_name:
+                  type: string
+                  minLength: 1
+                  example: Ferme des Garrigues
+                description:
+                  type: string
+                  example: Exploitation familiale au cœur du Pic Saint-Loup.
+                  minLength: 1
+                address:
+                  type: string
+                  example: Route de Ganges, Saint-Gély-du-Fesc
+                  minLength: 1
+                city:
+                  type: string
+                  minLength: 1
+                  example: Saint-Gély-du-Fesc
+                postal_code:
+                  type: string
+                  minLength: 5
+                  maxLength: 5
+                  example: 34780
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                  example: 43.6938
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                  example: 3.8049
+                website_url:
+                  type: string
+                  format: uri
+                  example: https://ferme-des-garrigues.fr
+      responses:
+        '201':
+          description: Profil créé ou mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producer'
+        '400':
+          description: Données invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié ou mauvais rôle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Suffisance de rôle insuffisante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur interne
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /producers/{id}:
+    get:
+      summary: Fiche producteur
+      description: Récupère les détails complets d'un producteur spécifique
+      operationId: getProducerById
+      tags:
+        - Producers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identifiant du producteur
+          schema:
+            type: string
+            example: prod-001
+      responses:
+        '200':
+          description: Détails du producteur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producer'
+        '404':
+          description: Producteur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+  schemas:
+    Producer:
+      type: object
+      required:
+        - id
+        - user_id
+        - company_name
+        - latitude
+        - longitude
+        - is_verified
+        - first_name
+        - last_name
+        - created_at
+      properties:
+        id:
+          type: string
+          example: prod-001
+          description: Identifiant unique du producteur
+        user_id:
+          type: string
+          description: ID de l'utilisateur associé
+          example: user-prod-001
+        company_name:
+          type: string
+          minLength: 1
+          description: Nom de l'entreprise du producteur
+          example: Ferme des Garrigues
+        description:
+          type: string
+          description: Description de l'activité du producteur
+          example: Exploitation familiale au cœur du Pic Saint-Loup
+        address:
+          type: string
+          description: Adresse du lieu de production
+          example: Route de Ganges, Saint-Gély-du-Fesc
+        city:
+          type: string
+          description: Ville
+          example: Saint-Gély-du-Fesc
+        postal_code:
+          type: string
+          description: Code postal
+          pattern: '^\d{5}$'
+          example: 34780
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          description: Latitude en degrés (WGS84)
+          example: 43.6938
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          description: Longitude en degrés (WGS84)
+          example: 3.8049
+        website_url:
+          type: string
+          format: uri
+          description: Site web optionnel
+          example: https://ferme-des-garrigues.fr
+        is_verified:
+          type: boolean
+          description: Indique si le producteur est vérifié
+          example: true
+        first_name:
+          type: string
+          example: Jean
+        last_name:
+          type: string
+          example: Dupont
+        created_at:
+          type: string
+          format: date-time
+          description: Date de création
+          example: 2025-04-01T10:00:00Z
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          example: Producteur introuvable
+        status:
+          type: integer
+          example: 404
+          enum: [400, 401, 403, 404, 500]
+        details:
+          type: object
+          additionalProperties: true
+          example:
+            field: postal_code
+            message: Format invalide

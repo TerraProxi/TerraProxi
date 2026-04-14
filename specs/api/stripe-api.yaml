@@ -1,0 +1,189 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Stripe
+  version: 1.0.0
+  description: |
+    API pour l'intégration Stripe Payment et Webhooks
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Stripe
+    description: Paiements Stripe
+security: []
+paths:
+  /stripe/payment-intent:
+    post:
+      summary: Créer un PaymentIntent
+      description: |
+        Crée un Stripe PaymentIntent pour une commande existante.
+        Le backend ne voit jamais les données de carte (PCI-DSS compliance).
+        Rôle requis: CONSUMER
+      operationId: createPaymentIntent
+      tags:
+        - Stripe
+      security:
+        - bearerAuth: ['- CONSUMER']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - order_id
+              properties:
+                order_id:
+                  type: string
+                  description: Identifiant de la commande à payer
+                  example: order-001
+      responses:
+        '200':
+          description: PaymentIntent créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentResponse'
+        '400':
+          description: La commande ne peut plus être payée (statut invalide)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié ou mauvais rôle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: La commande ne vous appartient pas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Commande introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur Stripe ou interne
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stripe/webhook:
+    post:
+      summary: Webhook Stripe
+      description: |
+        Recevoir les événements Stripe (payment_intent.succeeded, etc.).
+        La signature du webhook est vérifiée avant tout traitement.
+      operationId: stripeWebhook
+      tags:
+        - Stripe
+      requestBody:
+        required: true
+        content:
+          '*/*':
+            schema:
+              type: string
+              description: Corps du webhook Stripe
+              example: '{"id":"evt_1abc123","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_1def456","amount":1300,"status":"succeeded"}}}'
+      responses:
+        '200':
+          description: Événement reçu et traité
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          description: Signature manquante ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur lors du traitement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    PaymentIntentResponse:
+      type: object
+      required:
+        - client_secret
+        - payment_intent_id
+      properties:
+        client_secret:
+          type: string
+          description: Secret client pour le paiement (coté frontend)
+          example: pi_1abc123_secret_xyz
+        payment_intent_id:
+          type: string
+          description: Identifiant du PaymentIntent Stripe
+          example: pi_1abc123xyz
+    WebhookResponse:
+      type: object
+      required:
+        - received
+      properties:
+        received:
+          type: boolean
+          description: Indique que le webhook a été reçu
+          example: true
+    OrderMetadata:
+      type: object
+      required:
+        - order_id
+        - consumer_id
+      properties:
+        order_id:
+          type: string
+          description: Identifiant de la commande associée
+          example: order-001
+        consumer_id:
+          type: string
+          description: Identifiant du consommateur
+          example: user-001
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          description: Message d'erreur
+          example: Signature manquante
+        status:
+          type: integer
+          description: Code HTTP
+          example: 400
+          enum: [400, 401, 403, 404, 500]
+        details:
+          type: object
+          additionalProperties: true
+          description: Détails supplémentaires (optionnel)
+          example:
+            field: signature
+            message: Signature invalide
+    WebhookSignatureHeader:
+      type: object
+      description: En-tête requis pour la signature des webhooks
+      properties:
+        stripe-signature:
+          type: string
+          description: Signature HMAC SHA256 des webhooks
+          example: t=1234567890,v1=abc123xyz

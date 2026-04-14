@@ -1,0 +1,271 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Messages
+  version: 1.0.0
+  description: |
+    API de messagerie entre utilisateurs
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Messages
+    description: Messagerie entre users
+security:
+  - bearerAuth: []
+paths:
+  /messages:
+    get:
+      summary: Liste des conversations
+      description: |
+        Liste les conversations de l'utilisateur courant (dernier message de chaque thread).
+      operationId: listMessages
+      tags:
+        - Messages
+      responses:
+        '200':
+          description: Liste des conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Envoyer un message
+      description: |
+        Envoie un message à un utilisateur.
+        Le destinataire doit être différent de l'expéditeur.
+      operationId: sendMessage
+      tags:
+        - Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - receiver_id
+                - content
+              properties:
+                receiver_id:
+                  type: string
+                  description: Identifiant du destinataire
+                  example: user-002
+                content:
+                  type: string
+                  minLength: 1
+                  description: Contenu du message
+                  example: Bonjour, je suis intéressé par vos produits
+      responses:
+        '201':
+          description: Message envoyé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Impossible d'envoyer un message à soi-même
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Destinataire introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /messages/{partnerId}:
+    get:
+      summary: Conversation avec un utilisateur
+      description: |
+        Récupère l'historique complet d'une conversation.
+        Les messages sont marqués comme lus automatiquement.
+      operationId: getConversation
+      tags:
+        - Messages
+      parameters:
+        - name: partnerId
+          in: path
+          required: true
+          description: Identifiant du partenaire de conversation
+          schema:
+            type: string
+            example: user-002
+        - name: limit
+          in: query
+          description: Nombre maximum de messages
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 50
+        - name: before
+          in: query
+          description: Date de début pour le chargement chronologique inversé
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: 2025-04-01T10:00:00Z
+      responses:
+        '200':
+          description: Historique de la conversation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '400':
+          description: Paramètre before invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Conversation introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+  schemas:
+    Conversation:
+      type: object
+      required:
+        - partner_id
+        - partner_name
+        - last_content
+        - last_sent_at
+        - unread_count
+      properties:
+        partner_id:
+          type: string
+          description: Identifiant de l'autre utilisateur
+          example: user-002
+        partner_name:
+          type: string
+          description: Nom complet du partenaire
+          example: Sarah Martin
+        last_content:
+          type: string
+          description: Dernier message
+          example: Je vous contacte pour commander des œufs
+        last_sent_at:
+          type: string
+          format: date-time
+          description: Date du dernier message
+          example: 2025-04-01T10:30:00Z
+        unread_count:
+          type: integer
+          minimum: 0
+          description: Nombre de messages non lus
+          example: 3
+    Message:
+      type: object
+      required:
+        - id
+        - sender_id
+        - receiver_id
+        - content
+        - is_read
+        - sent_at
+      properties:
+        id:
+          type: string
+          example: msg-001
+        sender_id:
+          type: string
+          description: Identifiant de l'expéditeur
+          example: user-001
+        receiver_id:
+          type: string
+          description: Identifiant du destinataire
+          example: user-002
+        content:
+          type: string
+          minLength: 1
+          description: Contenu du message
+          example: Bonjour, je suis intéressé par vos produits
+        is_read:
+          type: boolean
+          description: Le message a-t-il été lu ?
+          example: false
+        sent_at:
+          type: string
+          format: date-time
+          description: Date d'envoi
+          example: 2025-04-01T10:25:00Z
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          example: Conversation introuvable
+        status:
+          type: integer
+          example: 404
+          enum: [400, 401, 404, 500]
+        details:
+          type: object
+          additionalProperties: true
+          example:
+            field: content
+            message: Champs manquant

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "id",
+    "sender_id",
+    "receiver_id",
+    "content",
+    "is_read",
+    "sent_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "sender_id": {
+      "type": "string"
+    },
+    "receiver_id": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "is_read": {
+      "type": "boolean"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "receiver_name": {
+      "type": "string"
+    }
+  }
+}

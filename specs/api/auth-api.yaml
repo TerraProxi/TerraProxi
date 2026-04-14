@@ -1,0 +1,258 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Authentication
+  version: 1.0.0
+  description: |
+    API pour l'authentification des utilisateurs (inscription, connexion, gestion du profil)
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://www.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production environment
+  - url: http://localhost:3002/api
+    description: Development environment
+tags:
+  - name: Auth
+    description: Authentification et gestion des utilisateurs
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      summary: Inscription
+      description: |
+        Crée un nouveau compte utilisateur. Le consentement RGPD est obligatoire.
+        Le rôle par défaut est CONSUMER si non spécifié.
+      operationId: register
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - first_name
+                - last_name
+                - gdpr_consent
+              properties:
+                email:
+                  type: string
+                  format: email
+                  minLength: 1
+                  example: user@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: password123
+                first_name:
+                  type: string
+                  minLength: 1
+                  example: Jean
+                last_name:
+                  type: string
+                  minLength: 1
+                  example: Dupont
+                role:
+                  type: string
+                  enum: [CONSUMER, PRODUCER]
+                  example: CONSUMER
+                gdpr_consent:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Utilisateur créé avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                  - access_token
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  access_token:
+                    type: string
+                    description: Token JWT pour l'authentification future
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+        '400':
+          description: Requête invalide (consentement RGPD manquant ou email déjà utilisé)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/login:
+    post:
+      summary: Connexion
+      description: |
+        Connecte un utilisateur existant avec son email et mot de passe.
+        Retourne le jeton d'accès.
+      operationId: login
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  example: password123
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user
+                  - access_token
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  access_token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+        '401':
+          description: Email ou mot de passe incorrect (ou compte inactive)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/me:
+    get:
+      summary: Profil courant
+      description: |
+        Récupère le profil de l'utilisateur authentifié.
+      operationId: getMe
+      tags:
+        - Auth
+      responses:
+        '200':
+          description: Profil de l'utilisateur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Token manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Utilisateur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Erreur serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
+        Génére lors de l'inscription ou de la connexion.
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - role
+        - created_at
+      properties:
+        id:
+          type: string
+          example: user-001
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        first_name:
+          type: string
+          example: Jean
+        last_name:
+          type: string
+          example: Dupont
+        role:
+          type: string
+          enum: [CONSUMER, PRODUCER, ADMIN]
+          example: CONSUMER
+        phone:
+          type: string
+          example: +33612345678
+        avatar_url:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+        created_at:
+          type: string
+          format: date-time
+          example: 2025-04-01T10:00:00Z
+    Error:
+      type: object
+      required:
+        - error
+        - status
+      properties:
+        error:
+          type: string
+          example: Email manquant
+        status:
+          type: integer
+          example: 400
+          enum: [400, 401, 403, 404, 409, 500]
+        details:
+          type: object
+          additionalProperties: true
+          example:
+            field: email
+            message: Email déjà utilisé
