@@ -7,6 +7,7 @@ import { ScanScreen } from '../screens/ScanScreen'
 import { FavoritesScreen } from '../screens/FavoritesScreen'
 import { UserProfileScreen } from '../screens/UserProfileScreen'
 import { Colors } from '../theme'
+import { useUiStore } from '../store/ui.store'
 
 const Tab = createBottomTabNavigator()
 
@@ -21,17 +22,19 @@ function ScanButton({ onPress }: { onPress: (e: any) => void }) {
 }
 
 export function TabNavigator() {
+  const darkMode = useUiStore((s) => s.darkMode)
+
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.gray500,
+        tabBarInactiveTintColor: darkMode ? '#9CA3AF' : Colors.gray500,
         tabBarStyle: {
-          borderTopColor: Colors.gray200,
+          borderTopColor: darkMode ? '#1F2937' : Colors.gray200,
           paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 4,
           height: Platform.OS === 'ios' ? 80 : 64,
-          backgroundColor: '#fff',
+          backgroundColor: darkMode ? '#111827' : '#fff',
         },
         tabBarLabelStyle: {
           fontSize: 10,

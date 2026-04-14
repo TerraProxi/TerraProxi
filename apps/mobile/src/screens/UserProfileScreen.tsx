@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator, Alert } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Radius, Spacing } from '../theme'
 import { useAuthStore } from '../store/auth.store'
+import { useFavoritesStore } from '../store/favorites.store'
+import { useCartStore } from '../store/cart.store'
+import { useUiStore } from '../store/ui.store'
 import api from '../services/api'
 
 type Nav = StackNavigationProp<RootStackParamList>
@@ -27,9 +31,9 @@ interface ProfileData {
   first_name: string
   last_name: string
   role: 'CONSUMER' | 'PRODUCER' | 'ADMIN'
-  order_count: number
-  favorite_count: number
-  review_count: number
+  order_count?: number
+  favorite_count?: number
+  review_count?: number
 }
 
 const MENU_ITEMS: MenuItem[] = [
@@ -48,10 +52,17 @@ const SECTION_ORDER = ['Mon Compte', 'Préférences', 'Support']
 const SECTION_ICONS: Record<string, string> = { 'Mon Compte': 'account', 'Préférences': 'tune', 'Support': 'lifebuoy' }
 
 export function UserProfileScreen() {
+  const insets = useSafeAreaInsets()
   const { user, isAuthenticated, logout } = useAuthStore()
   const nav = useNavigation<Nav>()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const darkModeEnabled = useUiStore((s) => s.darkMode)
+  const setDarkModeEnabled = useUiStore((s) => s.setDarkMode)
+  const isDark = darkModeEnabled
+  const favoriteCount = useFavoritesStore((s) => s.producerIds.length + s.productIds.length)
+  const cartCount = useCartStore((s) => s.count)
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -64,12 +75,12 @@ export function UserProfileScreen() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.loginContainer}>
+      <View style={[styles.loginContainer, isDark && styles.loginContainerDark]}>
         <View style={styles.loginIconWrap}>
           <MaterialCommunityIcons name="account-circle" size={64} color={Colors.gray300} />
         </View>
-        <Text style={styles.loginTitle}>Mon compte</Text>
-        <Text style={styles.loginSub}>Connectez-vous pour accéder à votre profil</Text>
+        <Text style={[styles.loginTitle, isDark && styles.textPrimaryDark]}>Mon compte</Text>
+        <Text style={[styles.loginSub, isDark && styles.textSecondaryDark]}>Connectez-vous pour accéder à votre profil</Text>
         <TouchableOpacity onPress={() => nav.navigate('Login')} style={styles.loginBtn}>
           <Text style={styles.loginBtnText}>Se connecter</Text>
         </TouchableOpacity>
@@ -80,14 +91,35 @@ export function UserProfileScreen() {
     )
   }
 
-  const displayName = profile ? `${profile.first_name} ${profile.last_name}` : (user ? `${user.first_name} ${user.last_name}` : '')
-  const initials = profile ? `${profile.first_name[0]}${profile.last_name[0]}` : (user ? `${user.first_name?.[0]}${user.last_name?.[0]}` : '')
   const role = profile?.role ?? user?.role ?? 'CONSUMER'
 
   const groupedItems = SECTION_ORDER.map((section) => ({
     section,
     data: MENU_ITEMS.filter((i) => i.section === section),
   }))
+
+  const handleMenuPress = (item: MenuItem) => {
+    switch (item.id) {
+      case 'orders':
+        nav.navigate('Orders')
+        return
+      case 'favorites':
+        nav.navigate('Tabs', { screen: 'Favoris' } as never)
+        return
+      case 'cart':
+        nav.navigate('Cart')
+        return
+      case 'notifications':
+      case 'location':
+      case 'help':
+      case 'report':
+      case 'terms':
+        Alert.alert('Bientot disponible', `${item.label} sera disponible dans une prochaine version.`)
+        return
+      default:
+        return
+    }
+  }
 
   const sections: Array<{ key: string; type: 'header' | 'item'; section?: string; item?: MenuItem }> = []
   for (const group of groupedItems) {
@@ -105,59 +137,77 @@ export function UserProfileScreen() {
   )
 
   const renderItem = (item: MenuItem) => (
-    <TouchableOpacity style={styles.menuRow} activeOpacity={0.6}>
+    <TouchableOpacity
+      style={[styles.menuRow, isDark && styles.menuRowDark]}
+      activeOpacity={0.6}
+      onPress={() => !item.hasToggle && handleMenuPress(item)}
+      disabled={item.hasToggle}
+    >
       <View style={[styles.menuIcon, { backgroundColor: item.iconBg }]}>
         <MaterialCommunityIcons name={item.icon as any} size={20} color={item.iconColor} />
       </View>
-      <Text style={styles.menuLabel}>{item.label}</Text>
+      <Text style={[styles.menuLabel, isDark && styles.textPrimaryDark]}>{item.label}</Text>
       {item.badge && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{item.badge}</Text>
         </View>
       )}
       {item.hasToggle ? (
-        <Switch value={false} trackColor={{ false: Colors.gray300, true: Colors.primary }} thumbColor={Colors.white} />
+        <Switch
+          value={item.id === 'darkMode' ? darkModeEnabled : notificationsEnabled}
+          onValueChange={item.id === 'darkMode' ? setDarkModeEnabled : setNotificationsEnabled}
+          trackColor={{ false: Colors.gray300, true: Colors.primary }}
+          thumbColor={Colors.white}
+        />
       ) : (
         <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.gray400} />
       )}
     </TouchableOpacity>
   )
 
+  const safeFirstName = profile?.first_name ?? user?.first_name ?? ''
+  const safeLastName = profile?.last_name ?? user?.last_name ?? ''
+  const displayName = `${safeFirstName} ${safeLastName}`.trim() || 'Mon compte'
+  const initials = `${safeFirstName.charAt(0)}${safeLastName.charAt(0)}`.toUpperCase() || 'MC'
+  const orderCount = profile?.order_count
+  const reviewCount = profile?.review_count
+
   return (
     <FlatList
       data={sections}
       keyExtractor={(s) => s.key}
+      style={styles.container}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
-        <View style={styles.profileHeader}>
+        <View style={[styles.profileHeader, { paddingTop: insets.top + Spacing.lg }, isDark && styles.profileHeaderDark]}>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
+            <View style={[styles.avatar, isDark && styles.avatarDark]}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
             <TouchableOpacity style={styles.avatarEdit}>
               <MaterialCommunityIcons name="pencil" size={14} color={Colors.white} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{displayName}</Text>
-          <View style={styles.roleBadge}>
+          <Text style={[styles.userName, isDark && styles.textPrimaryDark]}>{displayName}</Text>
+          <View style={[styles.roleBadge, isDark && styles.roleBadgeDark]}>
             <Text style={styles.roleText}>
               {role === 'PRODUCER' ? 'Producteur' : 'Consommateur'}
             </Text>
           </View>
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.order_count ?? '–')}</Text>
-              <Text style={styles.statLabel}>Commandes</Text>
+              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{profileLoading ? '–' : (orderCount ?? '–')}</Text>
+              <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Commandes</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, isDark && styles.statDividerDark]} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.favorite_count ?? '–')}</Text>
-              <Text style={styles.statLabel}>Favoris</Text>
+              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{favoriteCount}</Text>
+              <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Favoris</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, isDark && styles.statDividerDark]} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.review_count ?? '–')}</Text>
-              <Text style={styles.statLabel}>Avis</Text>
+              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{profileLoading ? '–' : (reviewCount ?? cartCount)}</Text>
+              <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Avis</Text>
             </View>
           </View>
         </View>
@@ -178,6 +228,10 @@ export function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.gray50,
+  },
   loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.gray50, padding: 32 },
   loginIconWrap: { marginBottom: 16 },
   loginTitle: { fontSize: 24, fontWeight: '700', color: Colors.dark, marginBottom: 8 },
@@ -188,7 +242,7 @@ const styles = StyleSheet.create({
   registerBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 16 },
   profileHeader: {
     backgroundColor: Colors.white, borderBottomLeftRadius: Radius.xxl, borderBottomRightRadius: Radius.xxl,
-    paddingTop: 56, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center',
+    paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
   avatarWrap: { position: 'relative', marginBottom: 12 },
@@ -238,4 +292,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md, paddingVertical: 16,
   },
   logoutText: { fontSize: 16, fontWeight: '700', color: Colors.danger },
+  loginContainerDark: { backgroundColor: '#0B1220' },
+  profileHeaderDark: { backgroundColor: '#111827' },
+  avatarDark: { backgroundColor: '#1F2937' },
+  roleBadgeDark: { backgroundColor: '#1B3A2C' },
+  menuRowDark: { backgroundColor: '#111827', borderBottomColor: '#1F2937' },
+  statDividerDark: { backgroundColor: '#1F2937' },
+  textPrimaryDark: { color: '#F3F4F6' },
+  textSecondaryDark: { color: '#9CA3AF' },
 })

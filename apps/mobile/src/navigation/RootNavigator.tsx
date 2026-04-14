@@ -1,4 +1,4 @@
-import { NavigationContainer } from '@react-navigation/native'
+import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { TabNavigator } from './TabNavigator'
 import { SplashScreen } from '../screens/SplashScreen'
@@ -12,6 +12,8 @@ import { CartScreen } from '../screens/CartScreen'
 import { CheckoutScreen } from '../screens/CheckoutScreen'
 import { MessagesScreen } from '../screens/MessagesScreen'
 import { ChatScreen } from '../screens/ChatScreen'
+import { OrdersScreen } from '../screens/OrdersScreen'
+import { useUiStore } from '../store/ui.store'
 
 export type RootStackParamList = {
   Splash: undefined
@@ -23,6 +25,7 @@ export type RootStackParamList = {
   ProducerProfile: { producerId: string }
   Catalog: { producerId: string }
   Cart: undefined
+  Orders: undefined
   Checkout: { orderId: string }
   Messages: undefined
   Conversation: { partnerId: string; partnerName: string }
@@ -31,8 +34,34 @@ export type RootStackParamList = {
 const Stack = createStackNavigator<RootStackParamList>()
 
 export function RootNavigator() {
+  const darkMode = useUiStore((s) => s.darkMode)
+
+  const navigationTheme = darkMode
+    ? {
+      ...DarkTheme,
+      colors: {
+        ...DarkTheme.colors,
+        background: '#0B1220',
+        card: '#111827',
+        border: '#1F2937',
+        text: '#F3F4F6',
+        primary: '#5BAE6A',
+      },
+    }
+    : {
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        background: '#F9FAFB',
+        card: '#FFFFFF',
+        border: '#E5E7EB',
+        text: '#1F2937',
+        primary: '#5BAE6A',
+      },
+    }
+
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
@@ -43,6 +72,7 @@ export function RootNavigator() {
         <Stack.Screen name="ProducerProfile" component={ProducerProfileScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Catalog" component={CatalogScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Orders" component={OrdersScreen} options={{ headerShown: true, title: 'Mes commandes' }} />
         <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true, title: 'Paiement' }} />
         <Stack.Screen name="Messages" component={MessagesScreen} options={{ headerShown: true, title: 'Messages' }} />
         <Stack.Screen name="Conversation" component={ChatScreen} options={{ headerShown: false }} />
