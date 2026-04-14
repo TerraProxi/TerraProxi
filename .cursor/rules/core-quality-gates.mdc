@@ -1,0 +1,139 @@
+---
+description: Conformance gates — automated validation that code matches specifications
+alwaysApply: true
+---
+
+# Quality Gates (Spec-Driven)
+
+## The Conformance Philosophy
+
+In Spec Driven Development, a quality gate is not just "do the tests pass?" It is **"does the system exactly match the contract?"**
+
+A feature is only "done" when it passes all conformance gates. There are no exceptions for "it works on my machine" or "the frontend can handle the differing payload." If it violates the spec, the build fails.
+
+## Gate 1: Spec Linting & Validation
+
+Before any code is considered, the specs themselves must be valid.
+
+### Checks:
+- **OpenAPI**: Is it valid OpenAPI 3.x? Does it have descriptions? Are error codes documented?
+- **JSON Schema**: Is it valid draft-2020-12? Are all `$ref`s resolvable?
+- **GraphQL**: Does the SDL compile? Are all types reachable?
+
+### Tools:
+- `spectral lint specs/api/openapi.yaml` (enforces standards and best practices)
+- `ajv compile -s specs/schemas/**/*.json`
+- `graphql-schema-linter specs/api/schema.graphql`
+
+## Gate 2: Code Generation
+
+Generated code (types, interfaces, clients) must build successfully.
+
+### Checks:
+- TypeScript compilation of generated types (`tsc --noEmit`).
+- If generation fails, the spec is invalid or incompatible with the generator.
+
+## Gate 3: Contract Conformance Tests
+
+This is the most critical gate. The running application is bombarded with requests to verify it adheres to the OpenAPI/GraphQL/gRPC spec.
+
+### Checks (API Conformance):
+- Does every endpoint return the exact HTTP status codes defined in the spec?
+- Do the response payloads perfectly match the JSON Schemas referenced in the spec (no missing required fields, no extra undocumented fields)?
+- Do the endpoints reject invalid input with the correct error codes according to the spec?
+
+### Tools:
+- **Dredd**: Reads OpenAPI and tests the live server.
+- **Portman**: Generates Postman collections and Newman tests from OpenAPI.
+- **Prism**: Validation proxy (can be run in validation mode against a test suite).
+- **Pact**: Contract testing between consumer and provider.
+
+## Gate 4: Behavior Tests (BDD)
+
+The business logic must satisfy the functional requirements.
+
+### Checks:
+- Do all Scenarios in the Gherkin `specs/features/` pass?
+- Are edge cases (empty states, boundary values) handled gracefully?
+
+### Tools:
+- **Cucumber.js / PyTest-BDD / Godog**: Parse Gherkin and run step definitions.
+
+## Gate 5: Security, Performance & Code Quality
+
+These are standard gates, but informed by the specs.
+
+### Checks:
+- **Security**: No hardcoded secrets (TruffleHog), dependencies audited (`npm audit`), SAST tools pass. Ensure auth enforced as per OpenAPI `securitySchemes`.
+- **Performance**: Response times meet the SLOs defined in `specs/slos/*.yaml`. No N+1 query patterns. Wait for CI checks.
+- **Code Quality**: Linter passes (ESLint, Ruff, Golangci-lint). Complexity within limits (`global-clean-code`).
+
+## Metrics & Coverage
+
+### 1. Spec Coverage Metric
+
+Measure how much of your actual runtime surface area is documented in specs.
+
+- Track: Total API routes mapped by the router vs. endpoints defined in OpenAPI.
+- Target: 100%. (Any undocumented route is a security risk and a spec failure).
+
+### 2. Conformance Coverage Metric
+
+Measure how much of your spec is actually tested for conformance.
+
+- Track: Endpoints in OpenAPI vs. Endpoints hit by automated tests returning 200/201.
+- Target: 100% of defined endpoints must have at least one success-path conformance test.
+
+### 3. Business Logic Code Coverage
+
+Standard code coverage metric for implementation.
+
+- Track: Lines/branches of code executed during unit and behavior tests.
+- Target: ≥80% for domain/business logic. (Do not chase 100% on glue code or generated files).
+
+## Automated Gate Scripts
+
+Add these gate checks to your build pipeline.
+
+### `scripts/gate-check.sh` Example:
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚪 Running Spec Validation (Gate 1)..."
+npm run spec:lint || { echo "❌ Spec linting failed"; exit 1; }
+
+echo "🚪 Running Type Check (Gate 2)..."
+npm run typecheck || { echo "❌ Type checking failed"; exit 1; }
+
+echo "🚪 Running Unit & Behavior Tests (Gate 4)..."
+npm run test:unit || { echo "❌ Unit tests failed"; exit 1; }
+
+echo "🚪 Starting Server for Conformance Testing..."
+npm run start:test-server &
+SERVER_PID=$!
+sleep 5 # Wait for server to boot
+
+echo "🚪 Running Conformance Tests (Gate 3)..."
+npm run test:conformance || {
+  echo "❌ Conformance tests failed! The API does not match the spec."
+  kill $SERVER_PID
+  exit 1
+}
+
+kill $SERVER_PID
+echo "✅ All Quality Gates Passed!"
+```
+
+## The "Spec Fix" Workflow
+
+When a conformance gate fails, you have a Spec Gap. You must explicitly choose one of two paths:
+
+1. **The Code is Wrong**: The spec accurately reflects the requirement, but the implementation is buggy.
+   → *Action: Fix the code, re-run tests.*
+
+2. **The Spec is Wrong (or Outdated)**: The code works correctly for the current business reality, but the spec hasn't been updated.
+   → *Action: DO NOT "hack" the test to pass. Update the OpenAPI/JSON Schema, get it reviewed, run generation, update types, THEN re-run tests.*
+
+**Never change the implementation to appease a bad test if the spec is what needs updating.**
