@@ -1,7 +1,9 @@
 import axios from 'axios'
+import { Platform } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
 
-const API_URL = 'https://gateway.terraproxi.fr/api'
+const DEV_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3002/api' : 'http://localhost:3002/api'
+const API_URL = __DEV__ ? DEV_API_URL : 'https://gateway.terraproxi.fr/api'
 
 export const api = axios.create({
   baseURL: API_URL,

@@ -1,18 +1,40 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image, Keyboard, Platform,
+  TextInput, Image, Keyboard, Platform, ActivityIndicator,
 } from 'react-native'
-import MapView, { Marker, Callout } from 'react-native-maps'
+import MapView, { Marker, Callout, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
-import { useMockStore } from '../store/mock.store'
+import { api } from '../services/api'
 
 type Nav = StackNavigationProp<RootStackParamList>
+
+interface Producer {
+  id: string
+  user_id: string
+  company_name: string
+  description: string | null
+  address: string
+  city: string
+  postal_code: string
+  latitude: number
+  longitude: number
+  website_url: string | null
+  banner_url: string | null
+  is_verified: boolean
+  first_name: string
+  last_name: string
+  distance_km: number
+  rating: number
+  review_count: number
+  categories: string[]
+  is_open: boolean
+}
 
 const CATEGORIES = ['Tous', 'Légumes', 'Fruits', 'Vins', 'Épicerie', 'Viande', 'Fromage']
 
@@ -25,40 +47,86 @@ const DEFAULT_REGION = {
 
 export function MapScreen() {
   const nav = useNavigation<Nav>()
-  const { producers } = useMockStore()
+  const [producers, setProducers] = useState<Producer[]>([])
+  const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const [activeCategory, setActiveCategory] = useState('Tous')
   const [showFilters, setShowFilters] = useState(false)
-  const [region, setRegion] = useState(DEFAULT_REGION)
+  const [region, setRegion] = useState<Region>(DEFAULT_REGION)
   const mapRef = useRef<MapView>(null)
 
   const isValidLocation = (lat: number, lng: number) => lat > 40 && lat < 52 && lng > -6 && lng < 10
 
+  const fetchProducers = useCallback(async (searchQuery?: string, category?: string) => {
+    try {
+      setLoading(true)
+      const params: Record<string, any> = {
+        lat: region.latitude,
+        lon: region.longitude,
+        radius: Math.max(region.latitudeDelta, region.longitudeDelta) * 111,
+        limit: 50,
+      }
+      if (searchQuery?.trim()) {
+        params.search = searchQuery.trim()
+      }
+      if (category && category !== 'Tous') {
+        params.category = category.toLowerCase()
+      }
+      const res = await api.get<Producer[]>('/producers', { params })
+      setProducers(res.data)
+    } catch {
+      setProducers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta])
+
   useEffect(() => {
     ;(async () => {
       const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') return
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const { latitude, longitude } = pos.coords
-      if (!isValidLocation(latitude, longitude)) return
-      const r = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
-      setRegion(r)
-      mapRef.current?.animateToRegion(r, 800)
+      if (status !== 'granted') {
+        fetchProducers()
+        return
+      }
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        const { latitude, longitude } = pos.coords
+        if (!isValidLocation(latitude, longitude)) {
+          fetchProducers()
+          return
+        }
+        const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
+        setRegion(r)
+        mapRef.current?.animateToRegion(r, 800)
+      } catch {
+        fetchProducers()
+      }
     })()
   }, [])
 
-  const filteredProducers = producers.filter((p) => {
-    const matchesCategory = activeCategory === 'Tous' || p.categories.some((c) => c.toLowerCase().includes(activeCategory.toLowerCase()))
-    const matchesSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.tagline.toLowerCase().includes(search.toLowerCase())
-    return matchesCategory && matchesSearch
-  })
+  useEffect(() => {
+    fetchProducers(search, activeCategory)
+  }, [region, activeCategory])
+
+  const handleRegionChangeComplete = (newRegion: Region) => {
+    setRegion(newRegion)
+  }
+
+  const handleSearchSubmit = () => {
+    fetchProducers(search, activeCategory)
+  }
+
+  const handleCategoryChange = (cat: string) => {
+    setActiveCategory(cat)
+    setShowFilters(false)
+  }
 
   const searchResults = search.trim()
     ? producers.filter(
         (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.tagline.toLowerCase().includes(search.toLowerCase()),
+          p.company_name.toLowerCase().includes(search.toLowerCase()) ||
+          (p.description && p.description.toLowerCase().includes(search.toLowerCase())),
       )
     : []
 
@@ -78,27 +146,27 @@ export function MapScreen() {
       mapRef.current?.animateToRegion(r, 800)
       return
     }
-    const r = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
+    const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
     mapRef.current?.animateToRegion(r, 800)
   }
 
   return (
     <View style={styles.container}>
-      <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} onRegionChangeComplete={setRegion}>
-        {filteredProducers.map((p) => (
-          <Marker key={p.id} coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}>
+      <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} onRegionChangeComplete={handleRegionChangeComplete}>
+        {producers.map((p) => (
+          <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}>
             <View style={styles.markerContainer}>
               <View style={styles.markerCircle}>
                 <MaterialCommunityIcons name="store" size={20} color={Colors.white} />
               </View>
               <View style={styles.markerDistance}>
-                <Text style={styles.markerDistanceText}>{p.distance} km</Text>
+                <Text style={styles.markerDistanceText}>{Math.round(p.distance_km)} km</Text>
               </View>
             </View>
             <Callout tooltip onPress={() => goToProducer(p.id)}>
               <View style={styles.callout}>
-                <Text style={styles.calloutName}>{p.name}</Text>
-                <Text style={styles.calloutTagline}>{p.tagline}</Text>
+                <Text style={styles.calloutName}>{p.company_name}</Text>
+                {p.description && <Text style={styles.calloutTagline}>{p.description}</Text>}
                 <Text style={styles.calloutCta}>Voir la boutique →</Text>
               </View>
             </Callout>
@@ -116,6 +184,7 @@ export function MapScreen() {
           onChangeText={setSearch}
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+          onSubmitEditing={handleSearchSubmit}
           returnKeyType="search"
         />
         <TouchableOpacity
@@ -131,12 +200,12 @@ export function MapScreen() {
           <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
             {searchResults.map((p) => (
               <TouchableOpacity key={p.id} style={styles.searchResultItem} onPress={() => goToProducer(p.id)}>
-                <Image source={{ uri: p.avatar }} style={styles.searchResultAvatar} />
+                <Image source={{ uri: p.banner_url || undefined }} style={styles.searchResultAvatar} />
                 <View style={styles.searchResultInfo}>
-                  <Text style={styles.searchResultName}>{p.name}</Text>
-                  <Text style={styles.searchResultTagline}>{p.tagline}</Text>
+                  <Text style={styles.searchResultName}>{p.company_name}</Text>
+                  {p.description && <Text style={styles.searchResultTagline}>{p.description}</Text>}
                 </View>
-                <Text style={styles.searchResultDistance}>{p.distance} km</Text>
+                <Text style={styles.searchResultDistance}>{Math.round(p.distance_km)} km</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -149,7 +218,7 @@ export function MapScreen() {
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat}
-                onPress={() => setActiveCategory(cat)}
+                onPress={() => handleCategoryChange(cat)}
                 style={[styles.filterChip, activeCategory === cat && styles.filterChipActive]}
               >
                 <Text style={[styles.filterChipText, activeCategory === cat && styles.filterChipTextActive]}>
@@ -167,18 +236,18 @@ export function MapScreen() {
 
       <View style={styles.bottomCards}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomCardsContent}>
-          {filteredProducers.map((p) => (
+          {producers.map((p) => (
             <TouchableOpacity key={p.id} style={styles.card} onPress={() => goToProducer(p.id)}>
-              <Image source={{ uri: p.image }} style={styles.cardImage} />
+              <Image source={{ uri: p.banner_url || undefined }} style={styles.cardImage} />
               <View style={styles.cardBody}>
-                <Text style={styles.cardName} numberOfLines={1}>{p.name}</Text>
-                <Text style={styles.cardTagline} numberOfLines={1}>{p.tagline}</Text>
+                <Text style={styles.cardName} numberOfLines={1}>{p.company_name}</Text>
+                {p.description && <Text style={styles.cardTagline} numberOfLines={1}>{p.description}</Text>}
                 <View style={styles.cardMeta}>
                   <View style={styles.cardRating}>
                     <MaterialCommunityIcons name="star" size={14} color={Colors.yellow500} />
                     <Text style={styles.cardRatingText}>{p.rating}</Text>
                   </View>
-                  <Text style={styles.cardDistance}>{p.distance} km</Text>
+                  <Text style={styles.cardDistance}>{Math.round(p.distance_km)} km</Text>
                 </View>
               </View>
             </TouchableOpacity>

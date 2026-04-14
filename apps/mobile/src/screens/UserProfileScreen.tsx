@@ -1,10 +1,12 @@
-import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet } from 'react-native'
+import { useState, useEffect } from 'react'
+import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Radius, Spacing } from '../theme'
 import { useAuthStore } from '../store/auth.store'
+import api from '../services/api'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -17,6 +19,17 @@ interface MenuItem {
   section: string
   badge?: string
   hasToggle?: boolean
+}
+
+interface ProfileData {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  role: 'CONSUMER' | 'PRODUCER' | 'ADMIN'
+  order_count: number
+  favorite_count: number
+  review_count: number
 }
 
 const MENU_ITEMS: MenuItem[] = [
@@ -37,6 +50,17 @@ const SECTION_ICONS: Record<string, string> = { 'Mon Compte': 'account', 'Préf�
 export function UserProfileScreen() {
   const { user, isAuthenticated, logout } = useAuthStore()
   const nav = useNavigation<Nav>()
+  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    setProfileLoading(true)
+    api.get<ProfileData>('/users/profile')
+      .then(({ data }) => setProfile(data))
+      .catch(() => {})
+      .finally(() => setProfileLoading(false))
+  }, [isAuthenticated])
 
   if (!isAuthenticated) {
     return (
@@ -55,6 +79,10 @@ export function UserProfileScreen() {
       </View>
     )
   }
+
+  const displayName = profile ? `${profile.first_name} ${profile.last_name}` : (user ? `${user.first_name} ${user.last_name}` : '')
+  const initials = profile ? `${profile.first_name[0]}${profile.last_name[0]}` : (user ? `${user.first_name?.[0]}${user.last_name?.[0]}` : '')
+  const role = profile?.role ?? user?.role ?? 'CONSUMER'
 
   const groupedItems = SECTION_ORDER.map((section) => ({
     section,
@@ -104,31 +132,31 @@ export function UserProfileScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user?.first_name?.[0]}{user?.last_name?.[0]}</Text>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
             <TouchableOpacity style={styles.avatarEdit}>
               <MaterialCommunityIcons name="pencil" size={14} color={Colors.white} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{user?.first_name} {user?.last_name}</Text>
+          <Text style={styles.userName}>{displayName}</Text>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>
-              {user?.role === 'PRODUCER' ? 'Producteur' : 'Consommateur'}
+              {role === 'PRODUCER' ? 'Producteur' : 'Consommateur'}
             </Text>
           </View>
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>12</Text>
+              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.order_count ?? '–')}</Text>
               <Text style={styles.statLabel}>Commandes</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>8</Text>
+              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.favorite_count ?? '–')}</Text>
               <Text style={styles.statLabel}>Favoris</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statValue}>4</Text>
+              <Text style={styles.statValue}>{profileLoading ? '–' : (profile?.review_count ?? '–')}</Text>
               <Text style={styles.statLabel}>Avis</Text>
             </View>
           </View>

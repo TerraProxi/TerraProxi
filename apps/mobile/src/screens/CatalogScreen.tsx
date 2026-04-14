@@ -1,39 +1,80 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   View, Text, FlatList, ScrollView, TextInput, Image,
-  TouchableOpacity, StyleSheet,
+  TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
-import { useMockStore } from '../store/mock.store'
+import { api } from '../services/api'
+import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
-import type { Product } from '../store/mock.store'
 
-type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'> & {
+type Props = StackScreenProps<RootStackParamList, 'Catalog'> & {
   route: { params: { producerId: string } }
 }
 
-const ALL_CATEGORIES = ['Tous', 'Légumes', 'Crèmerie', 'Fruits', 'Fromage', 'Épicerie', 'Boissons', 'Vins', 'Viande', 'Œufs']
+interface ApiProducer {
+  id: string
+  company_name: string
+  tagline?: string
+  banner_url?: string
+  avatar_url?: string
+}
+
+interface ApiProduct {
+  id: string
+  name: string
+  price: number
+  unit: string
+  category: string
+  banner_url?: string
+  image_url?: string
+  producer_id?: string
+  is_bestseller?: boolean
+  is_seasonal?: boolean
+}
 
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { producers, products } = useMockStore()
   const { add, count, total } = useCartStore()
+  const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
+  const isProductFavorite = useFavoritesStore((s) => s.isProductFavorite)
 
-  const producer = producers.find((p) => p.id === producerId)
-
-  const producerProducts = useMemo(
-    () => products.filter((p) => p.producerId === producerId),
-    [products, producerId],
-  )
+  const [producer, setProducer] = useState<ApiProducer | null>(null)
+  const [products, setProducts] = useState<ApiProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('Tous')
 
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [prodRes, pRes] = await Promise.all([
+          api.get<ApiProducer>(`/producers/${producerId}`),
+          api.get<ApiProduct[]>('/products', { params: { producer_id: producerId, available: 'true' } }),
+        ])
+        setProducer(prodRes.data)
+        setProducts(pRes.data)
+      } catch {
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [producerId])
+
+  const categories = useMemo(() => {
+    const unique = Array.from(new Set(products.map((p) => p.category).filter(Boolean)))
+    return ['Tous', ...unique]
+  }, [products])
+
   const filteredProducts = useMemo(() => {
-    let result = producerProducts
+    let result = products
     if (activeCategory !== 'Tous') {
       result = result.filter((p) => p.category === activeCategory)
     }
@@ -42,20 +83,15 @@ export function CatalogScreen({ route, navigation }: Props) {
       result = result.filter((p) => p.name.toLowerCase().includes(q))
     }
     return result
-  }, [producerProducts, activeCategory, search])
+  }, [products, activeCategory, search])
 
-  const categories = useMemo(() => {
-    const unique = Array.from(new Set(producerProducts.map((p) => p.category)))
-    return ['Tous', ...unique]
-  }, [producerProducts])
-
-  const handleAdd = (product: Product) => {
+  const handleAdd = (product: ApiProduct) => {
     add({
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
-      producer_id: product.producerId,
+      producer_id: product.producer_id ?? producerId,
     })
   }
 
@@ -63,7 +99,15 @@ export function CatalogScreen({ route, navigation }: Props) {
     navigation.navigate('Cart')
   }
 
-  if (!producer) {
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    )
+  }
+
+  if (error || !producer) {
     return (
       <View style={styles.errorContainer}>
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
@@ -75,22 +119,30 @@ export function CatalogScreen({ route, navigation }: Props) {
     )
   }
 
-  const renderItem = ({ item }: { item: Product }) => (
+  const renderItem = ({ item }: { item: ApiProduct }) => (
     <View style={styles.productCard}>
       <View style={styles.imageContainer}>
-        <Image source={{ uri: item.image }} style={styles.productImage} />
-        {item.isBestseller && (
+        <Image source={{ uri: item.banner_url || item.image_url }} style={styles.productImage} />
+        {item.is_bestseller && (
           <View style={styles.bestsellerBadge}>
             <Text style={styles.bestsellerText}>Top Vente</Text>
           </View>
         )}
-        {item.isSeasonal && !item.isBestseller && (
+        {item.is_seasonal && !item.is_bestseller && (
           <View style={styles.seasonalBadge}>
             <Text style={styles.seasonalText}>De Saison</Text>
           </View>
         )}
-        <TouchableOpacity style={styles.heartBtn}>
-          <MaterialCommunityIcons name="heart-outline" size={18} color={Colors.gray600} />
+        <TouchableOpacity
+          style={styles.heartBtn}
+          onPress={() => toggleProduct(item.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons
+            name={isProductFavorite(item.id) ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isProductFavorite(item.id) ? Colors.danger : Colors.gray600}
+          />
         </TouchableOpacity>
       </View>
       <View style={styles.productInfo}>
@@ -114,13 +166,13 @@ export function CatalogScreen({ route, navigation }: Props) {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerLabel}>Producteur</Text>
-          <Text style={styles.headerName} numberOfLines={1}>{producer.name}</Text>
+          <Text style={styles.headerName} numberOfLines={1}>{producer.company_name}</Text>
         </View>
         <View style={styles.headerBtn} />
       </View>
 
       <View style={styles.producerCard}>
-        <Image source={{ uri: producer.avatar }} style={styles.producerAvatar} />
+        <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
         <View style={styles.producerInfo}>
           <View style={styles.bioBadge}>
             <MaterialCommunityIcons name="leaf" size={14} color={Colors.primary} />
@@ -195,6 +247,12 @@ export function CatalogScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray50,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.gray50,
   },
   header: {

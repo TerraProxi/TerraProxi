@@ -6,6 +6,7 @@ export interface CartProduct {
   price: number
   unit: string
   producer_id: string
+  image_url?: string
 }
 
 export interface CartItem {

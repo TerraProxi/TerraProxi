@@ -10,7 +10,6 @@ import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors } from '../theme'
 import { useCartStore } from '../store/cart.store'
 import { useAuthStore } from '../store/auth.store'
-import { useMockStore } from '../store/mock.store'
 import api from '../services/api'
 
 type Nav = StackNavigationProp<RootStackParamList>
@@ -20,7 +19,6 @@ type DeliveryMode = 'delivery' | 'pickup'
 export function CartScreen() {
   const { items, total, producerId, remove, updateQty, clear } = useCartStore()
   const { isAuthenticated } = useAuthStore()
-  const { products } = useMockStore()
   const nav = useNavigation<Nav>()
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery')
 
@@ -29,8 +27,8 @@ export function CartScreen() {
   const grandTotal = total + deliveryFee + tva
 
   const getProductImage = (productId: string) => {
-    const found = products.find((p) => p.id === productId)
-    if (found) return found.image
+    const found = items.find((i) => i.product.id === productId)
+    if (found?.product.image_url) return found.product.image_url
     return 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?q=80&w=200'
   }
 

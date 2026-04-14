@@ -10,6 +10,7 @@ import { stripeRoutes } from './routes/stripe.routes'
 import { usersRoutes } from './routes/users.routes'
 import { aiRoutes } from './routes/ai.routes'
 import { AppError } from './utils/errors'
+import { isDbAvailable } from './db/client'
 
 const PORT = Number(process.env.API_PORT ?? 3002)
 
@@ -47,6 +48,7 @@ const app = new Elysia()
     status: 'ok',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
+    data_source: isDbAvailable() ? 'postgresql' : 'mock',
   }))
 
   // Routes API v1

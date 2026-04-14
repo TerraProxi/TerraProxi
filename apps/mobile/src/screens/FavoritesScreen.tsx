@@ -1,40 +1,86 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, Image, ScrollView,
-  StyleSheet, Dimensions,
+  StyleSheet, Dimensions, ActivityIndicator,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { Colors, Spacing, Radius } from '../theme'
-import { useMockStore } from '../store/mock.store'
+import { api } from '../services/api'
+import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
 
 const { width } = Dimensions.get('window')
 const CARD_WIDTH = (width - Spacing.xl * 3) / 2
 
+interface ApiProducer {
+  id: string
+  company_name: string
+  tagline?: string
+  banner_url?: string
+  avatar_url?: string
+}
+
+interface ApiProduct {
+  id: string
+  name: string
+  price: number
+  unit: string
+  banner_url?: string
+  image_url?: string
+  producer_id?: string
+}
+
 type Tab = 'producers' | 'products'
 
 export function FavoritesScreen({ navigation }: any) {
   const [tab, setTab] = useState<Tab>('producers')
-  const producers = useMockStore((s) => s.producers)
-  const products = useMockStore((s) => s.products)
-  const favoriteProducerIds = useMockStore((s) => s.favoriteProducerIds)
-  const favoriteProductIds = useMockStore((s) => s.favoriteProductIds)
-  const toggleFavoriteProducer = useMockStore((s) => s.toggleFavoriteProducer)
-  const toggleFavoriteProduct = useMockStore((s) => s.toggleFavoriteProduct)
+  const [allProducers, setAllProducers] = useState<ApiProducer[]>([])
+  const [allProducts, setAllProducts] = useState<ApiProduct[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const producerIds = useFavoritesStore((s) => s.producerIds)
+  const productIds = useFavoritesStore((s) => s.productIds)
+  const toggleProducer = useFavoritesStore((s) => s.toggleProducer)
+  const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
   const addToCart = useCartStore((s) => s.add)
 
-  const favoriteProducers = producers.filter((p) => favoriteProducerIds.includes(p.id))
-  const favoriteProducts = products.filter((p) => favoriteProductIds.includes(p.id))
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [prodRes, pRes] = await Promise.all([
+          api.get<ApiProducer[]>('/producers', { params: { limit: 50 } }),
+          api.get<ApiProduct[]>('/products', { params: { limit: 50 } }),
+        ])
+        setAllProducers(prodRes.data)
+        setAllProducts(pRes.data)
+      } catch {
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
 
-  const handleAddToCart = (product: typeof products[0]) => {
+  const favoriteProducers = allProducers.filter((p) => producerIds.includes(p.id))
+  const favoriteProducts = allProducts.filter((p) => productIds.includes(p.id))
+
+  const handleAddToCart = (product: ApiProduct) => {
     addToCart({
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
-      producer_id: product.producerId,
+      producer_id: product.producer_id ?? '',
     })
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    )
   }
 
   return (
@@ -82,9 +128,9 @@ export function FavoritesScreen({ navigation }: any) {
                 onPress={() => navigation.navigate('ProducerProfile', { producerId: producer.id })}
                 activeOpacity={0.7}
               >
-                <Image source={{ uri: producer.avatar }} style={styles.producerAvatar} />
+                <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
                 <View style={styles.producerInfo}>
-                  <Text style={styles.producerName} numberOfLines={1}>{producer.name}</Text>
+                  <Text style={styles.producerName} numberOfLines={1}>{producer.company_name}</Text>
                   <Text style={styles.producerTagline} numberOfLines={1}>{producer.tagline}</Text>
                   <View style={styles.producerBadges}>
                     <View style={styles.badge}>
@@ -96,7 +142,7 @@ export function FavoritesScreen({ navigation }: any) {
                   </View>
                 </View>
                 <TouchableOpacity
-                  onPress={() => toggleFavoriteProducer(producer.id)}
+                  onPress={() => toggleProducer(producer.id)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <MaterialCommunityIcons
@@ -119,10 +165,10 @@ export function FavoritesScreen({ navigation }: any) {
           {favoriteProducts.map((product) => (
             <View key={product.id} style={styles.productCard}>
               <View style={styles.productImageWrapper}>
-                <Image source={{ uri: product.image }} style={styles.productImage} />
+                <Image source={{ uri: product.banner_url || product.image_url }} style={styles.productImage} />
                 <TouchableOpacity
                   style={styles.productHeartBtn}
-                  onPress={() => toggleFavoriteProduct(product.id)}
+                  onPress={() => toggleProduct(product.id)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialCommunityIcons name="heart" size={20} color={Colors.danger} />
@@ -170,6 +216,12 @@ export function FavoritesScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray50,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.gray50,
   },
   header: {

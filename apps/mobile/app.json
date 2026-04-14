@@ -14,7 +14,15 @@
       "supportsTablet": false,
       "bundleIdentifier": "fr.terraproxi.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TerraProxi utilise votre localisation pour trouver les producteurs près de chez vous."
+        "NSLocationWhenInUseUsageDescription": "TerraProxi utilise votre localisation pour trouver les producteurs près de chez vous.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
+        }
       }
     },
     "android": {

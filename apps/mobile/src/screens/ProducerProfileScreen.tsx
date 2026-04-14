@@ -1,21 +1,59 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native'
+import { useState, useEffect } from 'react'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
-import { useMockStore } from '../store/mock.store'
+import api from '../services/api'
+import { useFavoritesStore } from '../store/favorites.store'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
+interface ProducerData {
+  id: string
+  user_id: string
+  company_name: string
+  description: string
+  address: string
+  city: string
+  latitude: number
+  longitude: number
+  banner_url: string
+  is_verified: boolean
+  first_name: string
+  last_name: string
+  distance_km: number
+  rating: number
+  review_count: number
+  categories: string[]
+  is_open: boolean
+}
+
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { producers, toggleFavoriteProducer, isFavoriteProducer } = useMockStore()
+  const { toggleProducer, isProducerFavorite } = useFavoritesStore()
+  const [producer, setProducer] = useState<ProducerData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  const producer = producers.find((p) => p.id === producerId)
+  useEffect(() => {
+    api.get<ProducerData>(`/producers/${producerId}`)
+      .then(({ data }) => setProducer(data))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [producerId])
 
-  if (!producer) {
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    )
+  }
+
+  if (error || !producer) {
     return (
       <View style={styles.errorContainer}>
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
@@ -28,27 +66,27 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
     )
   }
 
-  const favorite = isFavoriteProducer(producer.id)
+  const favorite = isProducerFavorite(producer.id)
 
   const handleShop = () => {
     navigation.navigate('Catalog', { producerId: producer.id })
   }
 
   const handleMessage = () => {
-    navigation.navigate('Conversation', { partnerId: producer.id, partnerName: producer.name })
+    navigation.navigate('Conversation', { partnerId: producer.user_id, partnerName: producer.company_name })
   }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.coverContainer}>
-        <Image source={{ uri: producer.coverImage }} style={styles.coverImage} />
+        <Image source={{ uri: producer.banner_url }} style={styles.coverImage} />
         <View style={styles.coverGradient} />
         <View style={styles.topNav}>
           <TouchableOpacity style={styles.topNavBtn} onPress={() => navigation.goBack()}>
             <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.white} />
           </TouchableOpacity>
           <View style={styles.topNavRight}>
-            <TouchableOpacity style={styles.topNavBtn} onPress={() => toggleFavoriteProducer(producer.id)}>
+            <TouchableOpacity style={styles.topNavBtn} onPress={() => toggleProducer(producer.id)}>
               <MaterialCommunityIcons
                 name={favorite ? 'heart' : 'heart-outline'}
                 size={22}
@@ -64,19 +102,21 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 
       <View style={styles.contentCard}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: producer.avatar }} style={styles.avatar} />
-          <View style={styles.verifiedBadge}>
-            <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
-          </View>
+          <Image source={{ uri: producer.banner_url }} style={styles.avatar} />
+          {producer.is_verified && (
+            <View style={styles.verifiedBadge}>
+              <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
+            </View>
+          )}
         </View>
 
-        <Text style={styles.producerName}>{producer.name}</Text>
-        <Text style={styles.producerMeta}>Depuis 2015 • Certifié Bio</Text>
+        <Text style={styles.producerName}>{producer.company_name}</Text>
+        <Text style={styles.producerMeta}>{producer.city}</Text>
 
         <View style={styles.ratingBadge}>
           <MaterialCommunityIcons name="star" size={18} color={Colors.yellow500} />
           <Text style={styles.ratingText}>{producer.rating}</Text>
-          <Text style={styles.reviewCount}>({producer.reviewCount} avis)</Text>
+          <Text style={styles.reviewCount}>({producer.review_count} avis)</Text>
         </View>
 
         <View style={styles.actionRow}>
@@ -119,7 +159,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           </View>
           <View style={styles.locationInfo}>
             <Text style={styles.addressText}>{producer.address}</Text>
-            <Text style={styles.distanceText}>{producer.distance} km de vous</Text>
+            <Text style={styles.distanceText}>{producer.distance_km} km de vous</Text>
           </View>
           <TouchableOpacity style={styles.directionsBtn}>
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />
@@ -136,6 +176,12 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.gray50,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: Colors.gray50,
   },
   coverContainer: {

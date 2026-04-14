@@ -1,13 +1,36 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, TextInput, Image,
-  StyleSheet, ScrollView,
+  StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
+import * as Location from 'expo-location'
 import { Colors, Spacing, Radius } from '../theme'
-import { useMockStore } from '../store/mock.store'
+import { api } from '../services/api'
 
 type Filter = 'closest' | 'rated' | 'open'
+
+interface Producer {
+  id: string
+  user_id: string
+  company_name: string
+  description: string | null
+  address: string
+  city: string
+  postal_code: string
+  latitude: number
+  longitude: number
+  website_url: string | null
+  banner_url: string | null
+  is_verified: boolean
+  first_name: string
+  last_name: string
+  distance_km: number
+  rating: number
+  review_count: number
+  categories: string[]
+  is_open: boolean
+}
 
 const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
   { key: 'closest', label: 'Plus proche', icon: 'map-marker' },
@@ -18,29 +41,76 @@ const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof M
 export function ShopListScreen({ navigation }: any) {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<Filter>('closest')
-  const producers = useMockStore((s) => s.producers)
+  const [producers, setProducers] = useState<Producer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
+
+  const fetchProducers = async (searchQuery?: string) => {
+    try {
+      setLoading(true)
+      const params: Record<string, any> = { limit: 20 }
+      if (userLocation) {
+        params.lat = userLocation.lat
+        params.lon = userLocation.lon
+        params.radius = 100
+      }
+      if (searchQuery?.trim()) {
+        params.search = searchQuery.trim()
+      }
+      console.log('[ShopList] fetching producers with params:', JSON.stringify(params))
+      const res = await api.get<Producer[]>('/producers', { params })
+      console.log('[ShopList] response:', res.data?.length, 'producers')
+      setProducers(res.data)
+    } catch (err: any) {
+      console.error('[ShopList] fetch error:', err?.message, err?.code, err?.response?.status)
+      setProducers([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          const { latitude, longitude } = pos.coords
+          if (latitude > 40 && latitude < 52 && longitude > -6 && longitude < 10) {
+            setUserLocation({ lat: latitude, lon: longitude })
+          }
+        }
+      } catch {}
+      fetchProducers()
+    })()
+  }, [])
+
+  const handleSearchSubmit = () => {
+    fetchProducers(search)
+  }
+
+  const handleFilterChange = (filter: Filter) => {
+    setActiveFilter(filter)
+    if (filter === 'closest' && userLocation) {
+      fetchProducers(search)
+    }
+  }
 
   const filtered = useMemo(() => {
     let result = [...producers]
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.tagline.toLowerCase().includes(q),
-      )
-    }
     switch (activeFilter) {
       case 'closest':
-        result.sort((a, b) => a.distance - b.distance)
+        result.sort((a, b) => a.distance_km - b.distance_km)
         break
       case 'rated':
         result.sort((a, b) => b.rating - a.rating)
         break
       case 'open':
-        result = result.filter((p) => p.isOpen)
+        result = result.filter((p) => p.is_open)
         break
     }
     return result
-  }, [producers, search, activeFilter])
+  }, [producers, activeFilter])
 
   return (
     <View style={styles.container}>
@@ -57,6 +127,8 @@ export function ShopListScreen({ navigation }: any) {
           placeholderTextColor={Colors.gray400}
           value={search}
           onChangeText={setSearch}
+          onSubmitEditing={handleSearchSubmit}
+          returnKeyType="search"
         />
       </View>
 
@@ -67,7 +139,7 @@ export function ShopListScreen({ navigation }: any) {
             return (
               <TouchableOpacity
                 key={f.key}
-                onPress={() => setActiveFilter(f.key)}
+                onPress={() => handleFilterChange(f.key)}
                 style={[styles.filterPill, active && styles.filterPillActive]}
               >
                 <MaterialCommunityIcons
@@ -84,42 +156,61 @@ export function ShopListScreen({ navigation }: any) {
         </ScrollView>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('ProducerProfile', { producerId: item.id })}
-            activeOpacity={0.7}
-          >
-            <View style={styles.imageWrapper}>
-              <Image source={{ uri: item.image }} style={styles.image} />
-              <View style={[styles.badge, item.isOpen ? styles.badgeOpen : styles.badgeClosed]}>
-                <Text style={styles.badgeText}>{item.isOpen ? 'OUVERT' : 'FERMÉ'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.cardContent}>
-              <Text style={styles.producerName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.producerTagline} numberOfLines={2}>{item.tagline}</Text>
-              <View style={styles.cardBottom}>
-                <View style={styles.distanceBadge}>
-                  <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primary} />
-                  <Text style={styles.distanceText}>{item.distance} km</Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={22}
-                  color={Colors.gray400}
-                />
-              </View>
-            </View>
+      {loading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="store-off" size={48} color={Colors.gray300} />
+          <Text style={styles.emptyTitle}>Aucun producteur trouvé</Text>
+          <Text style={styles.emptySubtitle}>
+            {producers.length === 0 ? 'Vérifiez que l\'API est lancée sur localhost:3002' : 'Essayez un autre filtre'}
+          </Text>
+          <TouchableOpacity onPress={() => fetchProducers(search)} style={styles.retryBtn}>
+            <Text style={styles.retryBtnText}>Réessayer</Text>
           </TouchableOpacity>
-        )}
-      />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('ProducerProfile', { producerId: item.id })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.imageWrapper}>
+                <Image source={{ uri: item.banner_url || undefined }} style={styles.image} />
+                <View style={[styles.badge, item.is_open ? styles.badgeOpen : styles.badgeClosed]}>
+                  <Text style={styles.badgeText}>{item.is_open ? 'OUVERT' : 'FERMÉ'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cardContent}>
+                <Text style={styles.producerName} numberOfLines={1}>{item.company_name}</Text>
+                {item.description ? (
+                  <Text style={styles.producerTagline} numberOfLines={2}>{item.description}</Text>
+                ) : null}
+                <View style={styles.cardBottom}>
+                  <View style={styles.distanceBadge}>
+                    <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primary} />
+                    <Text style={styles.distanceText}>{item.distance_km} km</Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={22}
+                    color={Colors.gray400}
+                  />
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </View>
   )
 }
@@ -289,5 +380,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
     marginLeft: 3,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xxl,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.gray700,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: Colors.gray500,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  retryBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  retryBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 15,
   },
 })

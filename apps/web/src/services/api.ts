@@ -1,15 +1,13 @@
 import axios from 'axios'
-import { setupMockInterceptor } from './mock.interceptor'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3002/api'
 
 export const api = axios.create({
-  baseURL: BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`,
+  baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10_000,
 })
 
-// Intercepteur : ajoute le JWT à chaque requête
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
@@ -18,7 +16,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Intercepteur : gestion des erreurs 401
 api.interceptors.response.use(
   (res) => res,
   (error) => {
@@ -30,7 +27,5 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
-
-setupMockInterceptor(api)
 
 export default api

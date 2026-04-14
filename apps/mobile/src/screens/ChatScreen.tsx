@@ -1,93 +1,116 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  Image, ScrollView, StyleSheet, KeyboardAvoidingView, Platform,
+  Image, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
-import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
+import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors } from '../theme'
-import { useMockStore } from '../store/mock.store'
-import type { ChatMessage } from '../store/mock.store'
+import api from '../services/api'
 
-type Nav = StackNavigationProp<RootStackParamList>
+type Props = StackScreenProps<RootStackParamList, 'Conversation'>
 
-interface LocalMessage extends ChatMessage {
-  local?: boolean
+interface ApiMessage {
+  id: string
+  sender_id: string
+  receiver_id: string
+  content: string
+  created_at: string
+  image_url?: string
+}
+
+interface LocalMessage {
+  id: string
+  sender: 'user' | 'partner'
+  text: string
+  timestamp: string
+  image?: string
+  pending?: boolean
 }
 
 const QUICK_REPLIES = ["C'est prêt ?", 'Encore du stock ?', 'Merci beaucoup !', 'À quelle heure ?']
 
-const AUTO_REPLIES = [
-  'Oui, bien sûr ! Je prépare ça.',
-  'C\'est noté, je vous confirme bientôt.',
-  'Pas de souci, on s\'en occupe !',
-  'Parfait, à tout à l\'heure !',
-  'Bien reçu, merci !',
-]
-
-export function ChatScreen() {
-  const nav = useNavigation<Nav>()
-  const { messages: storeMessages, producers } = useMockStore()
-  const producer = producers[0]
+export function ChatScreen({ route, navigation }: Props) {
+  const { partnerId, partnerName } = route.params
   const listRef = useRef<FlatList>(null)
-  const [localMessages, setLocalMessages] = useState<LocalMessage[]>(storeMessages)
+  const [messages, setMessages] = useState<LocalMessage[]>([])
+  const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
 
   useEffect(() => {
-    setLocalMessages(storeMessages)
-  }, [storeMessages])
+    api.get<ApiMessage[]>(`/messages/${partnerId}`)
+      .then(({ data }) => {
+        setMessages(
+          data.map((m) => ({
+            id: m.id,
+            sender: m.sender_id === partnerId ? 'partner' : 'user',
+            text: m.content,
+            timestamp: m.created_at,
+            image: m.image_url,
+          })),
+        )
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [partnerId])
 
   const scrollToBottom = () => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!text.trim()) return
 
-    const userMsg: LocalMessage = {
-      id: `local-${Date.now()}`,
+    const content = text.trim()
+    const optimistic: LocalMessage = {
+      id: `pending-${Date.now()}`,
       sender: 'user',
-      text: text.trim(),
-      timestamp: new Date(),
-      local: true,
+      text: content,
+      timestamp: new Date().toISOString(),
+      pending: true,
     }
 
-    setLocalMessages((prev) => [...prev, userMsg])
+    setMessages((prev) => [...prev, optimistic])
     setText('')
     scrollToBottom()
 
-    const replyText = AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)]
-
-    setTimeout(() => {
-      const producerMsg: LocalMessage = {
-        id: `local-reply-${Date.now()}`,
-        sender: 'producer',
-        text: replyText,
-        timestamp: new Date(),
-        local: true,
-      }
-      setLocalMessages((prev) => [...prev, producerMsg])
-      scrollToBottom()
-    }, 2000)
+    try {
+      const { data } = await api.post<ApiMessage>('/messages', {
+        receiver_id: partnerId,
+        content,
+      })
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimistic.id
+            ? { id: data.id, sender: 'user', text: data.content, timestamp: data.created_at }
+            : m,
+        ),
+      )
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimistic.id ? { ...m, pending: false } : m)),
+      )
+    }
   }
 
-  const formatTime = (date: Date) => {
-    const d = new Date(date)
+  const formatTime = (ts: string) => {
+    const d = new Date(ts)
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
   }
 
   const renderMessage = ({ item, index }: { item: LocalMessage; index: number }) => {
     const isUser = item.sender === 'user'
-    const showAvatar = !isUser && (index === 0 || localMessages[index - 1]?.sender === 'user')
+    const showAvatar = !isUser && (index === 0 || messages[index - 1]?.sender === 'user')
 
     return (
       <View style={{ marginBottom: 8 }}>
         {showAvatar && (
           <View style={styles.avatarRow}>
-            <Image source={{ uri: producer.avatar }} style={styles.msgAvatar} />
-            <Text style={styles.avatarName}>{producer.name}</Text>
+            <View style={styles.msgAvatarFallback}>
+              <Text style={styles.msgAvatarLetter}>{partnerName[0]}</Text>
+            </View>
+            <Text style={styles.avatarName}>{partnerName}</Text>
           </View>
         )}
         <View style={[isUser ? styles.userRow : styles.producerRow, !showAvatar && !isUser && { marginLeft: 44 }]}>
@@ -114,15 +137,17 @@ export function ChatScreen() {
       keyboardVerticalOffset={90}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.dark} />
         </TouchableOpacity>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: producer.avatar }} style={styles.headerAvatar} />
+          <View style={styles.headerAvatarFallback}>
+            <Text style={styles.headerAvatarLetter}>{partnerName[0]}</Text>
+          </View>
           <View style={styles.onlineDot} />
         </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>{producer.name}</Text>
+          <Text style={styles.headerName}>{partnerName}</Text>
           <Text style={styles.headerSubtitle}>Producteur Bio</Text>
         </View>
         <TouchableOpacity style={styles.callBtn}>
@@ -146,15 +171,21 @@ export function ChatScreen() {
         </View>
       </View>
 
-      <FlatList
-        ref={listRef}
-        data={localMessages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={styles.messageList}
-        onContentSizeChange={scrollToBottom}
-        renderItem={renderMessage}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={styles.messageList}
+          onContentSizeChange={scrollToBottom}
+          renderItem={renderMessage}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplies} contentContainerStyle={styles.quickRepliesContent}>
         {QUICK_REPLIES.map((qr) => (
@@ -221,11 +252,18 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
   },
-  headerAvatar: {
+  headerAvatarFallback: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.gray200,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatarLetter: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   onlineDot: {
     position: 'absolute',
@@ -293,6 +331,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.gray600,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   messageList: {
     paddingHorizontal: 16,
     paddingBottom: 8,
@@ -303,11 +346,18 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  msgAvatar: {
+  msgAvatarFallback: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.gray200,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  msgAvatarLetter: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   avatarName: {
     fontSize: 13,
