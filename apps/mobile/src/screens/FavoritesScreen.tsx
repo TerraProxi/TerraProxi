@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, Image, ScrollView,
   StyleSheet, Dimensions, ActivityIndicator,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 
 import { Colors, Spacing, Radius } from '../theme'
@@ -34,6 +35,7 @@ interface ApiProduct {
 type Tab = 'producers' | 'products'
 
 export function FavoritesScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('producers')
   const [allProducers, setAllProducers] = useState<ApiProducer[]>([])
   const [allProducts, setAllProducts] = useState<ApiProduct[]>([])
@@ -85,7 +87,7 @@ export function FavoritesScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
         <Text style={styles.headerTitle}>Mes Coups de Cœur</Text>
         <Text style={styles.headerSubtitle}>
           Retrouvez vos produits et artisans préférés
@@ -227,7 +229,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.primaryLight,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xxxl,
     paddingBottom: Spacing.xxl,
     borderBottomLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,

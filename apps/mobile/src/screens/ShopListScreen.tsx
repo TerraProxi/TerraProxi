@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, TextInput, Image,
   StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { Colors, Spacing, Radius } from '../theme'
@@ -39,6 +40,7 @@ const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof M
 ]
 
 export function ShopListScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<Filter>('closest')
   const [producers, setProducers] = useState<Producer[]>([])
@@ -114,7 +116,7 @@ export function ShopListScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
         <Text style={styles.headerTitle}>Producteurs Locaux</Text>
         <Text style={styles.headerSubtitle}>En direct du terroir héraultais</Text>
       </View>
@@ -223,7 +225,6 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.white,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray100,
