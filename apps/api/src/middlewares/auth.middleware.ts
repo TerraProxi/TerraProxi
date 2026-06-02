@@ -1,12 +1,14 @@
+import '../config/env'
 import { Elysia } from 'elysia'
 import { jwt } from '@elysiajs/jwt'
 import type { JwtPayload, UserRole } from '../models/types'
+import { requireEnv } from '../config/env'
 import { AppError } from '../utils/errors'
 
 export const jwtPlugin = new Elysia({ name: 'jwt' }).use(
   jwt({
     name: 'jwt',
-    secret: process.env.JWT_SECRET!,
+    secret: requireEnv('JWT_SECRET'),
     exp: process.env.JWT_EXPIRES_IN ?? '15m',
   }),
 )

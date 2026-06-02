@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
+    "dev": "bun --env-file=../../.env --env-file=.env run --watch src/index.ts",
+    "start": "bun --env-file=../../.env --env-file=.env run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "lint": "bunx tsc --noEmit",
     "db:migrate": "bun run src/db/migrate.ts"
