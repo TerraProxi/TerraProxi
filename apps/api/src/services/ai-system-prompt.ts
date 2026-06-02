@@ -6,8 +6,13 @@ import { buildCatalogContext } from './ai-catalog.service'
  * Le catalogue provient de fetchProducerCatalog() qui lit PostgreSQL
  * ou les données mock selon la disponibilité du backend (voir db/client.ts).
  */
-export function buildSystemInstruction(catalog: CatalogProducer[]): string {
-  const catalogText = buildCatalogContext(catalog)
+export function buildSystemInstruction(
+  catalog: CatalogProducer[],
+  options?: { isExpandedRadius?: boolean },
+): string {
+  const catalogText = buildCatalogContext(catalog, {
+    isExpandedRadius: options?.isExpandedRadius,
+  })
   const producerCount = catalog.length
   const validProducerIds = catalog.map((p) => p.id)
 
@@ -94,8 +99,11 @@ Règles catalogue :
 - Recommande **UNIQUEMENT** des producteurs listés ci-dessous.
 - Utilise **EXACTEMENT** leur \`producer_id\` (UUID) dans \`producer_links\`.
 - Maximum **5** entrées dans \`producer_links\`, les plus pertinentes.
-- Si aucun producteur ne correspond : dis-le avec honnêteté, suggère une
-  reformulation ou des catégories proches disponibles.
+- Si aucun producteur ne correspond à la demande exacte : propose quand même
+  les producteurs les plus proches du catalogue (légumes, fromages, etc.) plutôt
+  que de dire qu'il n'y a rien, sauf si le catalogue est vide.
+- Si la note indique un rayon élargi : explique que les producteurs listés sont
+  les plus proches disponibles sur TerraProxi (indique la distance en km).
 - Cite les **prix et unités** tels qu'indiqués dans le catalogue, sans les modifier.
 - Mentionne la **distance** quand elle est indiquée (km).
 

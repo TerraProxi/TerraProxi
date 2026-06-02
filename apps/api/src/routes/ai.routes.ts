@@ -28,7 +28,7 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
       const history = body.history ?? []
       const hasGeo = body.lat !== undefined && body.lon !== undefined
 
-      const catalog = await fetchProducerCatalog(
+      const { producers, isExpandedRadius } = await fetchProducerCatalog(
         hasGeo
           ? {
             lat: body.lat!,
@@ -38,7 +38,9 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
           : undefined,
       )
 
-      return chatWithGemini(body.message.trim(), history, catalog)
+      return chatWithGemini(body.message.trim(), history, producers, {
+        isExpandedRadius,
+      })
     },
     {
       body: t.Object({

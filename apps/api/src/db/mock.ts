@@ -49,8 +49,11 @@ function extractParam(sql: string, pattern: RegExp, params: unknown[]): unknown 
   return params[idx]
 }
 
-function extractLimitOffset(sql: string, params: unknown[]): { limit: number; offset: number } {
-  let limit = 20
+function extractLimitOffset(
+  sql: string,
+  params: unknown[],
+): { limit: number | null; offset: number } {
+  let limit: number | null = null
   let offset = 0
 
   const limitParamMatch = sql.match(/LIMIT\s+\$(\d+)/i)
@@ -78,6 +81,19 @@ function extractLimitOffset(sql: string, params: unknown[]): { limit: number; of
   return { limit, offset }
 }
 
+function applyLimitOffset<T>(
+  items: T[],
+  limit: number | null,
+  offset: number,
+): T[] {
+  if (limit === null) return items
+  return items.slice(offset, offset + limit)
+}
+
+function sortByNameAsc<T extends { name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+}
+
 function producerToRow(p: SeedProducer, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: p.id,
@@ -99,7 +115,7 @@ function producerToRow(p: SeedProducer, extra: Record<string, unknown> = {}): Re
     review_count: p.review_count,
     categories: p.categories,
     is_open: p.is_open,
-    distance_km: p.distance_km,
+    distance_km: (p as SeedProducer & { distance_km?: number }).distance_km,
     ...extra,
   }
 }
@@ -226,6 +242,28 @@ async function handleProducerQuery(sql: string, params: unknown[]) {
     return { rows: [], rowCount: 0 }
   }
 
+  if (sql.includes('ST_Distance') && !sql.includes('ST_DWithin')) {
+    const lat = p[0] as number
+    const lon = p[1] as number
+
+    let results = producers
+      .filter(pr => pr.latitude != null && pr.longitude != null)
+      .map(pr => {
+        const dist = haversineDistance(lat, lon, pr.latitude!, pr.longitude!)
+        return { ...pr, distance_km: Math.round(dist * 10) / 10 }
+      })
+
+    results.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0))
+
+    const { limit, offset } = extractLimitOffset(sql, p)
+    results = applyLimitOffset(results, limit, offset)
+
+    return {
+      rows: results.map(pr => producerToRow(pr)),
+      rowCount: results.length,
+    }
+  }
+
   if (sql.includes('ST_DWithin') || sql.includes('ST_Distance')) {
     const lat = p[0] as number
     const lon = p[1] as number
@@ -251,7 +289,7 @@ async function handleProducerQuery(sql: string, params: unknown[]) {
     results.sort((a, b) => (a.distance_km ?? 0) - (b.distance_km ?? 0))
 
     const { limit, offset } = extractLimitOffset(sql, p)
-    results = results.slice(offset, offset + limit)
+    results = applyLimitOffset(results, limit, offset)
 
     return {
       rows: results.map(pr => producerToRow(pr)),
@@ -275,7 +313,7 @@ async function handleProducerQuery(sql: string, params: unknown[]) {
   results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   const { limit, offset } = extractLimitOffset(sql, p)
-  results = results.slice(offset, offset + limit)
+  results = applyLimitOffset(results, limit, offset)
 
   return {
     rows: results.map(pr => producerToRow(pr)),
@@ -396,9 +434,18 @@ async function handleProductQuery(sql: string, params: unknown[]) {
 
   let results = [...products]
 
+  if (sql.includes('producer_id = ANY')) {
+    const ids = (p[0] as string[]) ?? []
+    results = results.filter(pr => ids.includes(pr.producer_id))
+  }
+
   const producerIdParam = extractParam(sql, /p\.producer_id\s*=\s*\$(\d+)/i, p)
   if (producerIdParam) {
     results = results.filter(pr => pr.producer_id === producerIdParam)
+  }
+
+  if (sql.includes('is_available = true')) {
+    results = results.filter(pr => pr.is_available === true)
   }
 
   const categoryParam = extractParam(sql, /p\.category\s*=\s*\$(\d+)/i, p)
@@ -422,10 +469,14 @@ async function handleProductQuery(sql: string, params: unknown[]) {
     }
   }
 
-  results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  if (/ORDER BY\s+name\s+ASC/i.test(sql)) {
+    results = sortByNameAsc(results)
+  } else {
+    results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
 
   const { limit, offset } = extractLimitOffset(sql, p)
-  results = results.slice(offset, offset + limit)
+  results = applyLimitOffset(results, limit, offset)
 
   return {
     rows: results.map(pr => productToRow(pr)),
@@ -757,7 +808,7 @@ async function handleOrderQuery(sql: string, params: unknown[]) {
 
     filtered.sort((a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime())
 
-    const results = filtered.slice(offset, offset + limit).map(o => {
+    const results = applyLimitOffset(filtered, limit, offset).map(o => {
       const producer = producers.find(pr => pr.id === o.producer_id)
       const items = orderItems
         .filter(oi => oi.order_id === o.id)

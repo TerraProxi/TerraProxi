@@ -95,6 +95,7 @@ export async function chatWithGemini(
   message: string,
   history: ChatHistoryItem[],
   catalog: CatalogProducer[],
+  options?: { isExpandedRadius?: boolean },
 ): Promise<AiChatResult> {
   const { apiKey, model } = getGeminiConfig()
   const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`
@@ -104,7 +105,7 @@ export async function chatWithGemini(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: buildSystemInstruction(catalog) }],
+        parts: [{ text: buildSystemInstruction(catalog, options) }],
       },
       contents: buildContents(message, history),
       generationConfig: {

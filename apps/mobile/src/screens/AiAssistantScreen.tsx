@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
@@ -17,6 +18,7 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import * as Location from 'expo-location'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
+import { ChatMessageText } from '../components/ChatMessageText'
 import api from '../services/api'
 
 type Nav = StackNavigationProp<RootStackParamList>
@@ -167,6 +169,31 @@ export function AiAssistantScreen() {
     navigation.navigate('ProducerProfile', { producerId })
   }
 
+  const hasConversation = messages.some(
+    (m) => m.id !== 'welcome' && !m.pending,
+  )
+
+  const clearHistory = () => {
+    if (!hasConversation || isSending) return
+
+    Alert.alert(
+      'Effacer la conversation',
+      'Supprimer tous les messages de cette discussion ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Effacer',
+          style: 'destructive',
+          onPress: () => {
+            setMessages([WELCOME_MESSAGE])
+            setText('')
+            scrollToBottom()
+          },
+        },
+      ],
+    )
+  }
+
   const renderProducerLinks = (links: ProducerLink[]) => (
     <View style={styles.linksContainer}>
       {links.map((link) => (
@@ -217,9 +244,11 @@ export function AiAssistantScreen() {
         )}
         <View style={isUser ? styles.userContent : styles.assistantContent}>
           <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-            <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>
-              {item.text}
-            </Text>
+            <ChatMessageText
+              text={item.text}
+              style={[styles.bubbleText, isUser && styles.userBubbleText]}
+              boldStyle={isUser ? styles.userBubbleBold : styles.assistantBubbleBold}
+            />
           </View>
           {!isUser && item.producerLinks && item.producerLinks.length > 0
             ? renderProducerLinks(item.producerLinks)
@@ -245,6 +274,22 @@ export function AiAssistantScreen() {
             {location ? 'Producteurs locaux · géolocalisé' : 'Producteurs locaux'}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={clearHistory}
+          disabled={!hasConversation || isSending}
+          style={[
+            styles.clearHistoryBtn,
+            (!hasConversation || isSending) && styles.clearHistoryBtnDisabled,
+          ]}
+          accessibilityLabel="Effacer la conversation"
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="delete-outline"
+            size={22}
+            color={hasConversation && !isSending ? Colors.gray700 : Colors.gray300}
+          />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -257,24 +302,27 @@ export function AiAssistantScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.quickPrompts}
-        contentContainerStyle={styles.quickPromptsContent}
-      >
-        {QUICK_PROMPTS.map((prompt) => (
-          <TouchableOpacity
-            key={prompt}
-            style={styles.quickPill}
-            onPress={() => sendMessage(prompt)}
-            disabled={isSending}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.quickPillText}>{prompt}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.quickPromptsSection}>
+        <Text style={styles.quickPromptsLabel}>Suggestions</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickPromptsContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {QUICK_PROMPTS.map((prompt) => (
+            <TouchableOpacity
+              key={prompt}
+              style={[styles.quickPill, isSending && styles.quickPillDisabled]}
+              onPress={() => sendMessage(prompt)}
+              disabled={isSending}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.quickPillText}>{prompt}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <View style={styles.inputContainer}>
         <TextInput
@@ -335,6 +383,17 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 12,
     color: Colors.gray500,
+  },
+  clearHistoryBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.gray100,
+  },
+  clearHistoryBtnDisabled: {
+    backgroundColor: Colors.gray50,
   },
   messageList: {
     paddingHorizontal: Spacing.lg,
@@ -401,6 +460,14 @@ const styles = StyleSheet.create({
   userBubbleText: {
     color: Colors.white,
   },
+  userBubbleBold: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
+  assistantBubbleBold: {
+    color: Colors.gray900,
+    fontWeight: '700',
+  },
   loadingText: {
     fontSize: 14,
     color: Colors.gray500,
@@ -446,29 +513,45 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     marginTop: 2,
   },
-  quickPrompts: {
-    maxHeight: 48,
+  quickPromptsSection: {
     backgroundColor: Colors.white,
     borderTopWidth: 1,
-    borderTopColor: Colors.gray100,
+    borderTopColor: Colors.gray200,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.md,
+  },
+  quickPromptsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.gray600,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   quickPromptsContent: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
   },
   quickPill: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.white,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingVertical: 10,
+    marginRight: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    shadowColor: Colors.dark,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quickPillDisabled: {
+    opacity: 0.5,
   },
   quickPillText: {
-    fontSize: 13,
-    color: Colors.green700,
+    fontSize: 14,
+    color: Colors.primaryDark,
     fontWeight: '600',
   },
   inputContainer: {

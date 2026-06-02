@@ -12,3 +12,4 @@ ios/
 *.tsbuildinfo
 coverage/
 .pnpm-store/
+apps/api/.env
