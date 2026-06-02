@@ -21,6 +21,12 @@ import { Colors, Spacing, Radius } from '../theme'
 import { AssistantReplyBubble } from '../components/AssistantReplyBubble'
 import { ChatMessageText } from '../components/ChatMessageText'
 import api from '../services/api'
+import {
+  buildCartContextPayload,
+  executeAiCartActions,
+  type AiCartAction,
+} from '../services/aiCartActions'
+import { useCartStore } from '../store/cart.store'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -36,15 +42,18 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   producerLinks?: ProducerLink[]
+  quickReplies?: string[]
+  cartFeedback?: string[]
   pending?: boolean
   error?: boolean
-  /** Révélation mot par mot (nouvelles réponses du bot uniquement). */
   animateReply?: boolean
 }
 
 interface AiChatResponse {
   reply: string
   producer_links: ProducerLink[]
+  cart_actions: AiCartAction[]
+  quick_replies: string[]
 }
 
 const WELCOME_MESSAGE: ChatMessage = {
@@ -53,15 +62,15 @@ const WELCOME_MESSAGE: ChatMessage = {
   text:
     'Bonjour. Je suis l\'assistant TerraProxi — votre guide pour découvrir '
     + 'les producteurs locaux, leurs produits frais et de saison, '
-    + 'et des idées de recettes avec des ingrédients près de chez vous. '
-    + 'Que recherchez-vous aujourd\'hui ?',
+    + 'des idées de recettes, et **je peux aussi remplir votre panier** '
+    + 'si vous me le demandez. Que recherchez-vous aujourd\'hui ?',
 }
 
 const QUICK_PROMPTS = [
+  'Ajoute du jus de pomme à mon panier',
   'Légumes bio près de moi',
   'Fromages locaux',
   'Recette avec des tomates',
-  'Fruits de saison',
 ]
 
 export function AiAssistantScreen() {
@@ -71,6 +80,37 @@ export function AiAssistantScreen() {
   const [text, setText] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null)
+  const cartItems = useCartStore((s) => s.items)
+  const cartTotal = useCartStore((s) => s.total)
+  const cartCount = useCartStore((s) => s.count)
+  const cartProducerId = useCartStore((s) => s.producerId)
+  const cartAdd = useCartStore((s) => s.add)
+  const cartReplaceWith = useCartStore((s) => s.replaceWith)
+  const cartRemove = useCartStore((s) => s.remove)
+  const cartUpdateQty = useCartStore((s) => s.updateQty)
+  const cartClear = useCartStore((s) => s.clear)
+
+  const getCartApi = useCallback(() => ({
+    items: cartItems,
+    total: cartTotal,
+    count: cartCount,
+    producerId: cartProducerId,
+    add: cartAdd,
+    replaceWith: cartReplaceWith,
+    remove: cartRemove,
+    updateQty: cartUpdateQty,
+    clear: cartClear,
+  }), [
+    cartItems,
+    cartTotal,
+    cartCount,
+    cartProducerId,
+    cartAdd,
+    cartReplaceWith,
+    cartRemove,
+    cartUpdateQty,
+    cartClear,
+  ])
 
   useEffect(() => {
     Location.requestForegroundPermissionsAsync()
@@ -125,16 +165,19 @@ export function AiAssistantScreen() {
     scrollToBottom()
 
     try {
+      const cartApi = getCartApi()
       const { data } = await api.post<AiChatResponse>(
         '/ai/chat',
         {
           message: trimmed,
           history: buildHistory([...messages, userMessage]),
+          cart_context: buildCartContextPayload(cartApi),
           ...(location ? { lat: location.lat, lon: location.lon, radius_km: 50 } : {}),
         },
         { timeout: 60_000 },
       )
 
+      const cartFeedback = executeAiCartActions(data.cart_actions ?? [], cartApi)
       const assistantId = `assistant-${Date.now()}`
       setMessages((prev) =>
         prev.map((m) =>
@@ -144,6 +187,8 @@ export function AiAssistantScreen() {
               role: 'assistant',
               text: data.reply,
               producerLinks: data.producer_links,
+              quickReplies: data.quick_replies,
+              cartFeedback,
               animateReply: true,
             }
             : m,
@@ -208,35 +253,22 @@ export function AiAssistantScreen() {
     )
   }
 
-  const renderProducerLinks = (links: ProducerLink[]) => (
-    <View style={styles.linksContainer}>
-      {links.map((link) => (
-        <TouchableOpacity
-          key={link.producer_id}
-          style={styles.producerCard}
-          onPress={() => openProducer(link.producer_id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.producerCardIcon}>
-            <MaterialCommunityIcons name="storefront" size={18} color={Colors.primary} />
-          </View>
-          <View style={styles.producerCardContent}>
-            <Text style={styles.producerCardName}>{link.company_name}</Text>
-            {link.city ? (
-              <Text style={styles.producerCardCity}>{link.city}</Text>
-            ) : null}
-            <Text style={styles.producerCardReason} numberOfLines={2}>
-              {link.reason}
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.gray400} />
-        </TouchableOpacity>
-      ))}
-    </View>
-  )
-
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const isUser = item.role === 'user'
+    if (item.role === 'user') {
+      return (
+        <View style={[styles.messageBlock, styles.userBlock]}>
+          <View style={styles.userContent}>
+            <View style={[styles.bubble, styles.userBubble]}>
+              <ChatMessageText
+                text={item.text}
+                style={styles.userBubbleTextCombined}
+                boldStyle={styles.userBubbleBold}
+              />
+            </View>
+          </View>
+        </View>
+      )
+    }
 
     if (item.pending) {
       return (
@@ -254,39 +286,21 @@ export function AiAssistantScreen() {
       )
     }
 
-    if (!isUser && item.animateReply) {
-      return (
-        <AssistantReplyBubble
-          text={item.text}
-          animate
-          producerLinks={item.producerLinks}
-          onAnimationComplete={() => handleAnimationComplete(item.id)}
-          onScrollRequest={scrollToBottom}
-          onOpenProducer={openProducer}
-        />
-      )
-    }
-
     return (
-      <View style={[styles.messageBlock, isUser ? styles.userBlock : styles.assistantBlock]}>
-        {!isUser && (
-          <View style={styles.assistantAvatar}>
-            <MaterialCommunityIcons name="robot-outline" size={16} color={Colors.primary} />
-          </View>
-        )}
-        <View style={isUser ? styles.userContent : styles.assistantContent}>
-          <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-            <ChatMessageText
-              text={item.text}
-              style={[styles.bubbleText, isUser && styles.userBubbleText]}
-              boldStyle={isUser ? styles.userBubbleBold : styles.assistantBubbleBold}
-            />
-          </View>
-          {!isUser && item.producerLinks && item.producerLinks.length > 0
-            ? renderProducerLinks(item.producerLinks)
-            : null}
-        </View>
-      </View>
+      <AssistantReplyBubble
+        text={item.text}
+        animate={item.animateReply === true}
+        producerLinks={item.producerLinks}
+        quickReplies={item.quickReplies}
+        cartFeedback={item.cartFeedback}
+        isInteractionDisabled={isSending}
+        onAnimationComplete={
+          item.animateReply ? () => handleAnimationComplete(item.id) : undefined
+        }
+        onScrollRequest={scrollToBottom}
+        onOpenProducer={openProducer}
+        onQuickReply={sendMessage}
+      />
     )
   }
 
@@ -488,6 +502,11 @@ const styles = StyleSheet.create({
   userBubbleText: {
     color: Colors.white,
   },
+  userBubbleTextCombined: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: Colors.white,
+  },
   userBubbleBold: {
     color: Colors.white,
     fontWeight: '700',
@@ -500,46 +519,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gray500,
     fontStyle: 'italic',
-  },
-  linksContainer: {
-    marginTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  producerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-  },
-  producerCardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  producerCardContent: {
-    flex: 1,
-    gap: 2,
-  },
-  producerCardName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.dark,
-  },
-  producerCardCity: {
-    fontSize: 12,
-    color: Colors.gray500,
-  },
-  producerCardReason: {
-    fontSize: 12,
-    color: Colors.gray600,
-    marginTop: 2,
   },
   quickPromptsSection: {
     backgroundColor: Colors.white,

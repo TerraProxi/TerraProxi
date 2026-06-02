@@ -7,6 +7,7 @@ export interface CatalogProduct {
   price: number
   unit: string
   category: string
+  image_url: string | null
 }
 
 export interface CatalogProducer {
@@ -46,6 +47,7 @@ interface ProductRow {
   price: number
   unit: string
   category: string
+  image_url: string | null
 }
 
 async function fetchProducersInRadius(geo: GeoFilter): Promise<ProducerRow[]> {
@@ -123,7 +125,7 @@ async function fetchAvailableProducts(
   if (producerIds.length === 0) return []
 
   const result = await db.query<ProductRow>(
-    `SELECT id, producer_id, name, description, price, unit, category
+    `SELECT id, producer_id, name, description, price, unit, category, image_url
      FROM products
      WHERE is_available = true
        AND producer_id = ANY($1)
@@ -174,6 +176,7 @@ export async function fetchProducerCatalog(
       price: Number(product.price),
       unit: product.unit,
       category: product.category,
+      image_url: product.image_url ?? null,
     })
     productsByProducer.set(product.producer_id, list)
   }
@@ -213,7 +216,7 @@ export function buildCatalogContext(
     const productLines = producer.products.length > 0
       ? producer.products
         .map((product) =>
-          `    - ${product.name} (${product.category}) : ${product.price}€/${product.unit}`,
+          `    - [product_id=${product.id}] ${product.name} (${product.category}) : ${product.price}€/${product.unit}`,
         )
         .join('\n')
       : '    (aucun produit listé)'

@@ -15,12 +15,20 @@ const chatHistoryItem = t.Object({
   content: t.String({ minLength: 1, maxLength: 4000 }),
 })
 
+const cartContextItem = t.Object({
+  product_id: t.String({ minLength: 1 }),
+  product_name: t.String({ minLength: 1 }),
+  quantity: t.Number({ minimum: 1, maximum: 99 }),
+  unit: t.String({ minLength: 1 }),
+  price: t.Number({ minimum: 0 }),
+})
+
 export const aiRoutes = new Elysia({ prefix: '/ai' })
   .use(authGuard())
 
   /**
    * POST /api/ai/chat
-   * Assistant IA : recherche producteurs, recettes, conseils locaux.
+   * Assistant IA : recherche producteurs, recettes, conseils locaux, panier.
    */
   .post(
     '/chat',
@@ -40,6 +48,7 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
 
       return chatWithGemini(body.message.trim(), history, producers, {
         isExpandedRadius,
+        cart: body.cart_context ?? null,
       })
     },
     {
@@ -49,6 +58,13 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
         lat: t.Optional(t.Number({ minimum: -90, maximum: 90 })),
         lon: t.Optional(t.Number({ minimum: -180, maximum: 180 })),
         radius_km: t.Optional(t.Number({ minimum: 1, maximum: 200 })),
+        cart_context: t.Optional(t.Object({
+          producer_id: t.Nullable(t.String()),
+          producer_name: t.Nullable(t.String()),
+          items: t.Array(cartContextItem, { maxItems: 30 }),
+          total: t.Number({ minimum: 0 }),
+          count: t.Number({ minimum: 0 }),
+        })),
       }),
       detail: {
         summary: 'Assistant IA conversationnel',

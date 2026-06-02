@@ -1,6 +1,13 @@
 import { AppError } from '../utils/errors'
 import type { CatalogProducer } from './ai-catalog.service'
 import { buildSystemInstruction } from './ai-system-prompt'
+import type { CartContext } from './ai-cart.service'
+import {
+  sanitizeCartActions,
+  sanitizeQuickReplies,
+  type AiCartActionInput,
+  type SanitizedCartAction,
+} from './ai-cart.service'
 
 export interface ChatHistoryItem {
   role: 'user' | 'assistant'
@@ -17,6 +24,20 @@ export interface ProducerLink {
 export interface AiChatResult {
   reply: string
   producer_links: ProducerLink[]
+  cart_actions: SanitizedCartAction[]
+  quick_replies: string[]
+}
+
+interface GeminiChatOptions {
+  isExpandedRadius?: boolean
+  cart?: CartContext | null
+}
+
+interface RawAiChatResult {
+  reply?: string
+  producer_links?: ProducerLink[]
+  cart_actions?: AiCartActionInput[]
+  quick_replies?: string[]
 }
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
@@ -54,8 +75,35 @@ function buildResponseSchema() {
           required: ['producer_id', 'company_name', 'reason'],
         },
       },
+      cart_actions: {
+        type: 'ARRAY',
+        description: 'Actions panier à exécuter côté application',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            type: {
+              type: 'STRING',
+              enum: [
+                'add_to_cart',
+                'remove_from_cart',
+                'update_cart_quantity',
+                'clear_cart',
+              ],
+            },
+            product_id: { type: 'STRING' },
+            quantity: { type: 'NUMBER' },
+            replace_cart: { type: 'BOOLEAN' },
+          },
+          required: ['type'],
+        },
+      },
+      quick_replies: {
+        type: 'ARRAY',
+        description: 'Réponses rapides suggérées (quantité, confirmation, etc.)',
+        items: { type: 'STRING' },
+      },
     },
-    required: ['reply', 'producer_links'],
+    required: ['reply', 'producer_links', 'cart_actions', 'quick_replies'],
   }
 }
 
@@ -95,7 +143,7 @@ export async function chatWithGemini(
   message: string,
   history: ChatHistoryItem[],
   catalog: CatalogProducer[],
-  options?: { isExpandedRadius?: boolean },
+  options?: GeminiChatOptions,
 ): Promise<AiChatResult> {
   const { apiKey, model } = getGeminiConfig()
   const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`
@@ -105,7 +153,12 @@ export async function chatWithGemini(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: buildSystemInstruction(catalog, options) }],
+        parts: [{
+          text: buildSystemInstruction(catalog, {
+            isExpandedRadius: options?.isExpandedRadius,
+            cart: options?.cart,
+          }),
+        }],
       },
       contents: buildContents(message, history),
       generationConfig: {
@@ -134,9 +187,9 @@ export async function chatWithGemini(
     throw new AppError(503, 'Réponse IA vide ou invalide')
   }
 
-  let parsed: AiChatResult
+  let parsed: RawAiChatResult
   try {
-    parsed = JSON.parse(rawText) as AiChatResult
+    parsed = JSON.parse(rawText) as RawAiChatResult
   } catch {
     throw new AppError(503, 'Réponse IA mal formée')
   }
@@ -144,5 +197,7 @@ export async function chatWithGemini(
   return {
     reply: parsed.reply?.trim() || 'Je n\'ai pas pu formuler une réponse.',
     producer_links: sanitizeProducerLinks(parsed.producer_links ?? [], catalog),
+    cart_actions: sanitizeCartActions(parsed.cart_actions, catalog),
+    quick_replies: sanitizeQuickReplies(parsed.quick_replies),
   }
 }

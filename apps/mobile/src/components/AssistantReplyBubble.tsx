@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import {
   Animated,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -22,28 +23,41 @@ interface AssistantReplyBubbleProps {
   text: string
   animate: boolean
   producerLinks?: ProducerLink[]
+  quickReplies?: string[]
+  cartFeedback?: string[]
+  isInteractionDisabled?: boolean
   onAnimationComplete?: () => void
   onScrollRequest?: () => void
   onOpenProducer: (producerId: string) => void
+  onQuickReply?: (text: string) => void
 }
 
 export function AssistantReplyBubble({
   text,
   animate,
   producerLinks = [],
+  quickReplies = [],
+  cartFeedback = [],
+  isInteractionDisabled = false,
   onAnimationComplete,
   onScrollRequest,
   onOpenProducer,
+  onQuickReply,
 }: AssistantReplyBubbleProps) {
   const cursorOpacity = useRef(new Animated.Value(1)).current
-  const linksOpacity = useRef(new Animated.Value(0)).current
-  const linksTranslateY = useRef(new Animated.Value(8)).current
+  const extrasOpacity = useRef(new Animated.Value(animate ? 0 : 1)).current
+  const extrasTranslateY = useRef(new Animated.Value(animate ? 8 : 0)).current
 
   const { visibleText, isComplete, isTyping, skip } = useTypewriter(text, {
     enabled: animate,
     onComplete: onAnimationComplete,
     onTick: onScrollRequest,
   })
+
+  const showExtras = isComplete
+  const hasExtras = producerLinks.length > 0
+    || quickReplies.length > 0
+    || cartFeedback.length > 0
 
   useEffect(() => {
     if (!isTyping) {
@@ -70,24 +84,22 @@ export function AssistantReplyBubble({
   }, [isTyping, cursorOpacity])
 
   useEffect(() => {
-    if (!isComplete || producerLinks.length === 0) return
+    if (!showExtras || !hasExtras) return
 
     Animated.parallel([
-      Animated.timing(linksOpacity, {
+      Animated.timing(extrasOpacity, {
         toValue: 1,
         duration: 380,
         useNativeDriver: true,
       }),
-      Animated.spring(linksTranslateY, {
+      Animated.spring(extrasTranslateY, {
         toValue: 0,
         friction: 8,
         tension: 80,
         useNativeDriver: true,
       }),
     ]).start()
-  }, [isComplete, producerLinks.length, linksOpacity, linksTranslateY])
-
-  const showLinks = isComplete && producerLinks.length > 0
+  }, [showExtras, hasExtras, extrasOpacity, extrasTranslateY])
 
   return (
     <View style={styles.messageBlock}>
@@ -121,48 +133,89 @@ export function AssistantReplyBubble({
           ) : null}
         </Pressable>
 
-        {showLinks ? (
+        {showExtras && hasExtras ? (
           <Animated.View
-            style={[
-              styles.linksContainer,
-              {
-                opacity: linksOpacity,
-                transform: [{ translateY: linksTranslateY }],
-              },
-            ]}
+            style={{
+              opacity: extrasOpacity,
+              transform: [{ translateY: extrasTranslateY }],
+            }}
           >
-            {producerLinks.map((link) => (
-              <Pressable
-                key={link.producer_id}
-                style={({ pressed }) => [
-                  styles.producerCard,
-                  pressed && styles.producerCardPressed,
-                ]}
-                onPress={() => onOpenProducer(link.producer_id)}
+            {cartFeedback.length > 0 ? (
+              <View style={styles.cartFeedbackContainer}>
+                {cartFeedback.map((line) => (
+                  <View key={line} style={styles.cartFeedbackRow}>
+                    <MaterialCommunityIcons
+                      name="cart-check"
+                      size={16}
+                      color={Colors.green700}
+                    />
+                    <Text style={styles.cartFeedbackText}>{line}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {quickReplies.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.quickRepliesScroll}
+                contentContainerStyle={styles.quickRepliesContent}
+                keyboardShouldPersistTaps="handled"
               >
-                <View style={styles.producerCardIcon}>
-                  <MaterialCommunityIcons
-                    name="storefront"
-                    size={18}
-                    color={Colors.primary}
-                  />
-                </View>
-                <View style={styles.producerCardContent}>
-                  <Text style={styles.producerCardName}>{link.company_name}</Text>
-                  {link.city ? (
-                    <Text style={styles.producerCardCity}>{link.city}</Text>
-                  ) : null}
-                  <Text style={styles.producerCardReason} numberOfLines={2}>
-                    {link.reason}
-                  </Text>
-                </View>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={20}
-                  color={Colors.gray400}
-                />
-              </Pressable>
-            ))}
+                {quickReplies.map((reply) => (
+                  <Pressable
+                    key={reply}
+                    disabled={isInteractionDisabled}
+                    onPress={() => onQuickReply?.(reply)}
+                    style={({ pressed }) => [
+                      styles.quickReplyPill,
+                      isInteractionDisabled && styles.quickReplyPillDisabled,
+                      pressed && !isInteractionDisabled && styles.quickReplyPillPressed,
+                    ]}
+                  >
+                    <Text style={styles.quickReplyText}>{reply}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+
+            {producerLinks.length > 0 ? (
+              <View style={styles.linksContainer}>
+                {producerLinks.map((link) => (
+                  <Pressable
+                    key={link.producer_id}
+                    style={({ pressed }) => [
+                      styles.producerCard,
+                      pressed && styles.producerCardPressed,
+                    ]}
+                    onPress={() => onOpenProducer(link.producer_id)}
+                  >
+                    <View style={styles.producerCardIcon}>
+                      <MaterialCommunityIcons
+                        name="storefront"
+                        size={18}
+                        color={Colors.primary}
+                      />
+                    </View>
+                    <View style={styles.producerCardContent}>
+                      <Text style={styles.producerCardName}>{link.company_name}</Text>
+                      {link.city ? (
+                        <Text style={styles.producerCardCity}>{link.city}</Text>
+                      ) : null}
+                      <Text style={styles.producerCardReason} numberOfLines={2}>
+                        {link.reason}
+                      </Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={20}
+                      color={Colors.gray400}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </Animated.View>
         ) : null}
       </View>
@@ -231,6 +284,56 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.gray400,
     fontStyle: 'italic',
+  },
+  cartFeedbackContainer: {
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  cartFeedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.green50,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  cartFeedbackText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.green700,
+  },
+  quickRepliesScroll: {
+    marginTop: Spacing.sm,
+    maxHeight: 44,
+  },
+  quickRepliesContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: Spacing.sm,
+  },
+  quickReplyPill: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 8,
+    marginRight: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  quickReplyPillPressed: {
+    backgroundColor: Colors.primaryLight,
+  },
+  quickReplyPillDisabled: {
+    opacity: 0.45,
+  },
+  quickReplyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primaryDark,
   },
   linksContainer: {
     marginTop: Spacing.sm,
