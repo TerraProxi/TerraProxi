@@ -1,5 +1,4 @@
-import { Alert } from 'react-native'
-import type { CartProduct, CartAddResult } from '../store/cart.store'
+import type { CartProduct, CartAddResult, CartProducerGroup } from '../store/cart.store'
 
 export interface AiCartActionAdd {
   type: 'add_to_cart'
@@ -13,7 +12,6 @@ export interface AiCartActionAdd {
     image_url: string | null
   }
   quantity: number
-  replace_cart: boolean
 }
 
 export interface AiCartActionRemove {
@@ -41,11 +39,9 @@ export type AiCartAction =
 
 interface CartStoreApi {
   add: (product: CartProduct, quantity?: number) => CartAddResult
-  replaceWith: (product: CartProduct, quantity?: number) => void
   remove: (productId: string) => void
   updateQty: (productId: string, quantity: number) => void
   clear: () => void
-  producerId: string | null
 }
 
 function toCartProduct(action: AiCartActionAdd): CartProduct {
@@ -55,6 +51,7 @@ function toCartProduct(action: AiCartActionAdd): CartProduct {
     price: action.product.price,
     unit: action.product.unit,
     producer_id: action.product.producer_id,
+    producer_name: action.product.producer_name,
     image_url: action.product.image_url ?? undefined,
   }
 }
@@ -92,24 +89,7 @@ export function executeAiCartActions(
 
     if (action.type === 'add_to_cart') {
       const product = toCartProduct(action)
-
-      if (action.replace_cart) {
-        cart.replaceWith(product, action.quantity)
-        feedback.push(
-          `✓ ${formatAddedLabel(product.name, action.quantity, product.unit)} ajouté au panier`,
-        )
-        continue
-      }
-
       const result = cart.add(product, action.quantity)
-      if (result === 'conflict') {
-        Alert.alert(
-          'Panier d\'un autre producteur',
-          'Votre panier contient déjà des articles d\'un autre producteur. '
-          + 'Dites « vider le panier et ajouter » pour remplacer.',
-        )
-        continue
-      }
 
       feedback.push(
         result === 'updated'
@@ -123,20 +103,26 @@ export function executeAiCartActions(
 }
 
 export function buildCartContextPayload(cart: {
-  producerId: string | null
-  items: Array<{ product: CartProduct; quantity: number }>
+  groups: CartProducerGroup[]
   total: number
   count: number
 }) {
   return {
-    producer_id: cart.producerId,
-    producer_name: null,
-    items: cart.items.map((item) => ({
-      product_id: item.product.id,
-      product_name: item.product.name,
-      quantity: item.quantity,
-      unit: item.product.unit,
-      price: item.product.price,
+    groups: cart.groups.map((group) => ({
+      producer_id: group.producerId,
+      producer_name: group.producerName,
+      delivery_mode: group.deliveryMode,
+      items: group.items.map((item) => ({
+        product_id: item.product.id,
+        product_name: item.product.name,
+        quantity: item.quantity,
+        unit: item.product.unit,
+        price: item.product.price,
+      })),
+      subtotal: group.items.reduce(
+        (sum, item) => sum + item.product.price * item.quantity,
+        0,
+      ),
     })),
     total: cart.total,
     count: cart.count,

@@ -38,7 +38,7 @@ interface ApiProduct {
 
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { add, replaceWith, count, total } = useCartStore()
+  const { add, count, total } = useCartStore()
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
   const isProductFavorite = useFavoritesStore((s) => s.isProductFavorite)
 
@@ -114,32 +114,17 @@ export function CatalogScreen({ route, navigation }: Props) {
       price: product.price,
       unit: product.unit,
       producer_id: product.producer_id ?? producerId,
+      producer_name: producer?.company_name,
       image_url: product.image_url ?? product.banner_url,
     }
 
     const result = add(cartProduct)
-    if (result === 'conflict') {
-      Alert.alert(
-        'Panier lie a un autre producteur',
-        'Ton panier contient deja des articles d\'un autre producteur. Voulez-vous le vider et ajouter ce produit ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Vider le panier',
-            style: 'destructive',
-            onPress: () => {
-              replaceWith(cartProduct)
-              setRecentlyAddedProductId(product.id)
-              showCartNotice(`${product.name} ajoute au panier`)
-            },
-          },
-        ],
-      )
-      return
-    }
-
     setRecentlyAddedProductId(product.id)
-    showCartNotice(result === 'updated' ? `Quantite mise a jour: ${product.name}` : `${product.name} ajoute au panier`)
+    showCartNotice(
+      result === 'updated'
+        ? `Quantité mise à jour : ${product.name}`
+        : `${product.name} ajouté au panier`,
+    )
   }
 
   const handleCartPress = () => {

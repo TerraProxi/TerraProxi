@@ -17,7 +17,15 @@ interface Order {
   items?: { product_name: string; quantity: number; unit_price: number }[]
 }
 
-function CheckoutInner({ orderId, navigation }: { orderId: string; navigation: Props['navigation'] }) {
+function CheckoutInner({
+  orderId,
+  pendingOrderIds = [],
+  navigation,
+}: {
+  orderId: string
+  pendingOrderIds?: string[]
+  navigation: Props['navigation']
+}) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe()
   const [order, setOrder] = useState<Order | null>(null)
   const [ready, setReady] = useState(false)
@@ -40,18 +48,41 @@ function CheckoutInner({ orderId, navigation }: { orderId: string; navigation: P
     setProcessing(false)
     if (error) {
       Alert.alert('Paiement refusé', error.message)
-    } else {
-      Alert.alert('✓ Paiement accepté', 'Votre commande est confirmée !', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ])
+      return
     }
+
+    if (pendingOrderIds.length > 0) {
+      Alert.alert(
+        'Paiement accepté',
+        `Commande confirmée. Il reste ${pendingOrderIds.length} commande(s) à payer.`,
+        [{
+          text: 'Continuer',
+          onPress: () => navigation.replace('Checkout', {
+            orderId: pendingOrderIds[0],
+            pendingOrderIds: pendingOrderIds.slice(1),
+          }),
+        }],
+      )
+      return
+    }
+
+    Alert.alert('✓ Paiement accepté', 'Votre commande est confirmée !', [
+      { text: 'OK', onPress: () => navigation.goBack() },
+    ])
   }
 
   if (!order) return <ActivityIndicator style={{ marginTop: 60 }} color="#5BAE6A" size="large" />
 
+  const remainingCount = pendingOrderIds.length
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Paiement sécurisé</Text>
+      {remainingCount > 0 ? (
+        <Text style={styles.queueHint}>
+          Commande {1} · {remainingCount + 1} restante{remainingCount + 1 > 1 ? 's' : ''}
+        </Text>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.producer}>{order.producer_name}</Text>
@@ -81,7 +112,11 @@ function CheckoutInner({ orderId, navigation }: { orderId: string; navigation: P
 export function CheckoutScreen({ route, navigation }: Props) {
   return (
     <StripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_KEY ?? ''}>
-      <CheckoutInner orderId={route.params.orderId} navigation={navigation} />
+      <CheckoutInner
+        orderId={route.params.orderId}
+        pendingOrderIds={route.params.pendingOrderIds}
+        navigation={navigation}
+      />
     </StripeProvider>
   )
 }
@@ -89,6 +124,7 @@ export function CheckoutScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container:   { padding: 20, flexGrow: 1, backgroundColor: '#F6F9F6' },
   title:       { fontSize: 22, fontWeight: '700', color: '#333', marginBottom: 20, textAlign: 'center' },
+  queueHint:   { fontSize: 13, color: '#6B7280', textAlign: 'center', marginBottom: 16 },
   card:        { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#E2EEE2', marginBottom: 20 },
   producer:    { fontWeight: '700', fontSize: 16, color: '#333', marginBottom: 12 },
   itemRow:     { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

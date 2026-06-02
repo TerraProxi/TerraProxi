@@ -92,7 +92,6 @@ function buildResponseSchema() {
             },
             product_id: { type: 'STRING' },
             quantity: { type: 'NUMBER' },
-            replace_cart: { type: 'BOOLEAN' },
           },
           required: ['type'],
         },

@@ -8,10 +8,16 @@ export interface CartContextItem {
   price: number
 }
 
-export interface CartContext {
-  producer_id: string | null
-  producer_name: string | null
+export interface CartContextGroup {
+  producer_id: string
+  producer_name: string
+  delivery_mode: 'delivery' | 'pickup'
   items: CartContextItem[]
+  subtotal: number
+}
+
+export interface CartContext {
+  groups: CartContextGroup[]
   total: number
   count: number
 }
@@ -20,7 +26,6 @@ export interface AiCartActionAdd {
   type: 'add_to_cart'
   product_id: string
   quantity: number
-  replace_cart?: boolean
 }
 
 export interface AiCartActionRemove {
@@ -58,7 +63,6 @@ export interface SanitizedCartActionAdd {
   type: 'add_to_cart'
   product: ResolvedCartProduct
   quantity: number
-  replace_cart: boolean
 }
 
 export interface SanitizedCartActionRemove {
@@ -105,29 +109,33 @@ function buildProductMap(catalog: CatalogProducer[]): Map<string, CatalogProduct
 }
 
 export function buildCartContextSection(cart?: CartContext | null): string {
-  if (!cart || cart.items.length === 0) {
+  if (!cart || cart.groups.length === 0) {
     return `# PANIER ACTUEL
 
 Le panier de l'utilisateur est **vide**. Tu peux y ajouter des produits via \`cart_actions\`.`
   }
 
-  const lines = cart.items.map(
-    (item) =>
-      `  - [product_id=${item.product_id}] ${item.product_name} × ${item.quantity} `
-      + `(${item.price}€/${item.unit})`,
-  )
+  const groupSections = cart.groups.map((group) => {
+    const lines = group.items.map(
+      (item) =>
+        `    - [product_id=${item.product_id}] ${item.product_name} × ${item.quantity} `
+        + `(${item.price}€/${item.unit})`,
+    )
+    const modeLabel = group.delivery_mode === 'pickup' ? 'Retrait sur place' : 'Livraison'
+    return `  **${group.producer_name}** (${group.producer_id}) — ${modeLabel}, ${group.subtotal.toFixed(2)} €
+${lines.join('\n')}`
+  })
 
   return `# PANIER ACTUEL
 
-Producteur du panier : **${cart.producer_name ?? cart.producer_id}** (${cart.count} article(s), ${cart.total.toFixed(2)} €)
+${cart.count} article(s) · ${cart.groups.length} producteur(s) · ${cart.total.toFixed(2)} € au total
 
-${lines.join('\n')}
+${groupSections.join('\n\n')}
 
 Règles panier :
-- Un panier = **un seul producteur** à la fois.
-- Pour ajouter un produit d'un **autre** producteur : demande d'abord confirmation
-  (propose \`quick_replies\` : « Vider le panier et ajouter », « Garder mon panier »).
-- N'utilise \`replace_cart: true\` sur \`add_to_cart\` **que si** l'utilisateur a confirmé.`
+- Le panier peut contenir des produits de **plusieurs producteurs** en parallèle.
+- Chaque producteur a son propre mode livraison/retrait (géré dans l'app).
+- Ajoute simplement les produits demandés : pas de conflit entre producteurs.`
 }
 
 function clampQuantity(value: unknown): number {
@@ -158,7 +166,6 @@ export function sanitizeCartActions(
         type: 'add_to_cart',
         product,
         quantity: clampQuantity(action.quantity),
-        replace_cart: action.replace_cart === true,
       })
       continue
     }

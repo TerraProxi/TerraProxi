@@ -8,12 +8,29 @@ const secureStorage = {
   removeItem: (name: string) => SecureStore.deleteItemAsync(name),
 }
 
+export type DeliveryMode = 'delivery' | 'pickup'
+
+export interface DeliveryAddress {
+  street: string
+  postalCode: string
+  city: string
+  extra: string
+}
+
+export const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
+  street: '12 Rue de la Republique',
+  postalCode: '34000',
+  city: 'Montpellier',
+  extra: '',
+}
+
 export interface CartProduct {
   id: string
   name: string
   price: number
   unit: string
   producer_id: string
+  producer_name?: string
   image_url?: string
 }
 
@@ -22,104 +39,216 @@ export interface CartItem {
   quantity: number
 }
 
-export type CartAddResult = 'added' | 'updated' | 'conflict'
+export interface CartProducerGroup {
+  producerId: string
+  producerName: string
+  items: CartItem[]
+  deliveryMode: DeliveryMode
+  deliveryAddress: DeliveryAddress
+}
 
-const computeCartStats = (items: CartItem[]) => ({
-  total: items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-  count: items.reduce((sum, item) => sum + item.quantity, 0),
+export type CartAddResult = 'added' | 'updated'
+
+const computeFromGroups = (groups: CartProducerGroup[]) => {
+  const items = groups.flatMap((group) => group.items)
+  return {
+    groups,
+    items,
+    total: items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    count: items.reduce((sum, item) => sum + item.quantity, 0),
+  }
+}
+
+const createProducerGroup = (
+  product: CartProduct,
+): CartProducerGroup => ({
+  producerId: product.producer_id,
+  producerName: product.producer_name ?? 'Producteur local',
+  items: [],
+  deliveryMode: 'delivery',
+  deliveryAddress: { ...DEFAULT_DELIVERY_ADDRESS },
 })
 
 interface CartStore {
+  groups: CartProducerGroup[]
   items: CartItem[]
-  producerId: string | null
   total: number
   count: number
   add: (product: CartProduct, quantity?: number) => CartAddResult
-  replaceWith: (product: CartProduct, quantity?: number) => void
   remove: (productId: string) => void
+  removeProducer: (producerId: string) => void
   updateQty: (productId: string, quantity: number) => void
+  setDeliveryMode: (producerId: string, mode: DeliveryMode) => void
+  setDeliveryAddress: (producerId: string, address: DeliveryAddress) => void
   clear: () => void
+}
+
+function upsertProductInGroups(
+  groups: CartProducerGroup[],
+  product: CartProduct,
+  quantity: number,
+): { groups: CartProducerGroup[]; result: CartAddResult } {
+  const nextGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({ ...item, product: { ...item.product } })),
+    deliveryAddress: { ...group.deliveryAddress },
+  }))
+
+  let groupIndex = nextGroups.findIndex((group) => group.producerId === product.producer_id)
+  if (groupIndex < 0) {
+    nextGroups.push(createProducerGroup(product))
+    groupIndex = nextGroups.length - 1
+  }
+
+  const group = nextGroups[groupIndex]
+  if (product.producer_name && group.producerName === 'Producteur local') {
+    group.producerName = product.producer_name
+  }
+
+  const existing = group.items.find((item) => item.product.id === product.id)
+  if (existing) {
+    existing.quantity += quantity
+    return { groups: nextGroups, result: 'updated' }
+  }
+
+  group.items.push({ product, quantity })
+  return { groups: nextGroups, result: 'added' }
+}
+
+function removeProductFromGroups(groups: CartProducerGroup[], productId: string) {
+  const nextGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.product.id !== productId),
+      deliveryAddress: { ...group.deliveryAddress },
+    }))
+    .filter((group) => group.items.length > 0)
+
+  return nextGroups
+}
+
+function migrateLegacyCartState(persisted: unknown): CartProducerGroup[] {
+  if (!persisted || typeof persisted !== 'object') return []
+
+  const state = persisted as {
+    groups?: CartProducerGroup[]
+    items?: CartItem[]
+    producerId?: string | null
+  }
+
+  if (Array.isArray(state.groups)) {
+    return state.groups.map((group) => ({
+      ...group,
+      deliveryAddress: group.deliveryAddress ?? { ...DEFAULT_DELIVERY_ADDRESS },
+      deliveryMode: group.deliveryMode ?? 'delivery',
+    }))
+  }
+
+  if (!Array.isArray(state.items) || state.items.length === 0) return []
+
+  const grouped = new Map<string, CartProducerGroup>()
+  for (const item of state.items) {
+    const producerId = item.product.producer_id
+    if (!grouped.has(producerId)) {
+      grouped.set(producerId, {
+        producerId,
+        producerName: item.product.producer_name ?? 'Producteur local',
+        items: [],
+        deliveryMode: 'delivery',
+        deliveryAddress: { ...DEFAULT_DELIVERY_ADDRESS },
+      })
+    }
+    grouped.get(producerId)!.items.push(item)
+  }
+
+  return Array.from(grouped.values())
 }
 
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
+      groups: [],
       items: [],
-      producerId: null,
       total: 0,
       count: 0,
 
       add: (product, quantity = 1) => {
-        const state = get()
-        if (state.producerId && state.producerId !== product.producer_id) {
-          return 'conflict'
-        }
-
-        const existing = state.items.find((i) => i.product.id === product.id)
-        if (existing) {
-          const nextItems = state.items.map((i) =>
-            i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i,
-          )
-          set({
-            items: nextItems,
-            ...computeCartStats(nextItems),
-          })
-          return 'updated'
-        }
-
-        const nextItems = [...state.items, { product, quantity }]
-        set({
-          items: nextItems,
-          producerId: product.producer_id,
-          ...computeCartStats(nextItems),
-        })
-        return 'added'
+        const { groups, result } = upsertProductInGroups(get().groups, product, quantity)
+        set(computeFromGroups(groups))
+        return result
       },
 
-      replaceWith: (product, quantity = 1) => {
-        const nextItems = [{ product, quantity }]
-        set({
-          items: nextItems,
-          producerId: product.producer_id,
-          ...computeCartStats(nextItems),
-        })
+      remove: (productId) => {
+        set(computeFromGroups(removeProductFromGroups(get().groups, productId)))
       },
 
-      remove: (productId) => set((s) => {
-        const nextItems = s.items.filter((i) => i.product.id !== productId)
-        return {
-          items: nextItems,
-          producerId: nextItems.length === 0 ? null : s.producerId,
-          ...computeCartStats(nextItems),
-        }
-      }),
+      removeProducer: (producerId) => {
+        set(computeFromGroups(get().groups.filter((group) => group.producerId !== producerId)))
+      },
 
-      updateQty: (productId, quantity) => set((s) => {
-        const nextItems = s.items.map((i) =>
-          i.product.id === productId ? { ...i, quantity: Math.max(1, quantity) } : i,
-        )
-        return {
-          items: nextItems,
-          ...computeCartStats(nextItems),
-        }
-      }),
+      updateQty: (productId, quantity) => {
+        const safeQty = Math.max(1, quantity)
+        const nextGroups = get().groups.map((group) => ({
+          ...group,
+          items: group.items.map((item) =>
+            item.product.id === productId ? { ...item, quantity: safeQty } : item,
+          ),
+          deliveryAddress: { ...group.deliveryAddress },
+        }))
+        set(computeFromGroups(nextGroups))
+      },
 
-      clear: () => set({ items: [], producerId: null, total: 0, count: 0 }),
+      setDeliveryMode: (producerId, mode) => {
+        set(computeFromGroups(get().groups.map((group) =>
+          group.producerId === producerId ? { ...group, deliveryMode: mode } : group,
+        )))
+      },
+
+      setDeliveryAddress: (producerId, address) => {
+        set(computeFromGroups(get().groups.map((group) =>
+          group.producerId === producerId
+            ? { ...group, deliveryAddress: { ...address } }
+            : group,
+        )))
+      },
+
+      clear: () => set({ groups: [], items: [], total: 0, count: 0 }),
     }),
     {
-      name: 'cart-store',
+      name: 'cart-store-v2',
       storage: createJSONStorage(() => secureStorage),
-      partialize: (state) => ({ items: state.items, producerId: state.producerId }),
+      partialize: (state) => ({ groups: state.groups }),
       merge: (persistedState, currentState) => {
-        const nextState = {
-          ...currentState,
-          ...(persistedState as Partial<CartStore>),
-        }
+        const groups = migrateLegacyCartState(persistedState)
         return {
-          ...nextState,
-          ...computeCartStats(nextState.items ?? []),
+          ...currentState,
+          ...computeFromGroups(groups),
         }
       },
     },
   ),
 )
+
+export const DELIVERY_FEE_EUR = 5
+export const TVA_RATE = 0.055
+
+export function getGroupSubtotal(group: CartProducerGroup): number {
+  return group.items.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0,
+  )
+}
+
+export function getGroupDeliveryFee(group: CartProducerGroup): number {
+  return group.deliveryMode === 'delivery' ? DELIVERY_FEE_EUR : 0
+}
+
+export function getGroupTotal(group: CartProducerGroup): number {
+  const subtotal = getGroupSubtotal(group)
+  const delivery = getGroupDeliveryFee(group)
+  return subtotal + delivery + (subtotal + delivery) * TVA_RATE
+}
+
+export function getCartGrandTotal(groups: CartProducerGroup[]): number {
+  return groups.reduce((sum, group) => sum + getGroupTotal(group), 0)
+}

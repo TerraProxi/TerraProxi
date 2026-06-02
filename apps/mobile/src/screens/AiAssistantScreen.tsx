@@ -80,33 +80,27 @@ export function AiAssistantScreen() {
   const [text, setText] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null)
-  const cartItems = useCartStore((s) => s.items)
+  const cartGroups = useCartStore((s) => s.groups)
   const cartTotal = useCartStore((s) => s.total)
   const cartCount = useCartStore((s) => s.count)
-  const cartProducerId = useCartStore((s) => s.producerId)
   const cartAdd = useCartStore((s) => s.add)
-  const cartReplaceWith = useCartStore((s) => s.replaceWith)
   const cartRemove = useCartStore((s) => s.remove)
   const cartUpdateQty = useCartStore((s) => s.updateQty)
   const cartClear = useCartStore((s) => s.clear)
 
   const getCartApi = useCallback(() => ({
-    items: cartItems,
+    groups: cartGroups,
     total: cartTotal,
     count: cartCount,
-    producerId: cartProducerId,
     add: cartAdd,
-    replaceWith: cartReplaceWith,
     remove: cartRemove,
     updateQty: cartUpdateQty,
     clear: cartClear,
   }), [
-    cartItems,
+    cartGroups,
     cartTotal,
     cartCount,
-    cartProducerId,
     cartAdd,
-    cartReplaceWith,
     cartRemove,
     cartUpdateQty,
     cartClear,

@@ -28,7 +28,6 @@ export function ProductsScreen() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const add = useCartStore((s) => s.add)
-  const replaceWith = useCartStore((s) => s.replaceWith)
 
   const load = async () => {
     setLoading(true)
@@ -45,35 +44,21 @@ export function ProductsScreen() {
   useEffect(() => { load() }, [])
 
   const handleAdd = (product: Product) => {
-    const cartProduct = {
+    const result = add({
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
       producer_id: product.producer_id,
-    }
+      producer_name: product.producer_name,
+    })
 
-    const result = add(cartProduct)
-    if (result === 'conflict') {
-      Alert.alert(
-        'Panier lie a un autre producteur',
-        'Ton panier contient deja des articles d\'un autre producteur. Voulez-vous le vider et ajouter ce produit ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Vider le panier',
-            style: 'destructive',
-            onPress: () => {
-              replaceWith(cartProduct)
-              Alert.alert('✓ Ajoute', `${product.name} ajoute au panier`)
-            },
-          },
-        ],
-      )
-      return
-    }
-
-    Alert.alert('✓ Ajoute', result === 'updated' ? `${product.name} quantite mise a jour` : `${product.name} ajoute au panier`)
+    Alert.alert(
+      '✓ Ajouté',
+      result === 'updated'
+        ? `${product.name} — quantité mise à jour`
+        : `${product.name} ajouté au panier`,
+    )
   }
 
   return (

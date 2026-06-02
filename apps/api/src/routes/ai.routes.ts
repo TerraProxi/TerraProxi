@@ -23,6 +23,14 @@ const cartContextItem = t.Object({
   price: t.Number({ minimum: 0 }),
 })
 
+const cartContextGroup = t.Object({
+  producer_id: t.String({ minLength: 1 }),
+  producer_name: t.String({ minLength: 1 }),
+  delivery_mode: t.Union([t.Literal('delivery'), t.Literal('pickup')]),
+  items: t.Array(cartContextItem, { maxItems: 30 }),
+  subtotal: t.Number({ minimum: 0 }),
+})
+
 export const aiRoutes = new Elysia({ prefix: '/ai' })
   .use(authGuard())
 
@@ -59,9 +67,7 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
         lon: t.Optional(t.Number({ minimum: -180, maximum: 180 })),
         radius_km: t.Optional(t.Number({ minimum: 1, maximum: 200 })),
         cart_context: t.Optional(t.Object({
-          producer_id: t.Nullable(t.String()),
-          producer_name: t.Nullable(t.String()),
-          items: t.Array(cartContextItem, { maxItems: 30 }),
+          groups: t.Array(cartContextGroup, { maxItems: 10 }),
           total: t.Number({ minimum: 0 }),
           count: t.Number({ minimum: 0 }),
         })),

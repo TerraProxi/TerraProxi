@@ -26,7 +26,7 @@ export type RootStackParamList = {
   Catalog: { producerId: string }
   Cart: undefined
   Orders: undefined
-  Checkout: { orderId: string }
+  Checkout: { orderId: string; pendingOrderIds?: string[] }
   Messages: undefined
   Conversation: { partnerId: string; partnerName: string }
 }
