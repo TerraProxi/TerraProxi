@@ -78,8 +78,22 @@ export interface SanitizedCartActionUpdate {
   quantity: number
 }
 
-export interface SanitizedCartActionClear {
-  type: 'clear_cart'
+export interface SanitizedProductPick {
+  product_id: string
+  name: string
+  short_label: string
+  price: number
+  unit: string
+  producer_id: string
+  producer_name: string
+  image_url: string | null
+  quantity_options: number[]
+}
+
+export interface AiProductPickInput {
+  product_id: string
+  short_label?: string
+  quantity_options?: number[]
 }
 
 export type SanitizedCartAction =
@@ -200,6 +214,56 @@ export function sanitizeQuickReplies(replies: string[] | undefined): string[] {
   if (!replies?.length) return []
   return replies
     .map((reply) => reply.trim())
-    .filter((reply) => reply.length > 0 && reply.length <= 80)
-    .slice(0, 4)
+    .filter((reply) => reply.length > 0 && reply.length <= 12)
+    .slice(0, 3)
+}
+
+function defaultQuantityOptions(unit: string): number[] {
+  const u = unit.toLowerCase()
+  if (u.includes('douz') || u.includes('boîte') || u.includes('boite')) return [1, 2]
+  if (u.includes('pot') || u.includes('bouteille') || u.includes('btl')) return [1, 2, 4]
+  if (u.includes('kg') || u.includes('l') || u.includes('litre')) return [1, 2, 3]
+  return [1, 2]
+}
+
+function truncateLabel(value: string, maxLen: number): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= maxLen) return trimmed
+  return `${trimmed.slice(0, maxLen - 1).trim()}…`
+}
+
+export function sanitizeProductPicks(
+  picks: AiProductPickInput[] | undefined,
+  catalog: CatalogProducer[],
+): SanitizedProductPick[] {
+  if (!picks?.length) return []
+
+  const productMap = buildProductMap(catalog)
+  const sanitized: SanitizedProductPick[] = []
+
+  for (const pick of picks.slice(0, 5)) {
+    const product = productMap.get(pick.product_id)
+    if (!product) continue
+
+    const rawOptions = pick.quantity_options?.length
+      ? pick.quantity_options.map((q) => clampQuantity(q))
+      : defaultQuantityOptions(product.unit)
+
+    const quantityOptions = [...new Set(rawOptions)].sort((a, b) => a - b).slice(0, 3)
+    if (quantityOptions.length === 0) continue
+
+    sanitized.push({
+      product_id: product.product_id,
+      name: product.name,
+      short_label: truncateLabel(pick.short_label?.trim() || product.name, 28),
+      price: product.price,
+      unit: product.unit,
+      producer_id: product.producer_id,
+      producer_name: product.producer_name,
+      image_url: product.image_url,
+      quantity_options: quantityOptions,
+    })
+  }
+
+  return sanitized
 }

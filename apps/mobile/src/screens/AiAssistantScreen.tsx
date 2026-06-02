@@ -19,6 +19,7 @@ import * as Location from 'expo-location'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
 import { AssistantReplyBubble } from '../components/AssistantReplyBubble'
+import type { ProductPick } from '../components/ProductPickList'
 import { ChatMessageText } from '../components/ChatMessageText'
 import api from '../services/api'
 import {
@@ -42,6 +43,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   producerLinks?: ProducerLink[]
+  productPicks?: ProductPick[]
   quickReplies?: string[]
   cartFeedback?: string[]
   pending?: boolean
@@ -53,6 +55,7 @@ interface AiChatResponse {
   reply: string
   producer_links: ProducerLink[]
   cart_actions: AiCartAction[]
+  product_picks: ProductPick[]
   quick_replies: string[]
 }
 
@@ -181,6 +184,7 @@ export function AiAssistantScreen() {
               role: 'assistant',
               text: data.reply,
               producerLinks: data.producer_links,
+              productPicks: data.product_picks,
               quickReplies: data.quick_replies,
               cartFeedback,
               animateReply: true,
@@ -247,6 +251,18 @@ export function AiAssistantScreen() {
     )
   }
 
+  const handleProductPickAdd = useCallback((pick: ProductPick, quantity: number) => {
+    cartAdd({
+      id: pick.product_id,
+      name: pick.name,
+      price: pick.price,
+      unit: pick.unit,
+      producer_id: pick.producer_id,
+      producer_name: pick.producer_name,
+    }, quantity)
+    scrollToBottom()
+  }, [cartAdd, scrollToBottom])
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     if (item.role === 'user') {
       return (
@@ -285,6 +301,7 @@ export function AiAssistantScreen() {
         text={item.text}
         animate={item.animateReply === true}
         producerLinks={item.producerLinks}
+        productPicks={item.productPicks}
         quickReplies={item.quickReplies}
         cartFeedback={item.cartFeedback}
         isInteractionDisabled={isSending}
@@ -294,6 +311,7 @@ export function AiAssistantScreen() {
         onScrollRequest={scrollToBottom}
         onOpenProducer={openProducer}
         onQuickReply={sendMessage}
+        onProductPickAdd={handleProductPickAdd}
       />
     )
   }

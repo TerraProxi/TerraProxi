@@ -4,9 +4,11 @@ import { buildSystemInstruction } from './ai-system-prompt'
 import type { CartContext } from './ai-cart.service'
 import {
   sanitizeCartActions,
+  sanitizeProductPicks,
   sanitizeQuickReplies,
   type AiCartActionInput,
   type SanitizedCartAction,
+  type SanitizedProductPick,
 } from './ai-cart.service'
 
 export interface ChatHistoryItem {
@@ -25,6 +27,7 @@ export interface AiChatResult {
   reply: string
   producer_links: ProducerLink[]
   cart_actions: SanitizedCartAction[]
+  product_picks: SanitizedProductPick[]
   quick_replies: string[]
 }
 
@@ -37,6 +40,11 @@ interface RawAiChatResult {
   reply?: string
   producer_links?: ProducerLink[]
   cart_actions?: AiCartActionInput[]
+  product_picks?: Array<{
+    product_id?: string
+    short_label?: string
+    quantity_options?: number[]
+  }>
   quick_replies?: string[]
 }
 
@@ -98,11 +106,27 @@ function buildResponseSchema() {
       },
       quick_replies: {
         type: 'ARRAY',
-        description: 'Réponses rapides suggérées (quantité, confirmation, etc.)',
+        description: 'Réponses courtes uniquement (ex. "1", "2", "Oui") — max 3 caractères si chiffre',
         items: { type: 'STRING' },
       },
+      product_picks: {
+        type: 'ARRAY',
+        description: 'Produits suggérés avec boutons quantité en un tap (apéro, recettes, listes)',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            product_id: { type: 'STRING' },
+            short_label: { type: 'STRING' },
+            quantity_options: {
+              type: 'ARRAY',
+              items: { type: 'NUMBER' },
+            },
+          },
+          required: ['product_id'],
+        },
+      },
     },
-    required: ['reply', 'producer_links', 'cart_actions', 'quick_replies'],
+    required: ['reply', 'producer_links', 'cart_actions', 'product_picks', 'quick_replies'],
   }
 }
 
@@ -197,6 +221,7 @@ export async function chatWithGemini(
     reply: parsed.reply?.trim() || 'Je n\'ai pas pu formuler une réponse.',
     producer_links: sanitizeProducerLinks(parsed.producer_links ?? [], catalog),
     cart_actions: sanitizeCartActions(parsed.cart_actions, catalog),
+    product_picks: sanitizeProductPicks(parsed.product_picks, catalog),
     quick_replies: sanitizeQuickReplies(parsed.quick_replies),
   }
 }

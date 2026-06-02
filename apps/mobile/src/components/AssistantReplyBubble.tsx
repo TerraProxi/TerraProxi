@@ -2,13 +2,13 @@ import { useEffect, useRef } from 'react'
 import {
   Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { ChatMessageText } from './ChatMessageText'
+import { ProductPickList, type ProductPick } from './ProductPickList'
 import { useTypewriter } from '../hooks/useTypewriter'
 import { Colors, Radius, Spacing } from '../theme'
 
@@ -23,6 +23,7 @@ interface AssistantReplyBubbleProps {
   text: string
   animate: boolean
   producerLinks?: ProducerLink[]
+  productPicks?: ProductPick[]
   quickReplies?: string[]
   cartFeedback?: string[]
   isInteractionDisabled?: boolean
@@ -30,12 +31,14 @@ interface AssistantReplyBubbleProps {
   onScrollRequest?: () => void
   onOpenProducer: (producerId: string) => void
   onQuickReply?: (text: string) => void
+  onProductPickAdd?: (pick: ProductPick, quantity: number) => void
 }
 
 export function AssistantReplyBubble({
   text,
   animate,
   producerLinks = [],
+  productPicks = [],
   quickReplies = [],
   cartFeedback = [],
   isInteractionDisabled = false,
@@ -43,6 +46,7 @@ export function AssistantReplyBubble({
   onScrollRequest,
   onOpenProducer,
   onQuickReply,
+  onProductPickAdd,
 }: AssistantReplyBubbleProps) {
   const cursorOpacity = useRef(new Animated.Value(1)).current
   const extrasOpacity = useRef(new Animated.Value(animate ? 0 : 1)).current
@@ -56,6 +60,7 @@ export function AssistantReplyBubble({
 
   const showExtras = isComplete
   const hasExtras = producerLinks.length > 0
+    || productPicks.length > 0
     || quickReplies.length > 0
     || cartFeedback.length > 0
 
@@ -155,14 +160,16 @@ export function AssistantReplyBubble({
               </View>
             ) : null}
 
+            {productPicks.length > 0 ? (
+              <ProductPickList
+                picks={productPicks}
+                disabled={isInteractionDisabled}
+                onAdd={(pick, quantity) => onProductPickAdd?.(pick, quantity)}
+              />
+            ) : null}
+
             {quickReplies.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.quickRepliesScroll}
-                contentContainerStyle={styles.quickRepliesContent}
-                keyboardShouldPersistTaps="handled"
-              >
+              <View style={styles.quickRepliesWrap}>
                 {quickReplies.map((reply) => (
                   <Pressable
                     key={reply}
@@ -177,7 +184,7 @@ export function AssistantReplyBubble({
                     <Text style={styles.quickReplyText}>{reply}</Text>
                   </Pressable>
                 ))}
-              </ScrollView>
+              </View>
             ) : null}
 
             {producerLinks.length > 0 ? (
@@ -306,23 +313,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.green700,
   },
-  quickRepliesScroll: {
+  quickRepliesWrap: {
     marginTop: Spacing.sm,
-    maxHeight: 44,
-  },
-  quickRepliesContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: Spacing.sm,
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
   },
   quickReplyPill: {
     backgroundColor: Colors.white,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 8,
-    marginRight: Spacing.sm,
+    paddingVertical: 10,
     borderWidth: 1.5,
     borderColor: Colors.primary,
+    minWidth: 44,
+    alignItems: 'center',
   },
   quickReplyPillPressed: {
     backgroundColor: Colors.primaryLight,
@@ -331,8 +336,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   quickReplyText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.primaryDark,
   },
   linksContainer: {
