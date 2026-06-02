@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Assistant IA
+  version: 1.0.0
+  description: |
+    Assistant conversationnel alimenté par Gemini.
+    Le backend injecte le catalogue des producteurs locaux pour
+    recommander des boutiques et répondre aux questions culinaires.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production
+  - url: http://localhost:3002/api
+    description: Développement
+tags:
+  - name: AI
+    description: Assistant IA et recommandations
+security:
+  - bearerAuth: []
+paths:
+  /ai/chat:
+    post:
+      summary: Envoyer un message à l'assistant IA
+      description: |
+        Transmet la question de l'utilisateur à Gemini avec le contexte
+        des producteurs et produits disponibles sur TerraProxi.
+        Retourne une réponse textuelle et des liens vers les boutiques
+        pertinentes.
+      operationId: aiChat
+      tags:
+        - AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiChatRequest'
+            example:
+              message: "Où trouver des tomates bio près de chez moi ?"
+              lat: 48.8566
+              lon: 2.3522
+              radius_km: 30
+              history:
+                - role: user
+                  content: "Bonjour"
+                - role: assistant
+                  content: "Bonjour ! Comment puis-je vous aider à découvrir les producteurs locaux ?"
+      responses:
+        '200':
+          description: Réponse de l'assistant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiChatResponse'
+        '400':
+          description: Message invalide
+        '401':
+          description: Non authentifié
+        '503':
+          description: Service IA indisponible (clé API manquante ou erreur Gemini)
+  /ai/recommendations:
+    get:
+      summary: Recommandations produits (stub ML)
+      operationId: aiRecommendations
+      tags:
+        - AI
+      responses:
+        '200':
+          description: Liste de produits recommandés
+  /ai/forecast/{producerId}:
+    get:
+      summary: Prévision de demande (stub ML)
+      operationId: aiForecast
+      tags:
+        - AI
+      parameters:
+        - name: producerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Prévisions par produit
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ChatHistoryItem:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+    AiChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        history:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ChatHistoryItem'
+        lat:
+          type: number
+        lon:
+          type: number
+        radius_km:
+          type: number
+          default: 50
+    ProducerLink:
+      type: object
+      required:
+        - producer_id
+        - company_name
+        - reason
+      properties:
+        producer_id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        reason:
+          type: string
+        city:
+          type: string
+    AiChatResponse:
+      type: object
+      required:
+        - reply
+        - producer_links
+      properties:
+        reply:
+          type: string
+        producer_links:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProducerLink'

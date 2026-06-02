@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { MapScreen } from '../screens/MapScreen'
 import { ShopListScreen } from '../screens/ShopListScreen'
-import { ScanScreen } from '../screens/ScanScreen'
+import { AiAssistantScreen } from '../screens/AiAssistantScreen'
 import { UserProfileScreen } from '../screens/UserProfileScreen'
 import { CartScreen } from '../screens/CartScreen'
 import { Colors } from '../theme'
@@ -12,11 +12,11 @@ import { useCartStore } from '../store/cart.store'
 
 const Tab = createBottomTabNavigator()
 
-function ScanButton({ onPress }: { onPress: (e: any) => void }) {
+function AssistantButton({ onPress }: { onPress: (e: any) => void }) {
   return (
     <TouchableOpacity style={styles.scanButton} onPress={(e) => onPress(e)} activeOpacity={0.7}>
       <View style={styles.scanButtonInner}>
-        <MaterialCommunityIcons name="qrcode-scan" size={24} color="#fff" />
+        <MaterialCommunityIcons name="robot-happy-outline" size={26} color="#fff" />
       </View>
     </TouchableOpacity>
   )
@@ -65,12 +65,13 @@ export function TabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Scan"
-        component={ScanScreen}
+        name="Assistant"
+        component={AiAssistantScreen}
         options={{
           tabBarIcon: () => null,
+          tabBarLabel: 'Assistant',
           tabBarButton: (props) => (
-            <ScanButton onPress={props.onPress!} />
+            <AssistantButton onPress={props.onPress!} />
           ),
         }}
       />

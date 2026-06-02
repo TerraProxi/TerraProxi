@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terraproxi.fr/schemas/ai-chat.schema.json",
+  "title": "AiChat",
+  "description": "Contrats pour l'assistant IA TerraProxi (Mobile → API → Gemini)",
+  "definitions": {
+    "ChatRole": {
+      "type": "string",
+      "enum": ["user", "assistant"]
+    },
+    "ChatHistoryItem": {
+      "type": "object",
+      "required": ["role", "content"],
+      "properties": {
+        "role": { "$ref": "#/definitions/ChatRole" },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProducerLink": {
+      "type": "object",
+      "required": ["producer_id", "company_name", "reason"],
+      "properties": {
+        "producer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Identifiant du producteur recommandé"
+        },
+        "company_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pourquoi ce producteur correspond à la demande"
+        },
+        "city": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AiChatRequest": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Question ou demande de l'utilisateur"
+        },
+        "history": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/definitions/ChatHistoryItem" }
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude pour prioriser les producteurs proches"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude pour prioriser les producteurs proches"
+        },
+        "radius_km": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50,
+          "description": "Rayon de recherche en km"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AiChatResponse": {
+      "type": "object",
+      "required": ["reply", "producer_links"],
+      "properties": {
+        "reply": {
+          "type": "string",
+          "description": "Réponse textuelle de l'assistant"
+        },
+        "producer_links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ProducerLink" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

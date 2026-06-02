@@ -38,7 +38,7 @@ const app = new Elysia()
         { name: 'Orders',    description: 'Commandes' },
         { name: 'Messages',  description: 'Messagerie interne' },
         { name: 'Stripe',    description: 'Paiements Stripe' },
-      { name: 'AI',        description: 'Recommandations & prévisions (post-MVP)' },
+      { name: 'AI',        description: 'Assistant IA Gemini & recommandations' },
       ],
     },
   }))

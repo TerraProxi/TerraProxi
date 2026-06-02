@@ -1,29 +1,69 @@
 /**
- * EPIC 11 — Extensions IA (post-MVP)
+ * EPIC 11 — Assistant IA & extensions ML
  *
- * Ces endpoints ne sont actifs qu'une fois les données historiques disponibles
- * (au minimum 3 mois de commandes). Implémenter les modèles ML séparément dans
- * un micro-service Python/FastAPI ou via une API externe (OpenAI, Hugging Face…)
- * et brancher ici.
+ * POST /ai/chat : assistant conversationnel Gemini avec contexte producteurs.
+ * GET  /ai/recommendations, /ai/forecast : stubs ML (historique commandes).
  */
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
+import { fetchProducerCatalog } from '../services/ai-catalog.service'
+import { chatWithGemini } from '../services/gemini.service'
+
+const chatHistoryItem = t.Object({
+  role: t.Union([t.Literal('user'), t.Literal('assistant')]),
+  content: t.String({ minLength: 1, maxLength: 4000 }),
+})
 
 export const aiRoutes = new Elysia({ prefix: '/ai' })
   .use(authGuard())
 
   /**
+   * POST /api/ai/chat
+   * Assistant IA : recherche producteurs, recettes, conseils locaux.
+   */
+  .post(
+    '/chat',
+    async ({ body }) => {
+      const history = body.history ?? []
+      const hasGeo = body.lat !== undefined && body.lon !== undefined
+
+      const catalog = await fetchProducerCatalog(
+        hasGeo
+          ? {
+            lat: body.lat!,
+            lon: body.lon!,
+            radiusKm: body.radius_km ?? 50,
+          }
+          : undefined,
+      )
+
+      return chatWithGemini(body.message.trim(), history, catalog)
+    },
+    {
+      body: t.Object({
+        message: t.String({ minLength: 1, maxLength: 2000 }),
+        history: t.Optional(t.Array(chatHistoryItem, { maxItems: 20 })),
+        lat: t.Optional(t.Number({ minimum: -90, maximum: 90 })),
+        lon: t.Optional(t.Number({ minimum: -180, maximum: 180 })),
+        radius_km: t.Optional(t.Number({ minimum: 1, maximum: 200 })),
+      }),
+      detail: {
+        summary: 'Assistant IA conversationnel',
+        tags: ['AI'],
+        description:
+          'Envoie un message à Gemini avec le catalogue des producteurs locaux.',
+      },
+    },
+  )
+
+  /**
    * GET /api/ai/recommendations
-   * Retourne des produits recommandés pour le consommateur courant
-   * basés sur son historique de commandes.
-   * Implémentation stub — à brancher sur un modèle ML réel.
+   * Produits recommandés (collaborative filtering simplifié).
    */
   .get(
     '/recommendations',
     async ({ user }) => {
-      // Récupération des produits les plus commandés par des consommateurs
-      // ayant un profil similaire (collaborative filtering simplifié).
       const result = await db.query(
         `SELECT p.*, COUNT(oi.id) AS order_count
          FROM products p
@@ -49,8 +89,7 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
 
   /**
    * GET /api/ai/forecast/:producerId
-   * Prévision de la demande pour les produits d'un producteur.
-   * Implémentation stub — retourne les moyennes historiques par produit.
+   * Prévision de la demande (moyennes historiques).
    */
   .get(
     '/forecast/:producerId',
