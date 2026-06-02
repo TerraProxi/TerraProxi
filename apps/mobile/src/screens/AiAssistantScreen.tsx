@@ -18,6 +18,7 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import * as Location from 'expo-location'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
+import { AssistantReplyBubble } from '../components/AssistantReplyBubble'
 import { ChatMessageText } from '../components/ChatMessageText'
 import api from '../services/api'
 
@@ -37,6 +38,8 @@ interface ChatMessage {
   producerLinks?: ProducerLink[]
   pending?: boolean
   error?: boolean
+  /** Révélation mot par mot (nouvelles réponses du bot uniquement). */
+  animateReply?: boolean
 }
 
 interface AiChatResponse {
@@ -132,14 +135,16 @@ export function AiAssistantScreen() {
         { timeout: 60_000 },
       )
 
+      const assistantId = `assistant-${Date.now()}`
       setMessages((prev) =>
         prev.map((m) =>
           m.id === pendingAssistant.id
             ? {
-              id: `assistant-${Date.now()}`,
+              id: assistantId,
               role: 'assistant',
               text: data.reply,
               producerLinks: data.producer_links,
+              animateReply: true,
             }
             : m,
         ),
@@ -172,6 +177,15 @@ export function AiAssistantScreen() {
   const hasConversation = messages.some(
     (m) => m.id !== 'welcome' && !m.pending,
   )
+
+  const handleAnimationComplete = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, animateReply: false } : m,
+      ),
+    )
+    scrollToBottom()
+  }, [scrollToBottom])
 
   const clearHistory = () => {
     if (!hasConversation || isSending) return
@@ -232,6 +246,19 @@ export function AiAssistantScreen() {
             <Text style={styles.loadingText}>Réflexion en cours…</Text>
           </View>
         </View>
+      )
+    }
+
+    if (!isUser && item.animateReply) {
+      return (
+        <AssistantReplyBubble
+          text={item.text}
+          animate
+          producerLinks={item.producerLinks}
+          onAnimationComplete={() => handleAnimationComplete(item.id)}
+          onScrollRequest={scrollToBottom}
+          onOpenProducer={openProducer}
+        />
       )
     }
 
