@@ -240,10 +240,15 @@ export function AiAssistantScreen() {
 
     if (item.pending) {
       return (
-        <View style={styles.assistantRow}>
-          <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={styles.loadingText}>Réflexion en cours…</Text>
+        <View style={[styles.messageBlock, styles.assistantBlock]}>
+          <View style={styles.assistantAvatar}>
+            <MaterialCommunityIcons name="robot-outline" size={16} color={Colors.primary} />
+          </View>
+          <View style={styles.assistantContent}>
+            <View style={[styles.bubble, styles.assistantBubble, styles.loadingBubble]}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadingText}>Réflexion en cours…</Text>
+            </View>
           </View>
         </View>
       )
@@ -454,10 +459,6 @@ const styles = StyleSheet.create({
   assistantContent: {
     flex: 1,
     maxWidth: '88%',
-  },
-  assistantRow: {
-    marginBottom: Spacing.md,
-    marginLeft: 36,
   },
   bubble: {
     paddingHorizontal: Spacing.lg,
