@@ -8,6 +8,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { Colors, Spacing, Radius } from '../theme'
 import { api } from '../services/api'
+import { useUiStore } from '../store/ui.store'
 
 type Filter = 'closest' | 'rated' | 'open'
 
@@ -41,6 +42,7 @@ const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof M
 
 export function ShopListScreen({ navigation }: any) {
   const insets = useSafeAreaInsets()
+  const darkMode = useUiStore((s) => s.darkMode)
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<Filter>('closest')
   const [producers, setProducers] = useState<Producer[]>([])
@@ -115,23 +117,31 @@ export function ShopListScreen({ navigation }: any) {
   }, [producers, activeFilter])
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={styles.headerTitle}>Producteurs Locaux</Text>
-        <Text style={styles.headerSubtitle}>En direct du terroir héraultais</Text>
+    <View style={[styles.container, darkMode && styles.containerDark]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }, darkMode && styles.headerDark]}>
+        <Text style={[styles.headerTitle, darkMode && styles.textPrimaryDark]}>Producteurs Locaux</Text>
+        <Text style={[styles.headerSubtitle, darkMode && styles.textSecondaryDark]}>En direct du terroir héraultais</Text>
       </View>
 
-      <View style={styles.searchWrapper}>
-        <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray400} />
+      <View style={[styles.searchWrapper, darkMode && styles.searchWrapperDark]}>
+        <MaterialCommunityIcons name="magnify" size={20} color={darkMode ? Colors.gray400 : Colors.gray400} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, darkMode && styles.textPrimaryDark]}
           placeholder="Rechercher un producteur…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={darkMode ? '#94A3B8' : Colors.gray400}
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={handleSearchSubmit}
           returnKeyType="search"
         />
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Scan')}
+          style={styles.scanBtn}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="barcode-scan" size={20} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterRow}>
@@ -142,14 +152,23 @@ export function ShopListScreen({ navigation }: any) {
               <TouchableOpacity
                 key={f.key}
                 onPress={() => handleFilterChange(f.key)}
-                style={[styles.filterPill, active && styles.filterPillActive]}
+                style={[
+                  styles.filterPill,
+                  darkMode && styles.filterPillDark,
+                  active && styles.filterPillActive,
+                ]}
               >
                 <MaterialCommunityIcons
                   name={f.icon}
                   size={14}
                   color={active ? Colors.white : Colors.primary}
                 />
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                <Text style={[
+                  styles.filterText,
+                  darkMode && !active && styles.filterTextDark,
+                  active && styles.filterTextActive,
+                ]}
+                >
                   {f.label}
                 </Text>
               </TouchableOpacity>
@@ -165,8 +184,8 @@ export function ShopListScreen({ navigation }: any) {
       ) : filtered.length === 0 ? (
         <View style={styles.emptyState}>
           <MaterialCommunityIcons name="store-off" size={48} color={Colors.gray300} />
-          <Text style={styles.emptyTitle}>Aucun producteur trouvé</Text>
-          <Text style={styles.emptySubtitle}>
+          <Text style={[styles.emptyTitle, darkMode && styles.textPrimaryDark]}>Aucun producteur trouvé</Text>
+          <Text style={[styles.emptySubtitle, darkMode && styles.textSecondaryDark]}>
             {producers.length === 0 ? 'Vérifiez que l\'API est lancée sur localhost:3002' : 'Essayez un autre filtre'}
           </Text>
           <TouchableOpacity onPress={() => fetchProducers(search)} style={styles.retryBtn}>
@@ -181,7 +200,7 @@ export function ShopListScreen({ navigation }: any) {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.card}
+              style={[styles.card, darkMode && styles.cardDark]}
               onPress={() => navigation.navigate('ProducerProfile', { producerId: item.id })}
               activeOpacity={0.7}
             >
@@ -193,19 +212,19 @@ export function ShopListScreen({ navigation }: any) {
               </View>
 
               <View style={styles.cardContent}>
-                <Text style={styles.producerName} numberOfLines={1}>{item.company_name}</Text>
+                <Text style={[styles.producerName, darkMode && styles.textPrimaryDark]} numberOfLines={1}>{item.company_name}</Text>
                 {item.description ? (
-                  <Text style={styles.producerTagline} numberOfLines={2}>{item.description}</Text>
+                  <Text style={[styles.producerTagline, darkMode && styles.textSecondaryDark]} numberOfLines={2}>{item.description}</Text>
                 ) : null}
                 <View style={styles.cardBottom}>
-                  <View style={styles.distanceBadge}>
+                  <View style={[styles.distanceBadge, darkMode && styles.distanceBadgeDark]}>
                     <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primary} />
                     <Text style={styles.distanceText}>{item.distance_km} km</Text>
                   </View>
                   <MaterialCommunityIcons
                     name="chevron-right"
                     size={22}
-                    color={Colors.gray400}
+                    color={darkMode ? '#64748B' : Colors.gray400}
                   />
                 </View>
               </View>
@@ -416,5 +435,40 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
     fontSize: 15,
+  },
+  scanBtn: {
+    padding: 6,
+    marginLeft: Spacing.xs,
+  },
+  containerDark: {
+    backgroundColor: '#0B1220',
+  },
+  headerDark: {
+    backgroundColor: '#111827',
+    borderBottomColor: '#1F2937',
+  },
+  searchWrapperDark: {
+    backgroundColor: '#111827',
+    borderColor: '#374151',
+  },
+  filterPillDark: {
+    backgroundColor: '#111827',
+    borderColor: '#374151',
+  },
+  filterTextDark: {
+    color: '#9CA3AF',
+  },
+  cardDark: {
+    backgroundColor: '#111827',
+    borderColor: '#1F2937',
+  },
+  distanceBadgeDark: {
+    backgroundColor: '#064E3B',
+  },
+  textPrimaryDark: {
+    color: '#F3F4F6',
+  },
+  textSecondaryDark: {
+    color: '#9CA3AF',
   },
 })

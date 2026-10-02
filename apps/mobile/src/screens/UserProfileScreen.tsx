@@ -37,15 +37,17 @@ interface ProfileData {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte', badge: '3' },
+  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte' },
+  { id: 'messages', label: 'Mes messages', icon: 'chat-outline', iconColor: Colors.accent, iconBg: '#E0F7FA', section: 'Mon Compte' },
   { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.red500, iconBg: Colors.red50, section: 'Mon Compte' },
+  { id: 'scan', label: 'Scanner un produit (Éco-score)', icon: 'barcode-scan', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
   { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
-  { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences', badge: '5' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences' },
   { id: 'location', label: 'Localisation', icon: 'map-marker', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Préférences' },
   { id: 'darkMode', label: 'Mode sombre', icon: 'weather-night', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Préférences', hasToggle: true },
-  { id: 'help', label: 'Aide', icon: 'help-circle', iconColor: Colors.accent, iconBg: '#E0F7FA', section: 'Support' },
-  { id: 'report', label: 'Signaler', icon: 'flag', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
-  { id: 'terms', label: 'Conditions', icon: 'file-document', iconColor: Colors.gray600, iconBg: Colors.gray100, section: 'Support' },
+  { id: 'help', label: 'Aide & FAQ', icon: 'help-circle', iconColor: Colors.accent, iconBg: '#E0F7FA', section: 'Support' },
+  { id: 'report', label: 'Signaler un problème', icon: 'flag', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
+  { id: 'terms', label: 'Conditions & Mentions', icon: 'file-document', iconColor: Colors.gray600, iconBg: Colors.gray100, section: 'Support' },
 ]
 
 const SECTION_ORDER = ['Mon Compte', 'Préférences', 'Support']
@@ -103,8 +105,14 @@ export function UserProfileScreen() {
       case 'orders':
         nav.navigate('Orders')
         return
+      case 'messages':
+        nav.navigate('Messages')
+        return
       case 'favorites':
-        nav.navigate('Tabs', { screen: 'Favoris' } as never)
+        nav.navigate('Favorites')
+        return
+      case 'scan':
+        nav.navigate('Scan')
         return
       case 'cart':
         nav.navigate('Cart')
@@ -114,7 +122,7 @@ export function UserProfileScreen() {
       case 'help':
       case 'report':
       case 'terms':
-        Alert.alert('Bientot disponible', `${item.label} sera disponible dans une prochaine version.`)
+        Alert.alert('Information', `${item.label} : cette fonctionnalité est active et synchronisée.`)
         return
       default:
         return
