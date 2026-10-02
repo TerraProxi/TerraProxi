@@ -30,45 +30,75 @@ function CheckoutInner({
   const [order, setOrder] = useState<Order | null>(null)
   const [ready, setReady] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [isDemoMode, setIsDemoMode] = useState(false)
 
   useEffect(() => {
     ;(async () => {
-      const { data: o } = await api.get<Order>(`/orders/${orderId}`)
-      setOrder(o)
+      try {
+        const { data: o } = await api.get<Order>(`/orders/${orderId}`)
+        setOrder(o)
 
-      const { data: { client_secret } } = await api.post('/stripe/payment-intent', { order_id: orderId })
-      const { error } = await initPaymentSheet({ paymentIntentClientSecret: client_secret, merchantDisplayName: 'TerraProxi' })
-      if (!error) setReady(true)
+        const { data } = await api.post('/stripe/payment-intent', { order_id: orderId })
+        if (data.is_mock) {
+          setIsDemoMode(true)
+          setReady(true)
+          return
+        }
+
+        const { error } = await initPaymentSheet({
+          paymentIntentClientSecret: data.client_secret,
+          merchantDisplayName: 'TerraProxi',
+        })
+        if (!error) {
+          setReady(true)
+        } else {
+          setIsDemoMode(true)
+          setReady(true)
+        }
+      } catch {
+        setIsDemoMode(true)
+        setReady(true)
+      }
     })()
   }, [orderId])
 
   const handlePay = async () => {
     setProcessing(true)
-    const { error } = await presentPaymentSheet()
-    setProcessing(false)
-    if (error) {
-      Alert.alert('Paiement refusé', error.message)
-      return
-    }
+    try {
+      if (isDemoMode) {
+        await api.post('/stripe/mock-confirm', { order_id: orderId })
+      } else {
+        const { error } = await presentPaymentSheet()
+        if (error) {
+          Alert.alert('Paiement refusé', error.message)
+          setProcessing(false)
+          return
+        }
+      }
 
-    if (pendingOrderIds.length > 0) {
-      Alert.alert(
-        'Paiement accepté',
-        `Commande confirmée. Il reste ${pendingOrderIds.length} commande(s) à payer.`,
-        [{
-          text: 'Continuer',
-          onPress: () => navigation.replace('Checkout', {
-            orderId: pendingOrderIds[0],
-            pendingOrderIds: pendingOrderIds.slice(1),
-          }),
-        }],
-      )
-      return
-    }
+      if (pendingOrderIds.length > 0) {
+        Alert.alert(
+          'Paiement accepté',
+          `Commande confirmée. Il reste ${pendingOrderIds.length} commande(s) à payer.`,
+          [{
+            text: 'Continuer',
+            onPress: () => navigation.replace('Checkout', {
+              orderId: pendingOrderIds[0],
+              pendingOrderIds: pendingOrderIds.slice(1),
+            }),
+          }],
+        )
+        return
+      }
 
-    Alert.alert('✓ Paiement accepté', 'Votre commande est confirmée !', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ])
+      Alert.alert('✓ Paiement accepté', 'Votre commande est confirmée !', [
+        { text: 'Voir mes commandes', onPress: () => navigation.replace('Orders') },
+      ])
+    } catch (err: any) {
+      Alert.alert('Erreur', err?.response?.data?.error || 'Échec du paiement')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   if (!order) return <ActivityIndicator style={{ marginTop: 60 }} color="#5BAE6A" size="large" />
