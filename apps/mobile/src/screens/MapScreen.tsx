@@ -11,6 +11,7 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
 import { api } from '../services/api'
+import { useUiStore } from '../store/ui.store'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -47,6 +48,7 @@ const DEFAULT_REGION = {
 
 export function MapScreen() {
   const nav = useNavigation<Nav>()
+  const isDarkMode = useUiStore((s) => s.isDarkMode)
   const [producers, setProducers] = useState<Producer[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -122,6 +124,12 @@ export function MapScreen() {
     setShowFilters(false)
   }
 
+  const displayedProducers = producers.filter((p) => {
+    if (activeCategory === 'Tous') return true
+    if (!p.categories || !Array.isArray(p.categories)) return false
+    return p.categories.some((c) => c.toLowerCase().includes(activeCategory.toLowerCase()))
+  })
+
   const searchResults = search.trim()
     ? producers.filter(
         (p) =>
@@ -153,7 +161,7 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} onRegionChangeComplete={handleRegionChangeComplete}>
-        {producers.map((p) => (
+        {displayedProducers.map((p) => (
           <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}>
             <View style={styles.markerContainer}>
               <View style={styles.markerCircle}>
@@ -164,9 +172,13 @@ export function MapScreen() {
               </View>
             </View>
             <Callout tooltip onPress={() => goToProducer(p.id)}>
-              <View style={styles.callout}>
-                <Text style={styles.calloutName}>{p.company_name}</Text>
-                {p.description && <Text style={styles.calloutTagline}>{p.description}</Text>}
+              <View style={[styles.callout, isDarkMode && { backgroundColor: '#1F2937' }]}>
+                <Text style={[styles.calloutName, isDarkMode && { color: '#F9FAFB' }]}>{p.company_name}</Text>
+                {p.description && (
+                  <Text style={[styles.calloutTagline, isDarkMode && { color: '#9CA3AF' }]}>
+                    {p.description}
+                  </Text>
+                )}
                 <Text style={styles.calloutCta}>Voir la boutique →</Text>
               </View>
             </Callout>
@@ -174,12 +186,12 @@ export function MapScreen() {
         ))}
       </MapView>
 
-      <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={22} color={Colors.gray500} />
+      <View style={[styles.searchBar, isDarkMode && { backgroundColor: '#1F2937' }]}>
+        <MaterialCommunityIcons name="magnify" size={22} color={isDarkMode ? '#9CA3AF' : Colors.gray500} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, isDarkMode && { color: '#F9FAFB' }]}
           placeholder="Rechercher un producteur…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={isDarkMode ? '#6B7280' : Colors.gray400}
           value={search}
           onChangeText={setSearch}
           onFocus={() => setSearchFocused(true)}
@@ -189,21 +201,37 @@ export function MapScreen() {
         />
         <TouchableOpacity
           onPress={() => setShowFilters(!showFilters)}
-          style={[styles.filterBtn, showFilters && styles.filterBtnActive]}
+          style={[
+            styles.filterBtn,
+            isDarkMode && { backgroundColor: '#374151' },
+            showFilters && styles.filterBtnActive,
+          ]}
         >
-          <MaterialCommunityIcons name="tune" size={22} color={showFilters ? Colors.white : Colors.gray700} />
+          <MaterialCommunityIcons
+            name="tune"
+            size={22}
+            color={showFilters ? Colors.white : isDarkMode ? '#E5E7EB' : Colors.gray700}
+          />
         </TouchableOpacity>
       </View>
 
       {searchFocused && searchResults.length > 0 && (
-        <View style={styles.searchResults}>
+        <View style={[styles.searchResults, isDarkMode && { backgroundColor: '#1F2937' }]}>
           <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
             {searchResults.map((p) => (
-              <TouchableOpacity key={p.id} style={styles.searchResultItem} onPress={() => goToProducer(p.id)}>
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.searchResultItem, isDarkMode && { borderBottomColor: '#374151' }]}
+                onPress={() => goToProducer(p.id)}
+              >
                 <Image source={{ uri: p.banner_url || undefined }} style={styles.searchResultAvatar} />
                 <View style={styles.searchResultInfo}>
-                  <Text style={styles.searchResultName}>{p.company_name}</Text>
-                  {p.description && <Text style={styles.searchResultTagline}>{p.description}</Text>}
+                  <Text style={[styles.searchResultName, isDarkMode && { color: '#F9FAFB' }]}>{p.company_name}</Text>
+                  {p.description && (
+                    <Text style={[styles.searchResultTagline, isDarkMode && { color: '#9CA3AF' }]}>
+                      {p.description}
+                    </Text>
+                  )}
                 </View>
                 <Text style={styles.searchResultDistance}>{Math.round(p.distance_km)} km</Text>
               </TouchableOpacity>
@@ -213,15 +241,25 @@ export function MapScreen() {
       )}
 
       {showFilters && (
-        <View style={styles.filterPanel}>
+        <View style={[styles.filterPanel, isDarkMode && { backgroundColor: '#1F2937' }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat}
                 onPress={() => handleCategoryChange(cat)}
-                style={[styles.filterChip, activeCategory === cat && styles.filterChipActive]}
+                style={[
+                  styles.filterChip,
+                  isDarkMode && { backgroundColor: '#374151' },
+                  activeCategory === cat && styles.filterChipActive,
+                ]}
               >
-                <Text style={[styles.filterChipText, activeCategory === cat && styles.filterChipTextActive]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isDarkMode && { color: '#D1D5DB' },
+                    activeCategory === cat && styles.filterChipTextActive,
+                  ]}
+                >
                   {cat}
                 </Text>
               </TouchableOpacity>
@@ -236,12 +274,20 @@ export function MapScreen() {
 
       <View style={styles.bottomCards}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomCardsContent}>
-          {producers.map((p) => (
-            <TouchableOpacity key={p.id} style={styles.card} onPress={() => goToProducer(p.id)}>
+          {displayedProducers.map((p) => (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.card, isDarkMode && { backgroundColor: '#1F2937' }]}
+              onPress={() => goToProducer(p.id)}
+            >
               <Image source={{ uri: p.banner_url || undefined }} style={styles.cardImage} />
               <View style={styles.cardBody}>
-                <Text style={styles.cardName} numberOfLines={1}>{p.company_name}</Text>
-                {p.description && <Text style={styles.cardTagline} numberOfLines={1}>{p.description}</Text>}
+                <Text style={[styles.cardName, isDarkMode && { color: '#F9FAFB' }]} numberOfLines={1}>{p.company_name}</Text>
+                {p.description && (
+                  <Text style={[styles.cardTagline, isDarkMode && { color: '#9CA3AF' }]} numberOfLines={1}>
+                    {p.description}
+                  </Text>
+                )}
                 <View style={styles.cardMeta}>
                   <View style={styles.cardRating}>
                     <MaterialCommunityIcons name="star" size={14} color={Colors.yellow500} />

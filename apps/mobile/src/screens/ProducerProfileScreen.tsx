@@ -6,6 +6,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
 import api from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
+import { useUiStore } from '../store/ui.store'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
 
@@ -34,6 +35,7 @@ interface ProducerData {
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
   const { toggleProducer, isProducerFavorite } = useFavoritesStore()
+  const isDarkMode = useUiStore((s) => s.isDarkMode)
   const [producer, setProducer] = useState<ProducerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -47,7 +49,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, isDarkMode && { backgroundColor: '#111827' }]}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     )
@@ -55,9 +57,9 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 
   if (error || !producer) {
     return (
-      <View style={styles.errorContainer}>
+      <View style={[styles.errorContainer, isDarkMode && { backgroundColor: '#111827' }]}>
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
-        <Text style={styles.errorTitle}>Producteur introuvable</Text>
+        <Text style={[styles.errorTitle, isDarkMode && { color: '#F9FAFB' }]}>Producteur introuvable</Text>
         <Text style={styles.errorSub}>Ce producteur n'existe pas ou a été supprimé.</Text>
         <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.errorBtnText}>Retour</Text>
@@ -118,7 +120,10 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={[styles.container, isDarkMode && { backgroundColor: '#111827' }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.coverContainer}>
         <Image source={{ uri: producer.banner_url }} style={styles.coverImage} />
         <View style={styles.coverGradient} />
@@ -141,7 +146,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         </View>
       </View>
 
-      <View style={styles.contentCard}>
+      <View style={[styles.contentCard, isDarkMode && { backgroundColor: '#1F2937' }]}>
         <View style={styles.avatarContainer}>
           <Image source={{ uri: producer.banner_url }} style={styles.avatar} />
           {producer.is_verified && (
@@ -151,13 +156,13 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           )}
         </View>
 
-        <Text style={styles.producerName}>{producer.company_name}</Text>
-        <Text style={styles.producerMeta}>{producer.city}</Text>
+        <Text style={[styles.producerName, isDarkMode && { color: '#F9FAFB' }]}>{producer.company_name}</Text>
+        <Text style={[styles.producerMeta, isDarkMode && { color: '#9CA3AF' }]}>{producer.city}</Text>
 
-        <View style={styles.ratingBadge}>
+        <View style={[styles.ratingBadge, isDarkMode && { backgroundColor: '#374151' }]}>
           <MaterialCommunityIcons name="star" size={18} color={Colors.yellow500} />
-          <Text style={styles.ratingText}>{producer.rating}</Text>
-          <Text style={styles.reviewCount}>({producer.review_count} avis)</Text>
+          <Text style={[styles.ratingText, isDarkMode && { color: '#F9FAFB' }]}>{producer.rating}</Text>
+          <Text style={[styles.reviewCount, isDarkMode && { color: '#9CA3AF' }]}>({producer.review_count} avis)</Text>
         </View>
 
         <View style={styles.actionRow}>
@@ -165,9 +170,12 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
             <MaterialCommunityIcons name="storefront" size={20} color={Colors.white} />
             <Text style={styles.shopBtnText}>Voir Boutique</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
-            <MaterialCommunityIcons name="chat-outline" size={20} color={Colors.primary} />
-            <Text style={styles.messageBtnText}>Message</Text>
+          <TouchableOpacity
+            style={[styles.messageBtn, isDarkMode && { backgroundColor: '#374151', borderColor: Colors.primary }]}
+            onPress={handleMessage}
+          >
+            <MaterialCommunityIcons name="chat-outline" size={20} color={isDarkMode ? '#A7F3D0' : Colors.primary} />
+            <Text style={[styles.messageBtnText, isDarkMode && { color: '#A7F3D0' }]}>Message</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -175,14 +183,17 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="information-outline" size={22} color={Colors.primary} />
-          <Text style={styles.sectionTitle}>À propos</Text>
+          <Text style={[styles.sectionTitle, isDarkMode && { color: '#F9FAFB' }]}>À propos</Text>
         </View>
-        <View style={styles.aboutCard}>
-          <Text style={styles.aboutText}>{producer.description}</Text>
+        <View style={[styles.aboutCard, isDarkMode && { backgroundColor: '#1F2937' }]}>
+          <Text style={[styles.aboutText, isDarkMode && { color: '#E5E7EB' }]}>{producer.description}</Text>
           <View style={styles.categoryPills}>
-            {producer.categories.map((cat) => (
-              <View key={cat} style={styles.categoryPill}>
-                <Text style={styles.categoryPillText}>{cat}</Text>
+            {(producer.categories ?? []).map((cat) => (
+              <View
+                key={cat}
+                style={[styles.categoryPill, isDarkMode && { backgroundColor: '#064E3B' }]}
+              >
+                <Text style={[styles.categoryPillText, isDarkMode && { color: '#A7F3D0' }]}>{cat}</Text>
               </View>
             ))}
           </View>
@@ -192,15 +203,15 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="map-marker-outline" size={22} color={Colors.primary} />
-          <Text style={styles.sectionTitle}>Localisation</Text>
+          <Text style={[styles.sectionTitle, isDarkMode && { color: '#F9FAFB' }]}>Localisation</Text>
         </View>
-        <View style={styles.locationCard}>
-          <View style={styles.mapPlaceholder}>
-            <MaterialCommunityIcons name="map-marker" size={56} color={Colors.gray300} />
+        <View style={[styles.locationCard, isDarkMode && { backgroundColor: '#1F2937' }]}>
+          <View style={[styles.mapPlaceholder, isDarkMode && { backgroundColor: '#374151' }]}>
+            <MaterialCommunityIcons name="map-marker" size={56} color={isDarkMode ? '#6B7280' : Colors.gray300} />
           </View>
           <View style={styles.locationInfo}>
-            <Text style={styles.addressText}>{producer.address}</Text>
-            <Text style={styles.distanceText}>{producer.distance_km} km de vous</Text>
+            <Text style={[styles.addressText, isDarkMode && { color: '#F9FAFB' }]}>{producer.address}</Text>
+            <Text style={[styles.distanceText, isDarkMode && { color: '#9CA3AF' }]}>{producer.distance_km} km de vous</Text>
           </View>
           <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />

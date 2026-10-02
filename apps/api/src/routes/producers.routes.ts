@@ -13,7 +13,7 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
   .get(
     '/',
     async ({ query }) => {
-      const { lat, lon, radius = 30, limit = 20, offset = 0, search } = query
+      const { lat, lon, radius = 30, limit = 20, offset = 0, search, category } = query
 
       if (lat !== undefined && lon !== undefined) {
         // Requête spatiale PostGIS — ST_DWithin sur géographie
@@ -43,6 +43,13 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
         if (search) params.push(`%${search}%`)
 
         const result = await db.query(sql, params)
+        if (category && category.toLowerCase() !== 'tous') {
+          const catLower = category.toLowerCase()
+          return result.rows.filter((r: any) => {
+            if (!r.categories || !Array.isArray(r.categories)) return false
+            return r.categories.some((c: string) => c.toLowerCase().includes(catLower))
+          })
+        }
         return result.rows
       }
 
@@ -58,16 +65,24 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
          LIMIT ${limit} OFFSET ${offset}`,
         search ? [`%${search}%`] : [],
       )
+      if (category && category.toLowerCase() !== 'tous') {
+        const catLower = category.toLowerCase()
+        return result.rows.filter((r: any) => {
+          if (!r.categories || !Array.isArray(r.categories)) return false
+          return r.categories.some((c: string) => c.toLowerCase().includes(catLower))
+        })
+      }
       return result.rows
     },
     {
       query: t.Object({
-        lat:    t.Optional(t.Number()),
-        lon:    t.Optional(t.Number()),
-        radius: t.Optional(t.Number()),
-        limit:  t.Optional(t.Number()),
-        offset: t.Optional(t.Number()),
-        search: t.Optional(t.String()),
+        lat:      t.Optional(t.Number()),
+        lon:      t.Optional(t.Number()),
+        radius:   t.Optional(t.Number()),
+        limit:    t.Optional(t.Number()),
+        offset:   t.Optional(t.Number()),
+        search:   t.Optional(t.String()),
+        category: t.Optional(t.String()),
       }),
       detail: { summary: 'Liste des producteurs (géolocalisée)', tags: ['Producers'] },
     },
