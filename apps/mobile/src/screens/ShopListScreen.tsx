@@ -34,6 +34,8 @@ interface Producer {
   is_open: boolean
 }
 
+const FALLBACK_PRODUCER_BANNER = 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000'
+
 const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
   { key: 'closest', label: 'Plus proche', icon: 'map-marker' },
   { key: 'rated', label: 'Mieux notés', icon: 'star' },
@@ -208,7 +210,7 @@ export function ShopListScreen({ navigation }: any) {
               activeOpacity={0.7}
             >
               <View style={styles.imageWrapper}>
-                <Image source={{ uri: item.banner_url || undefined }} style={styles.image} />
+                <Image source={{ uri: item.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.image} />
                 <View style={[styles.badge, item.is_open ? styles.badgeOpen : styles.badgeClosed]}>
                   <Text style={styles.badgeText}>{item.is_open ? 'OUVERT' : 'FERMÉ'}</Text>
                 </View>

@@ -35,6 +35,9 @@ interface ApiProduct {
 
 type Tab = 'producers' | 'products'
 
+const FALLBACK_PRODUCER_BANNER = 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000'
+const FALLBACK_PRODUCT_IMAGE = 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=600'
+
 export function FavoritesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets()
   const isDarkMode = useUiStore((s) => s.isDarkMode)
@@ -165,7 +168,7 @@ export function FavoritesScreen({ navigation }: any) {
                 onPress={() => navigation.navigate('ProducerProfile', { producerId: producer.id })}
                 activeOpacity={0.7}
               >
-                <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
+                <Image source={{ uri: producer.avatar_url || producer.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.producerAvatar} />
                 <View style={styles.producerInfo}>
                   <Text style={[styles.producerName, isDarkMode && { color: '#F9FAFB' }]} numberOfLines={1}>{producer.company_name}</Text>
                   <Text style={[styles.producerTagline, isDarkMode && { color: '#9CA3AF' }]} numberOfLines={1}>{producer.tagline}</Text>
@@ -211,7 +214,7 @@ export function FavoritesScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               <View style={styles.productImageWrapper}>
-                <Image source={{ uri: product.banner_url || product.image_url }} style={styles.productImage} />
+                <Image source={{ uri: product.banner_url || product.image_url || FALLBACK_PRODUCT_IMAGE }} style={styles.productImage} />
                 <TouchableOpacity
                   style={styles.productHeartBtn}
                   onPress={() => toggleProduct(product.id)}

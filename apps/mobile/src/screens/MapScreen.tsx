@@ -37,6 +37,8 @@ interface Producer {
   is_open: boolean
 }
 
+const FALLBACK_PRODUCER_BANNER = 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000'
+
 const CATEGORIES = ['Tous', 'Légumes', 'Fruits', 'Vins', 'Épicerie', 'Viande', 'Fromage']
 
 const DEFAULT_REGION = {
@@ -298,7 +300,7 @@ export function MapScreen() {
                 style={[styles.searchResultItem, isDarkMode && { borderBottomColor: '#374151' }]}
                 onPress={() => goToProducer(p.id)}
               >
-                <Image source={{ uri: p.banner_url || undefined }} style={styles.searchResultAvatar} />
+                <Image source={{ uri: p.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.searchResultAvatar} />
                 <View style={styles.searchResultInfo}>
                   <Text style={[styles.searchResultName, isDarkMode && { color: '#F9FAFB' }]}>{p.company_name}</Text>
                   {p.description && (
@@ -390,7 +392,7 @@ export function MapScreen() {
               style={[styles.card, isDarkMode && { backgroundColor: '#1F2937' }]}
               onPress={() => goToProducer(p.id)}
             >
-              <Image source={{ uri: p.banner_url || undefined }} style={styles.cardImage} />
+              <Image source={{ uri: p.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.cardImage} />
               <View style={styles.cardBody}>
                 <Text style={[styles.cardName, isDarkMode && { color: '#F9FAFB' }]} numberOfLines={1}>{p.company_name}</Text>
                 {p.description && (

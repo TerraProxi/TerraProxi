@@ -36,6 +36,9 @@ interface ApiProduct {
   is_seasonal?: boolean
 }
 
+const FALLBACK_PRODUCER_BANNER = 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000'
+const FALLBACK_PRODUCT_IMAGE = 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=600'
+
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
   const { add, count, total } = useCartStore()
@@ -154,7 +157,7 @@ export function CatalogScreen({ route, navigation }: Props) {
   const renderItem = ({ item }: { item: ApiProduct }) => (
     <View style={styles.productCard}>
       <View style={styles.imageContainer}>
-        <Image source={{ uri: item.banner_url || item.image_url }} style={styles.productImage} />
+        <Image source={{ uri: item.banner_url || item.image_url || FALLBACK_PRODUCT_IMAGE }} style={styles.productImage} />
         {item.is_bestseller && (
           <View style={styles.bestsellerBadge}>
             <Text style={styles.bestsellerText}>Top Vente</Text>
@@ -211,7 +214,7 @@ export function CatalogScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.producerCard}>
-        <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
+        <Image source={{ uri: producer.avatar_url || producer.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.producerAvatar} />
         <View style={styles.producerInfo}>
           <View style={styles.bioBadge}>
             <MaterialCommunityIcons name="leaf" size={14} color={Colors.primary} />

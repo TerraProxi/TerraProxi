@@ -32,6 +32,8 @@ interface ProducerData {
   is_open: boolean
 }
 
+const FALLBACK_PRODUCER_BANNER = 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000'
+
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
   const { toggleProducer, isProducerFavorite } = useFavoritesStore()
@@ -125,7 +127,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.coverContainer}>
-        <Image source={{ uri: producer.banner_url }} style={styles.coverImage} />
+        <Image source={{ uri: producer.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.coverImage} />
         <View style={styles.coverGradient} />
         <View style={styles.topNav}>
           <TouchableOpacity style={styles.topNavBtn} onPress={() => navigation.goBack()}>
@@ -148,7 +150,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
 
       <View style={[styles.contentCard, isDarkMode && { backgroundColor: '#1F2937' }]}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: producer.banner_url }} style={styles.avatar} />
+          <Image source={{ uri: producer.banner_url || FALLBACK_PRODUCER_BANNER }} style={styles.avatar} />
           {producer.is_verified && (
             <View style={styles.verifiedBadge}>
               <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
