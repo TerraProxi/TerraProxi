@@ -42,3 +42,23 @@ export const authGuard = (roles?: UserRole[]) =>
 
       return { user: payload }
     })
+
+/**
+ * Extrait optionnellement le Bearer token JWT si présent.
+ * Injecte `user: JwtPayload | null` sans bloquer les invités.
+ */
+export const optionalAuth = new Elysia({ name: 'optional-auth' })
+  .use(jwtPlugin)
+  .derive(async ({ jwt, headers }) => {
+    const authHeader = headers.authorization
+    if (!authHeader?.startsWith('Bearer ')) {
+      return { user: null }
+    }
+    const token = authHeader.slice(7)
+    try {
+      const payload = (await jwt.verify(token)) as JwtPayload | false
+      return { user: payload || null }
+    } catch {
+      return { user: null }
+    }
+  })

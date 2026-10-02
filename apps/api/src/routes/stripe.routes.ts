@@ -4,9 +4,12 @@ import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
 import { notFound, forbidden, badRequest } from '../utils/errors'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-})
+const stripeKey = process.env.STRIPE_SECRET_KEY
+const isStripeConfigured = Boolean(stripeKey && !stripeKey.includes('CHANGE_ME'))
+
+const stripe = isStripeConfigured
+  ? new Stripe(stripeKey!, { apiVersion: '2024-06-20' })
+  : null
 
 export const stripeRoutes = new Elysia({ prefix: '/stripe' })
 
@@ -32,6 +35,20 @@ export const stripeRoutes = new Elysia({ prefix: '/stripe' })
         throw badRequest('Cette commande ne peut plus être payée')
       }
 
+      if (!stripe) {
+        // Mode démo / test local sans clés Stripe réelles
+        const mockIntentId = `pi_mock_${Date.now()}`
+        await db.query(
+          'UPDATE orders SET stripe_payment_intent = $1 WHERE id = $2',
+          [mockIntentId, order_id],
+        )
+        return {
+          client_secret: `pi_mock_secret_${order_id}`,
+          payment_intent_id: mockIntentId,
+          is_mock: true,
+        }
+      }
+
       const intent = await stripe.paymentIntents.create({
         amount: Math.round(Number(order.total_price) * 100), // centimes
         currency: 'eur',
@@ -47,11 +64,44 @@ export const stripeRoutes = new Elysia({ prefix: '/stripe' })
       return {
         client_secret: intent.client_secret,
         payment_intent_id: intent.id,
+        is_mock: false,
       }
     },
     {
       body: t.Object({ order_id: t.String() }),
       detail: { summary: 'Créer un PaymentIntent', tags: ['Stripe'] },
+    },
+  )
+
+  /**
+   * POST /api/stripe/mock-confirm
+   * Confirmation directe pour dev et tests locaux.
+   */
+  .post(
+    '/mock-confirm',
+    async ({ body, user }) => {
+      const { order_id } = body
+
+      const orderRes = await db.query(
+        'SELECT * FROM orders WHERE id = $1',
+        [order_id],
+      )
+      const order = orderRes.rows[0]
+      if (!order) throw notFound('Commande')
+      if (order.consumer_id !== user.sub) throw forbidden()
+
+      await db.query(
+        `UPDATE orders
+         SET status = 'PAID', stripe_payment_id = $1
+         WHERE id = $2`,
+        [`mock_pay_${Date.now()}`, order_id],
+      )
+
+      return { success: true, status: 'PAID' }
+    },
+    {
+      body: t.Object({ order_id: t.String() }),
+      detail: { summary: 'Confirmer une commande en mode test', tags: ['Stripe'] },
     },
   )
 

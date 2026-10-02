@@ -5,7 +5,7 @@
  * GET  /ai/recommendations, /ai/forecast : stubs ML (historique commandes).
  */
 import { Elysia, t } from 'elysia'
-import { authGuard } from '../middlewares/auth.middleware'
+import { authGuard, optionalAuth } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
 import { fetchProducerCatalog } from '../services/ai-catalog.service'
 import { chatWithGemini } from '../services/gemini.service'
@@ -32,7 +32,7 @@ const cartContextGroup = t.Object({
 })
 
 export const aiRoutes = new Elysia({ prefix: '/ai' })
-  .use(authGuard())
+  .use(optionalAuth)
 
   /**
    * POST /api/ai/chat
@@ -85,6 +85,7 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
    * GET /api/ai/recommendations
    * Produits recommandés (collaborative filtering simplifié).
    */
+  .use(authGuard(['CONSUMER']))
   .get(
     '/recommendations',
     async ({ user }) => {

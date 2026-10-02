@@ -16,12 +16,12 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
   .post(
     '/',
     async ({ body, user, set }) => {
-      const { producer_id, items, notes } = body
+      const { producer_id, items, notes, delivery_mode, delivery_address } = body
 
       if (!items.length) throw badRequest('La commande doit contenir au moins un article')
 
       // Vérification stock et calcul du total
-      let total = 0
+      let subtotal = 0
       const enriched: Array<{ product: Product; quantity: number }> = []
 
       for (const item of items) {
@@ -34,9 +34,25 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
         if (product.stock < item.quantity) {
           throw badRequest(`Stock insuffisant pour ${product.name}`)
         }
-        total += Number(product.price) * item.quantity
+        subtotal += Number(product.price) * item.quantity
         enriched.push({ product, quantity: item.quantity })
       }
+
+      const deliveryFee = delivery_mode === 'delivery' ? 5 : 0
+      const tvaRate = 0.055
+      const total = subtotal + deliveryFee + (subtotal + deliveryFee) * tvaRate
+
+      const noteParts: string[] = []
+      if (delivery_mode) {
+        noteParts.push(`Mode: ${delivery_mode === 'delivery' ? 'Livraison à domicile (+5€)' : 'Retrait sur place'}`)
+      }
+      if (delivery_address) {
+        noteParts.push(`Adresse: ${delivery_address}`)
+      }
+      if (notes) {
+        noteParts.push(notes)
+      }
+      const finalNotes = noteParts.join(' | ') || undefined
 
       // Transaction DB : création commande + lignes + décrément stock
       const client = await db.getClient()
@@ -46,7 +62,7 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
         const orderRes = await client.query<Order>(
           `INSERT INTO orders (consumer_id, producer_id, total_price, notes)
            VALUES ($1, $2, $3, $4) RETURNING *`,
-          [user.sub, producer_id, total.toFixed(2), notes],
+          [user.sub, producer_id, total.toFixed(2), finalNotes],
         )
         const order = orderRes.rows[0]
 
@@ -75,9 +91,11 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
     },
     {
       body: t.Object({
-        producer_id: t.String(),
-        items:       t.Array(orderItemSchema, { minItems: 1 }),
-        notes:       t.Optional(t.String()),
+        producer_id:      t.String(),
+        items:            t.Array(orderItemSchema, { minItems: 1 }),
+        notes:            t.Optional(t.String()),
+        delivery_mode:    t.Optional(t.String()),
+        delivery_address: t.Optional(t.String()),
       }),
       detail: { summary: 'Créer une commande', tags: ['Orders'] },
     },
