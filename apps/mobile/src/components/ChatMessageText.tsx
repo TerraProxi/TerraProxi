@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { StyleSheet, Text, type TextStyle } from 'react-native'
+import { StyleSheet, Text, type TextStyle, type StyleProp } from 'react-native'
 
 type InlineSegment =
   | { kind: 'text'; value: string }
@@ -86,7 +86,7 @@ function segmentStyle(
   base?: TextStyle,
   boldStyle?: TextStyle,
   italicStyle?: TextStyle,
-): TextStyle | undefined {
+): StyleProp<TextStyle> {
   if (segment.kind === 'bold') {
     return [base, styles.bold, boldStyle]
   }
