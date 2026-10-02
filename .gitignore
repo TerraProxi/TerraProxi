@@ -13,3 +13,4 @@ ios/
 coverage/
 .pnpm-store/
 apps/api/.env
+.idea/
