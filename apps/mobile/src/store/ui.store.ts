@@ -10,6 +10,7 @@ const secureStorage = {
 
 interface UiStore {
   darkMode: boolean
+  isDarkMode: boolean
   setDarkMode: (enabled: boolean) => void
   toggleDarkMode: () => void
 }
@@ -18,8 +19,9 @@ export const useUiStore = create<UiStore>()(
   persist(
     (set) => ({
       darkMode: false,
-      setDarkMode: (enabled) => set({ darkMode: enabled }),
-      toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+      isDarkMode: false,
+      setDarkMode: (enabled) => set({ darkMode: enabled, isDarkMode: enabled }),
+      toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode, isDarkMode: !state.darkMode })),
     }),
     {
       name: 'ui-store',

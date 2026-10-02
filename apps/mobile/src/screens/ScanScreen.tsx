@@ -271,7 +271,7 @@ function ResultState({ result, onClose }: { result: ScanResult; onClose: () => v
             style={[resultStyles.altCard, isDarkMode && { backgroundColor: cardBg }]}
             onPress={() => {
               onClose()
-              nav.navigate('Main')
+              nav.navigate('Tabs')
             }}
             activeOpacity={0.7}
           >
@@ -297,7 +297,7 @@ function ResultState({ result, onClose }: { result: ScanResult; onClose: () => v
           style={resultStyles.findBtn}
           onPress={() => {
             onClose()
-            nav.navigate('Main')
+            nav.navigate('Tabs')
           }}
         >
           <Text style={resultStyles.findBtnText}>Trouver chez un producteur</Text>

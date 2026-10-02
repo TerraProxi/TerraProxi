@@ -87,7 +87,7 @@ export function OrdersScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.loginBtn, { backgroundColor: Colors.primary }]}
-          onPress={() => nav.navigate('Auth', {})}
+          onPress={() => nav.navigate('Auth')}
         >
           <Text style={styles.loginBtnText}>Se connecter</Text>
         </TouchableOpacity>
@@ -118,7 +118,7 @@ export function OrdersScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.shopBtn, { backgroundColor: Colors.primary }]}
-              onPress={() => nav.navigate('Main')}
+              onPress={() => nav.navigate('Tabs')}
             >
               <Text style={styles.shopBtnText}>Découvrir les producteurs</Text>
             </TouchableOpacity>

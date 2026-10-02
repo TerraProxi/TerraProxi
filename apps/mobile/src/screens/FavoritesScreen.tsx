@@ -252,7 +252,7 @@ export function FavoritesScreen({ navigation }: any) {
           </View>
           <TouchableOpacity
             style={styles.inspirationBtn}
-            onPress={() => navigation.navigate('Main')}
+            onPress={() => navigation.navigate('Tabs')}
           >
             <Text style={styles.inspirationBtnText}>Voir</Text>
           </TouchableOpacity>
