@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated, ActivityIndicator,
+  ScrollView, Share, Alert,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors } from '../theme'
+import { useUiStore } from '../store/ui.store'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -80,6 +82,7 @@ function CornerBracket({ position }: { position: 'topLeft' | 'topRight' | 'botto
 
 function IdleState({ onScan }: { onScan: () => void }) {
   const nav = useNavigation<Nav>()
+  const [flashOn, setFlashOn] = useState(false)
   const scanLineY = useRef(new Animated.Value(0)).current
   const pulseScale = useRef(new Animated.Value(1)).current
 
@@ -113,8 +116,11 @@ function IdleState({ onScan }: { onScan: () => void }) {
           <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.white} />
         </TouchableOpacity>
         <Text style={idleStyles.title}>Scanner</Text>
-        <TouchableOpacity style={idleStyles.iconBtn}>
-          <MaterialCommunityIcons name="flash" size={24} color={Colors.white} />
+        <TouchableOpacity
+          style={[idleStyles.iconBtn, flashOn && { backgroundColor: 'rgba(255,255,255,0.35)' }]}
+          onPress={() => setFlashOn(!flashOn)}
+        >
+          <MaterialCommunityIcons name={flashOn ? 'flash' : 'flash-off'} size={24} color={Colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -131,11 +137,14 @@ function IdleState({ onScan }: { onScan: () => void }) {
 
       <View style={idleStyles.bottom}>
         <View style={idleStyles.pillRow}>
-          <TouchableOpacity style={idleStyles.pill}>
-            <MaterialCommunityIcons name="history" size={18} color={Colors.white} />
-            <Text style={idleStyles.pillText}>Historique</Text>
+          <TouchableOpacity style={idleStyles.pill} onPress={onScan}>
+            <MaterialCommunityIcons name="barcode" size={18} color={Colors.white} />
+            <Text style={idleStyles.pillText}>Démo EAN</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={idleStyles.pill}>
+          <TouchableOpacity
+            style={idleStyles.pill}
+            onPress={() => Alert.alert('Galerie', 'Sélectionnez une photo de code-barres depuis votre galerie.')}
+          >
             <MaterialCommunityIcons name="image-outline" size={18} color={Colors.white} />
             <Text style={idleStyles.pillText}>Galerie</Text>
           </TouchableOpacity>
@@ -161,25 +170,51 @@ function ScanningOverlay() {
 }
 
 function ResultState({ result, onClose }: { result: ScanResult; onClose: () => void }) {
+  const nav = useNavigation<Nav>()
+  const isDarkMode = useUiStore((s) => s.isDarkMode)
   const scoreColor = result.score >= 80 ? Colors.green500 : result.score >= 60 ? Colors.warning : Colors.orange500
-  const scoreBgColor = result.score >= 80 ? Colors.green50 : result.score >= 60 ? Colors.yellow50 : Colors.orange50
+  const scoreBgColor = result.score >= 80
+    ? (isDarkMode ? '#064E3B' : Colors.green50)
+    : result.score >= 60
+    ? (isDarkMode ? '#78350F' : Colors.yellow50)
+    : (isDarkMode ? '#7C2D12' : Colors.orange50)
   const distanceColor = result.isLocal ? Colors.green700 : Colors.orange500
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `J'ai scanné "${result.name}" sur TerraProxi : Score de proximité locale ${result.score}/100 ! Découvrez les alternatives chez les producteurs près de chez vous.`,
+      })
+    } catch {}
+  }
+
+  const bg = isDarkMode ? '#111827' : Colors.white
+  const cardBg = isDarkMode ? '#1F2937' : Colors.gray50
+  const textDark = isDarkMode ? '#F9FAFB' : Colors.dark
+  const textMuted = isDarkMode ? '#9CA3AF' : Colors.gray600
+
   return (
-    <View style={resultStyles.container}>
+    <ScrollView
+      style={[resultStyles.container, { backgroundColor: bg }]}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={resultStyles.closeRow}>
-        <TouchableOpacity onPress={onClose} style={resultStyles.closeBtn}>
-          <MaterialCommunityIcons name="close" size={24} color={Colors.dark} />
+        <TouchableOpacity
+          onPress={onClose}
+          style={[resultStyles.closeBtn, isDarkMode && { backgroundColor: '#374151' }]}
+        >
+          <MaterialCommunityIcons name="close" size={24} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
         </TouchableOpacity>
       </View>
 
-      <View style={resultStyles.productCard}>
-        <View style={resultStyles.productImageWrap}>
-          <MaterialCommunityIcons name="image" size={40} color={Colors.gray300} />
+      <View style={[resultStyles.productCard, { backgroundColor: cardBg }]}>
+        <View style={[resultStyles.productImageWrap, isDarkMode && { backgroundColor: '#374151' }]}>
+          <MaterialCommunityIcons name="food-apple-outline" size={44} color={Colors.primary} />
         </View>
         <View style={resultStyles.productInfo}>
-          <Text style={resultStyles.productName}>{result.name}</Text>
-          <Text style={resultStyles.productBrand}>{result.brand}</Text>
+          <Text style={[resultStyles.productName, { color: textDark }]}>{result.name}</Text>
+          <Text style={[resultStyles.productBrand, { color: textMuted }]}>{result.brand}</Text>
           <View style={resultStyles.badgeRow}>
             <View style={[resultStyles.scoreBadge, { backgroundColor: NUTRI_COLORS[result.nutriScore] }]}>
               <Text style={resultStyles.scoreBadgeLetter}>{result.nutriScore}</Text>
@@ -198,46 +233,54 @@ function ResultState({ result, onClose }: { result: ScanResult; onClose: () => v
           </View>
         </View>
         <View style={resultStyles.scoreTextWrap}>
-          <Text style={resultStyles.scoreLabel}>{result.scoreLabel}</Text>
-          <Text style={resultStyles.scoreSub}>Score de proximité</Text>
+          <Text style={[resultStyles.scoreLabel, isDarkMode && { color: '#F9FAFB' }]}>{result.scoreLabel}</Text>
+          <Text style={[resultStyles.scoreSub, isDarkMode && { color: '#D1D5DB' }]}>Score de proximité</Text>
         </View>
       </View>
 
-      <View style={resultStyles.detailsCard}>
+      <View style={[resultStyles.detailsCard, isDarkMode && { backgroundColor: cardBg }]}>
         <View style={resultStyles.detailRow}>
           <View style={resultStyles.detailLeft}>
             <MaterialCommunityIcons name="map-marker" size={20} color={distanceColor} />
             <View style={resultStyles.detailTextWrap}>
-              <Text style={resultStyles.detailLabel}>Origine</Text>
-              <Text style={resultStyles.detailValue}>{result.origin}</Text>
+              <Text style={[resultStyles.detailLabel, { color: textMuted }]}>Origine</Text>
+              <Text style={[resultStyles.detailValue, { color: textDark }]}>{result.origin}</Text>
             </View>
           </View>
           <View style={[resultStyles.distanceBadge, { backgroundColor: result.isLocal ? Colors.green50 : Colors.orange50 }]}>
             <Text style={{ color: distanceColor, fontWeight: '700', fontSize: 13 }}>{result.distance} km</Text>
           </View>
         </View>
-        <View style={resultStyles.detailSeparator} />
+        <View style={[resultStyles.detailSeparator, isDarkMode && { backgroundColor: '#374151' }]} />
         <View style={resultStyles.detailRow}>
           <View style={resultStyles.detailLeft}>
             <MaterialCommunityIcons name="leaf" size={20} color={Colors.green500} />
             <View style={resultStyles.detailTextWrap}>
-              <Text style={resultStyles.detailLabel}>Impact carbone</Text>
-              <Text style={resultStyles.detailValue}>{result.impact}</Text>
+              <Text style={[resultStyles.detailLabel, { color: textMuted }]}>Impact carbone</Text>
+              <Text style={[resultStyles.detailValue, { color: textDark }]}>{result.impact}</Text>
             </View>
           </View>
         </View>
       </View>
 
       <View style={resultStyles.alternativesSection}>
-        <Text style={resultStyles.sectionTitle}>Alternatives Locales</Text>
+        <Text style={[resultStyles.sectionTitle, { color: textDark }]}>Alternatives Locales</Text>
         {result.alternatives.map((alt, i) => (
-          <View key={i} style={resultStyles.altCard}>
-            <View style={resultStyles.altImageWrap}>
-              <MaterialCommunityIcons name="image" size={24} color={Colors.gray300} />
+          <TouchableOpacity
+            key={i}
+            style={[resultStyles.altCard, isDarkMode && { backgroundColor: cardBg }]}
+            onPress={() => {
+              onClose()
+              nav.navigate('Main')
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[resultStyles.altImageWrap, isDarkMode && { backgroundColor: '#374151' }]}>
+              <MaterialCommunityIcons name="storefront-outline" size={24} color={Colors.primary} />
             </View>
             <View style={resultStyles.altInfo}>
-              <Text style={resultStyles.altName}>{alt.name}</Text>
-              <Text style={resultStyles.altProducer}>{alt.producer}</Text>
+              <Text style={[resultStyles.altName, { color: textDark }]}>{alt.name}</Text>
+              <Text style={[resultStyles.altProducer, { color: textMuted }]}>{alt.producer}</Text>
               <Text style={resultStyles.altDistance}>{alt.distance} km</Text>
             </View>
             <View style={resultStyles.altScoreWrap}>
@@ -245,19 +288,28 @@ function ResultState({ result, onClose }: { result: ScanResult; onClose: () => v
                 <Text style={{ fontSize: 14, fontWeight: '800', color: alt.score >= 80 ? Colors.green700 : Colors.warning }}>{alt.score}</Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
 
       <View style={resultStyles.bottomActions}>
-        <TouchableOpacity style={resultStyles.findBtn}>
-          <Text style={resultStyles.findBtnText}>Trouver ce produit</Text>
+        <TouchableOpacity
+          style={resultStyles.findBtn}
+          onPress={() => {
+            onClose()
+            nav.navigate('Main')
+          }}
+        >
+          <Text style={resultStyles.findBtnText}>Trouver chez un producteur</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={resultStyles.shareBtn}>
+        <TouchableOpacity
+          style={[resultStyles.shareBtn, isDarkMode && { backgroundColor: '#374151' }]}
+          onPress={handleShare}
+        >
           <MaterialCommunityIcons name="share-variant" size={22} color={Colors.primary} />
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   )
 }
 

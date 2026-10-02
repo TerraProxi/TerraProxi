@@ -10,6 +10,7 @@ import { Colors, Spacing, Radius } from '../theme'
 import { api } from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
+import { useUiStore } from '../store/ui.store'
 
 const { width } = Dimensions.get('window')
 const CARD_WIDTH = (width - Spacing.xl * 3) / 2
@@ -36,6 +37,7 @@ type Tab = 'producers' | 'products'
 
 export function FavoritesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets()
+  const isDarkMode = useUiStore((s) => s.isDarkMode)
   const [tab, setTab] = useState<Tab>('producers')
   const [allProducers, setAllProducers] = useState<ApiProducer[]>([])
   const [allProducts, setAllProducts] = useState<ApiProduct[]>([])
@@ -89,28 +91,51 @@ export function FavoritesScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, isDarkMode && { backgroundColor: '#111827' }]}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     )
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={styles.headerTitle}>Mes Coups de Cœur</Text>
-        <Text style={styles.headerSubtitle}>
+    <ScrollView
+      style={[styles.container, isDarkMode && { backgroundColor: '#111827' }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }, isDarkMode && { backgroundColor: '#064E3B' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+          {navigation.canGoBack() && (
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: 'rgba(255,255,255,0.25)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={22} color={isDarkMode ? '#FFFFFF' : Colors.gray900} />
+            </TouchableOpacity>
+          )}
+          <Text style={[styles.headerTitle, isDarkMode && { color: '#FFFFFF', marginBottom: 0 }]}>
+            Mes Coups de Cœur
+          </Text>
+        </View>
+        <Text style={[styles.headerSubtitle, isDarkMode && { color: '#D1FAE5' }]}>
           Retrouvez vos produits et artisans préférés
         </Text>
       </View>
 
       <View style={styles.tabContainer}>
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, isDarkMode && { backgroundColor: '#1F2937' }]}>
           <TouchableOpacity
             style={[styles.tab, tab === 'producers' && styles.tabActive]}
             onPress={() => setTab('producers')}
           >
-            <Text style={[styles.tabText, tab === 'producers' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, tab === 'producers' && styles.tabTextActive, isDarkMode && tab !== 'producers' && { color: '#9CA3AF' }]}>
               Producteurs
             </Text>
           </TouchableOpacity>
@@ -118,7 +143,7 @@ export function FavoritesScreen({ navigation }: any) {
             style={[styles.tab, tab === 'products' && styles.tabActive]}
             onPress={() => setTab('products')}
           >
-            <Text style={[styles.tabText, tab === 'products' && styles.tabTextActive]}>
+            <Text style={[styles.tabText, tab === 'products' && styles.tabTextActive, isDarkMode && tab !== 'products' && { color: '#9CA3AF' }]}>
               Produits
             </Text>
           </TouchableOpacity>
@@ -128,22 +153,22 @@ export function FavoritesScreen({ navigation }: any) {
       {tab === 'producers' ? (
         favoriteProducers.length === 0 ? (
           <View style={styles.empty}>
-            <MaterialCommunityIcons name="heart-outline" size={48} color={Colors.gray300} />
-            <Text style={styles.emptyText}>Aucun producteur favori</Text>
+            <MaterialCommunityIcons name="heart-outline" size={48} color={isDarkMode ? '#4B5563' : Colors.gray300} />
+            <Text style={[styles.emptyText, isDarkMode && { color: '#9CA3AF' }]}>Aucun producteur favori</Text>
           </View>
         ) : (
           <View style={styles.producerList}>
             {favoriteProducers.map((producer) => (
               <TouchableOpacity
                 key={producer.id}
-                style={styles.producerCard}
+                style={[styles.producerCard, isDarkMode && { backgroundColor: '#1F2937' }]}
                 onPress={() => navigation.navigate('ProducerProfile', { producerId: producer.id })}
                 activeOpacity={0.7}
               >
                 <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
                 <View style={styles.producerInfo}>
-                  <Text style={styles.producerName} numberOfLines={1}>{producer.company_name}</Text>
-                  <Text style={styles.producerTagline} numberOfLines={1}>{producer.tagline}</Text>
+                  <Text style={[styles.producerName, isDarkMode && { color: '#F9FAFB' }]} numberOfLines={1}>{producer.company_name}</Text>
+                  <Text style={[styles.producerTagline, isDarkMode && { color: '#9CA3AF' }]} numberOfLines={1}>{producer.tagline}</Text>
                   <View style={styles.producerBadges}>
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>Bio</Text>
@@ -169,13 +194,22 @@ export function FavoritesScreen({ navigation }: any) {
         )
       ) : favoriteProducts.length === 0 ? (
         <View style={styles.empty}>
-          <MaterialCommunityIcons name="heart-outline" size={48} color={Colors.gray300} />
-          <Text style={styles.emptyText}>Aucun produit favori</Text>
+          <MaterialCommunityIcons name="heart-outline" size={48} color={isDarkMode ? '#4B5563' : Colors.gray300} />
+          <Text style={[styles.emptyText, isDarkMode && { color: '#9CA3AF' }]}>Aucun produit favori</Text>
         </View>
       ) : (
         <View style={styles.productGrid}>
           {favoriteProducts.map((product) => (
-            <View key={product.id} style={styles.productCard}>
+            <TouchableOpacity
+              key={product.id}
+              style={[styles.productCard, isDarkMode && { backgroundColor: '#1F2937' }]}
+              onPress={() => {
+                if (product.producer_id) {
+                  navigation.navigate('Catalog', { producerId: product.producer_id })
+                }
+              }}
+              activeOpacity={0.8}
+            >
               <View style={styles.productImageWrapper}>
                 <Image source={{ uri: product.banner_url || product.image_url }} style={styles.productImage} />
                 <TouchableOpacity
@@ -187,10 +221,10 @@ export function FavoritesScreen({ navigation }: any) {
                 </TouchableOpacity>
               </View>
               <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                <Text style={styles.productUnit}>{product.unit}</Text>
+                <Text style={[styles.productName, isDarkMode && { color: '#F9FAFB' }]} numberOfLines={1}>{product.name}</Text>
+                <Text style={[styles.productUnit, isDarkMode && { color: '#9CA3AF' }]}>{product.unit}</Text>
                 <View style={styles.productBottom}>
-                  <Text style={styles.productPrice}>
+                  <Text style={[styles.productPrice, isDarkMode && { color: '#A7F3D0' }]}>
                     {product.price.toFixed(2)} €
                   </Text>
                   <TouchableOpacity
@@ -201,22 +235,25 @@ export function FavoritesScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}
 
       <View style={styles.inspirationSection}>
-        <View style={styles.inspirationCard}>
+        <View style={[styles.inspirationCard, isDarkMode && { backgroundColor: '#1F2937' }]}>
           <View style={styles.inspirationCardGradient} />
           <Text style={styles.inspirationEmoji}>🍅</Text>
           <View style={styles.inspirationContent}>
-            <Text style={styles.inspirationTitle}>Inspiration de saison</Text>
-            <Text style={styles.inspirationText}>
-              Découvrez les produits de printemps sélectionnés pour vous
+            <Text style={[styles.inspirationTitle, isDarkMode && { color: '#F9FAFB' }]}>Inspiration de saison</Text>
+            <Text style={[styles.inspirationText, isDarkMode && { color: '#9CA3AF' }]}>
+              Découvrez les produits de saison sélectionnés pour vous
             </Text>
           </View>
-          <TouchableOpacity style={styles.inspirationBtn}>
+          <TouchableOpacity
+            style={styles.inspirationBtn}
+            onPress={() => navigation.navigate('Main')}
+          >
             <Text style={styles.inspirationBtnText}>Voir</Text>
           </TouchableOpacity>
         </View>
