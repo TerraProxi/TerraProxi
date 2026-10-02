@@ -117,8 +117,17 @@ export function UserProfileScreen() {
       case 'cart':
         nav.navigate('Cart')
         return
-      case 'notifications':
       case 'location':
+        Alert.alert(
+          'Localisation active',
+          'Position configurée : Montpellier et région Occitanie (34000).\n\nSouhaitez-vous afficher les producteurs sur la carte interactive ?',
+          [
+            { text: 'Fermer', style: 'cancel' },
+            { text: 'Voir la carte', onPress: () => nav.navigate('Tabs') },
+          ],
+        )
+        return
+      case 'notifications':
       case 'help':
       case 'report':
       case 'terms':

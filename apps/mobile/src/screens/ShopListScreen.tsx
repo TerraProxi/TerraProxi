@@ -47,7 +47,10 @@ export function ShopListScreen({ navigation }: any) {
   const [activeFilter, setActiveFilter] = useState<Filter>('closest')
   const [producers, setProducers] = useState<Producer[]>([])
   const [loading, setLoading] = useState(true)
-  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>({
+    lat: 43.610769,
+    lon: 3.876716,
+  })
 
   const fetchProducers = async (searchQuery?: string) => {
     try {

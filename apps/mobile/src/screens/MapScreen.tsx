@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image, Keyboard, Platform, ActivityIndicator,
+  TextInput, Image, Keyboard, Platform, ActivityIndicator, Alert,
 } from 'react-native'
 import MapView, { Marker, Callout, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
@@ -56,6 +56,11 @@ export function MapScreen() {
   const [activeCategory, setActiveCategory] = useState('Tous')
   const [showFilters, setShowFilters] = useState(false)
   const [region, setRegion] = useState<Region>(DEFAULT_REGION)
+  const [userCoord, setUserCoord] = useState<{ latitude: number; longitude: number } | null>({
+    latitude: 43.610769,
+    longitude: 3.876716,
+  })
+  const [locating, setLocating] = useState(false)
   const mapRef = useRef<MapView>(null)
 
   const isValidLocation = (lat: number, lng: number) => lat > 40 && lat < 52 && lng > -6 && lng < 10
@@ -86,24 +91,23 @@ export function MapScreen() {
 
   useEffect(() => {
     ;(async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        fetchProducers()
-        return
-      }
       try {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-        const { latitude, longitude } = pos.coords
-        if (!isValidLocation(latitude, longitude)) {
-          fetchProducers()
-          return
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status === 'granted') {
+          try {
+            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+            const { latitude, longitude } = pos.coords
+            if (isValidLocation(latitude, longitude)) {
+              setUserCoord({ latitude, longitude })
+              const r: Region = { latitude, longitude, latitudeDelta: 0.15, longitudeDelta: 0.15 }
+              setRegion(r)
+              mapRef.current?.animateToRegion(r, 800)
+              return
+            }
+          } catch {}
         }
-        const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
-        setRegion(r)
-        mapRef.current?.animateToRegion(r, 800)
-      } catch {
-        fetchProducers()
-      }
+      } catch {}
+      fetchProducers()
     })()
   }, [])
 
@@ -145,22 +149,70 @@ export function MapScreen() {
   }
 
   const centerOnUser = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync()
-    if (status !== 'granted') return
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-    const { latitude, longitude } = pos.coords
-    if (!isValidLocation(latitude, longitude)) {
-      const r = { ...DEFAULT_REGION }
-      mapRef.current?.animateToRegion(r, 800)
-      return
+    try {
+      setLocating(true)
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert(
+          'Localisation désactivée',
+          'Veuillez autoriser l\'accès à votre position dans les réglages de votre appareil pour vous centrer.',
+        )
+        return
+      }
+
+      let lat = 43.610769
+      let lon = 3.876716
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        if (pos?.coords && isValidLocation(pos.coords.latitude, pos.coords.longitude)) {
+          lat = pos.coords.latitude
+          lon = pos.coords.longitude
+        }
+      } catch {
+        // Fallback to default coordinates
+      }
+
+      const targetCoord = { latitude: lat, longitude: lon }
+      setUserCoord(targetCoord)
+
+      const targetRegion: Region = {
+        latitude: lat,
+        longitude: lon,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }
+      setRegion(targetRegion)
+      mapRef.current?.animateToRegion(targetRegion, 800)
+    } catch {
+      Alert.alert('Erreur', 'Impossible de déterminer votre localisation.')
+    } finally {
+      setLocating(false)
     }
-    const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
-    mapRef.current?.animateToRegion(r, 800)
   }
 
   return (
     <View style={styles.container}>
-      <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} onRegionChangeComplete={handleRegionChangeComplete}>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={DEFAULT_REGION}
+        onRegionChangeComplete={handleRegionChangeComplete}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+      >
+        {userCoord && (
+          <Marker
+            coordinate={userCoord}
+            title="Votre position"
+            description="Vous êtes ici"
+            zIndex={999}
+          >
+            <View style={styles.userMarkerContainer}>
+              <View style={styles.userMarkerPulse} />
+              <View style={styles.userMarkerDot} />
+            </View>
+          </Marker>
+        )}
         {displayedProducers.map((p) => (
           <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}>
             <View style={styles.markerContainer}>
@@ -268,8 +320,16 @@ export function MapScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.locationBtn} onPress={centerOnUser}>
-        <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.white} />
+      <TouchableOpacity
+        style={[styles.locationBtn, locating && { opacity: 0.8 }]}
+        onPress={centerOnUser}
+        activeOpacity={0.7}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color={Colors.white} />
+        ) : (
+          <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.white} />
+        )}
       </TouchableOpacity>
 
       <View style={styles.bottomCards}>
@@ -533,5 +593,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  userMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+  },
+  userMarkerPulse: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(91, 174, 106, 0.3)',
+  },
+  userMarkerDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
   },
 })
