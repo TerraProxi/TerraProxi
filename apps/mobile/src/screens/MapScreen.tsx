@@ -128,6 +128,28 @@ export function MapScreen() {
     setShowFilters(false)
   }
 
+  const handleZoomIn = () => {
+    const newRegion: Region = {
+      latitude: region.latitude,
+      longitude: region.longitude,
+      latitudeDelta: Math.max(region.latitudeDelta / 2, 0.005),
+      longitudeDelta: Math.max(region.longitudeDelta / 2, 0.005),
+    }
+    setRegion(newRegion)
+    mapRef.current?.animateToRegion(newRegion, 300)
+  }
+
+  const handleZoomOut = () => {
+    const newRegion: Region = {
+      latitude: region.latitude,
+      longitude: region.longitude,
+      latitudeDelta: Math.min(region.latitudeDelta * 2, 8.0),
+      longitudeDelta: Math.min(region.longitudeDelta * 2, 8.0),
+    }
+    setRegion(newRegion)
+    mapRef.current?.animateToRegion(newRegion, 300)
+  }
+
   const displayedProducers = producers.filter((p) => {
     if (activeCategory === 'Tous') return true
     if (!p.categories || !Array.isArray(p.categories)) return false
@@ -319,6 +341,26 @@ export function MapScreen() {
           </ScrollView>
         </View>
       )}
+
+      <View style={[styles.zoomControls, isDarkMode && { backgroundColor: '#1F2937' }]}>
+        <TouchableOpacity
+          style={styles.zoomBtn}
+          onPress={handleZoomIn}
+          activeOpacity={0.7}
+          hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
+        >
+          <MaterialCommunityIcons name="plus" size={22} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
+        </TouchableOpacity>
+        <View style={[styles.zoomDivider, isDarkMode && { backgroundColor: '#374151' }]} />
+        <TouchableOpacity
+          style={styles.zoomBtn}
+          onPress={handleZoomOut}
+          activeOpacity={0.7}
+          hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
+        >
+          <MaterialCommunityIcons name="minus" size={22} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={[styles.locationBtn, locating && { opacity: 0.8 }]}
@@ -515,6 +557,34 @@ const styles = StyleSheet.create({
   calloutName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
   calloutTagline: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
   calloutCta: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: Spacing.sm },
+  zoomControls: {
+    position: 'absolute',
+    bottom: 244,
+    right: Spacing.lg,
+    width: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 6,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  zoomBtn: {
+    width: 48,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomDivider: {
+    width: 30,
+    height: 1,
+    backgroundColor: Colors.gray200,
+  },
   locationBtn: {
     position: 'absolute',
     bottom: 180,
