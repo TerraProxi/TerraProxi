@@ -342,37 +342,45 @@ export function MapScreen() {
         </View>
       )}
 
-      <View style={[styles.zoomControls, isDarkMode && { backgroundColor: '#1F2937' }]}>
+      <View
+        style={[
+          styles.actionDock,
+          { top: showFilters ? (Platform.OS === 'ios' ? 172 : 140) : (Platform.OS === 'ios' ? 116 : 84) },
+          isDarkMode && { backgroundColor: '#1F2937' },
+        ]}
+      >
         <TouchableOpacity
-          style={styles.zoomBtn}
+          style={styles.actionDockBtn}
           onPress={handleZoomIn}
           activeOpacity={0.7}
-          hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
         >
-          <MaterialCommunityIcons name="plus" size={22} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
+          <MaterialCommunityIcons name="plus" size={20} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
         </TouchableOpacity>
-        <View style={[styles.zoomDivider, isDarkMode && { backgroundColor: '#374151' }]} />
+
+        <View style={[styles.actionDockDivider, isDarkMode && { backgroundColor: '#374151' }]} />
+
         <TouchableOpacity
-          style={styles.zoomBtn}
+          style={styles.actionDockBtn}
           onPress={handleZoomOut}
           activeOpacity={0.7}
-          hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
         >
-          <MaterialCommunityIcons name="minus" size={22} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
+          <MaterialCommunityIcons name="minus" size={20} color={isDarkMode ? '#F9FAFB' : Colors.dark} />
+        </TouchableOpacity>
+
+        <View style={[styles.actionDockDivider, isDarkMode && { backgroundColor: '#374151' }]} />
+
+        <TouchableOpacity
+          style={styles.actionDockBtn}
+          onPress={centerOnUser}
+          activeOpacity={0.7}
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <MaterialCommunityIcons name="crosshairs-gps" size={20} color={Colors.primary} />
+          )}
         </TouchableOpacity>
       </View>
-
-      <TouchableOpacity
-        style={[styles.locationBtn, locating && { opacity: 0.8 }]}
-        onPress={centerOnUser}
-        activeOpacity={0.7}
-      >
-        {locating ? (
-          <ActivityIndicator size="small" color={Colors.white} />
-        ) : (
-          <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.white} />
-        )}
-      </TouchableOpacity>
 
       <View style={styles.bottomCards}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomCardsContent}>
@@ -557,50 +565,32 @@ const styles = StyleSheet.create({
   calloutName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
   calloutTagline: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
   calloutCta: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: Spacing.sm },
-  zoomControls: {
+  actionDock: {
     position: 'absolute',
-    bottom: 292,
     right: Spacing.lg,
-    width: 48,
-    borderRadius: 24,
+    width: 44,
+    borderRadius: 22,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
-    shadowRadius: 5,
+    shadowRadius: 6,
     elevation: 6,
     zIndex: 25,
     overflow: 'hidden',
   },
-  zoomBtn: {
-    width: 48,
+  actionDockBtn: {
+    width: 44,
     height: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  zoomDivider: {
-    width: 30,
+  actionDockDivider: {
+    width: 26,
     height: 1,
     backgroundColor: Colors.gray200,
-  },
-  locationBtn: {
-    position: 'absolute',
-    bottom: 228,
-    right: Spacing.lg,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 8,
-    zIndex: 25,
   },
   bottomCards: {
     position: 'absolute',
