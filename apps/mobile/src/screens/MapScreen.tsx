@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   calloutCta: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: Spacing.sm },
   zoomControls: {
     position: 'absolute',
-    bottom: 244,
+    bottom: 292,
     right: Spacing.lg,
     width: 48,
     borderRadius: 24,
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 5,
     elevation: 6,
-    zIndex: 10,
+    zIndex: 25,
     overflow: 'hidden',
   },
   zoomBtn: {
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   },
   locationBtn: {
     position: 'absolute',
-    bottom: 180,
+    bottom: 228,
     right: Spacing.lg,
     width: 52,
     height: 52,
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 8,
-    zIndex: 10,
+    zIndex: 25,
   },
   bottomCards: {
     position: 'absolute',
