@@ -1,67 +1,48 @@
 openapi: 3.1.0
 info:
-  title: TerraProxi API - Users
-  version: 1.0.0
+  title: TerraProxi API - Compte et RGPD
+  version: 1.1.0
   description: |
-    API de gestion des profils utilisateurs
+    Profil, identifiants et droits RGPD (accès, portabilité, rectification, effacement).
+    Implémentation : apps/api/src/routes/users.routes.ts — documentation : docs/rgpd.md.
   contact:
     name: TerraProxi Team
     email: dev@terraproxi.fr
   license:
     name: Proprietary
-    url: https://www.terraproxi.fr/legal
+    url: https://app.terraproxi.fr/legal
 servers:
   - url: https://gateway.terraproxi.fr/api
-    description: Production environment
+    description: Production
   - url: http://localhost:3002/api
-    description: Development environment
+    description: Développement
 tags:
   - name: Users
-    description: Gestion des profils utilisateurs
-security:
-  - bearerAuth: []
+    description: Compte utilisateur et RGPD
+
 paths:
   /users/profile:
     get:
       summary: Mon profil
-      description: |
-        Récupère le profil de l'utilisateur authentifié.
-      operationId: getProfile
-      tags:
-        - Users
+      description: Profil du compte connecté.
+      operationId: getMyProfile
+      tags: [Users]
       responses:
         '200':
-          description: Profil de l'utilisateur
+          description: Profil
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '../schemas/user.schema.json'
         '401':
-          description: Non authentifié
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Utilisateur introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
     patch:
       summary: Modifier mon profil
-      description: |
-        Met à jour le profil de l'utilisateur authentifié. Tous les champs sont optionnels.
-        Les champs non fournis ne sont pas modifiés.
-      operationId: updateProfile
-      tags:
-        - Users
+      description: Seuls les champs fournis sont modifiés.
+      operationId: updateMyProfile
+      tags: [Users]
       requestBody:
         required: true
         content:
@@ -72,87 +53,39 @@ paths:
                 first_name:
                   type: string
                   minLength: 1
-                  example: Jean
+                  maxLength: 100
                 last_name:
                   type: string
                   minLength: 1
-                  example: Dupont
+                  maxLength: 100
                 phone:
                   type: string
+                  maxLength: 20
                   example: '+33612345678'
                 avatar_url:
                   type: string
-                  format: uri
-                  example: https://example.com/avatar.jpg
+                  maxLength: 500
+              additionalProperties: false
       responses:
         '200':
           description: Profil mis à jour
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '../schemas/user.schema.json'
         '400':
-          description: Données invalides
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Non authentifié
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Utilisateur introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /users/me:
-    delete:
-      summary: Supprimer mon compte (RGPD)
-      description: |
-        Supprime le compte et toutes les données associées (CASCADE en DB).
-        Cette action est irréversible.
-      operationId: deleteMe
-      tags:
-        - Users
-      responses:
-        '204':
-          description: Compte supprimé
-          content:
-            application/json:
-              schema:
-                type: object
-                description: No content
-        '401':
-          description: Non authentifié
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
+
   /users/me/password:
     put:
       summary: Changer mon mot de passe
-      description: Exige le mot de passe actuel ; révoque toutes les sessions (refresh tokens).
+      description: Exige le mot de passe actuel ; révoque toutes les sessions (refresh tokens) du compte.
       operationId: changePassword
-      tags:
-        - Users
-      security:
-        - bearerAuth: []
+      tags: [Users]
       requestBody:
         required: true
         content:
@@ -163,34 +96,30 @@ paths:
               properties:
                 current_password:
                   type: string
+                  minLength: 1
                 new_password:
                   type: string
                   minLength: 8
                   maxLength: 128
+              additionalProperties: false
       responses:
         '204':
           description: Mot de passe modifié
         '400':
-          description: Nouveau mot de passe invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Mot de passe actuel incorrect
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/WrongPassword'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /users/me/email:
     put:
       summary: Changer mon adresse email
-      description: Exige le mot de passe actuel ; l'adresse doit être libre.
+      description: Exige le mot de passe actuel ; la nouvelle adresse doit être libre.
       operationId: changeEmail
-      tags:
-        - Users
-      security:
-        - bearerAuth: []
+      tags: [Users]
       requestBody:
         required: true
         content:
@@ -201,132 +130,189 @@ paths:
               properties:
                 current_password:
                   type: string
+                  minLength: 1
                 new_email:
                   type: string
                   format: email
+                  maxLength: 255
+              additionalProperties: false
       responses:
         '200':
           description: Adresse modifiée
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '../schemas/user.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Mot de passe actuel incorrect
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/WrongPassword'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           description: Adresse déjà utilisée
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '../contracts/error-envelope.schema.json'
+
   /users/me/export:
     get:
       summary: Exporter mes données (RGPD)
       description: |
-        Droit d'accès et à la portabilité : profil, fiche producteur, commandes et messages
-        au format JSON, servi en pièce jointe (terraproxi-mes-donnees.json).
+        Droit d'accès et à la portabilité. Servi en pièce jointe
+        (Content-Disposition: attachment; filename="terraproxi-mes-donnees.json").
       operationId: exportMyData
-      tags:
-        - Users
-      security:
-        - bearerAuth: []
+      tags: [Users]
       responses:
         '200':
           description: Export JSON
           content:
             application/json:
               schema:
-                type: object
-                required: [exported_at, profile, orders, messages]
-                properties:
-                  exported_at:
-                    type: string
-                    format: date-time
-                  profile:
-                    $ref: '#/components/schemas/User'
-                  producer:
-                    type: [object, 'null']
-                  orders:
-                    type: array
-                    items:
-                      type: object
-                  messages:
-                    type: array
-                    items:
-                      type: object
+                $ref: '#/components/schemas/DataExport'
         '401':
-          description: Non authentifié
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/me:
+    delete:
+      summary: Supprimer mon compte (RGPD)
+      description: |
+        Supprime le compte, la fiche producteur, les produits, les messages et les sessions.
+        Les commandes sont conservées (obligation comptable) mais anonymisées
+        (consumer_id / producer_id à null), et leurs lignes gardent le nom du produit.
+      operationId: deleteMyAccount
+      tags: [Users]
+      responses:
+        '204':
+          description: Compte supprimé
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
   schemas:
-    User:
+    DataExport:
       type: object
-      required:
-        - id
-        - email
-        - first_name
-        - last_name
-        - role
-        - created_at
+      required: [exported_at, profile, producer, orders, messages]
+      properties:
+        exported_at:
+          type: string
+          format: date-time
+        profile:
+          description: Profil complet, consentement RGPD compris
+          type: object
+          required: [id, email, first_name, last_name, role, created_at, gdpr_consent, gdpr_consent_at, updated_at]
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+              format: email
+            first_name:
+              type: string
+            last_name:
+              type: string
+            role:
+              $ref: '../schemas/user.schema.json#/$defs/UserRole'
+            phone:
+              type: [string, 'null']
+            avatar_url:
+              type: [string, 'null']
+            created_at:
+              type: string
+              format: date-time
+            gdpr_consent:
+              type: boolean
+            gdpr_consent_at:
+              type: [string, 'null']
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+          additionalProperties: false
+        producer:
+          description: Fiche producteur (sans first_name, last_name ni categories), ou null pour un consommateur
+          oneOf:
+            - $ref: '../schemas/producer.schema.json'
+            - type: 'null'
+        orders:
+          type: array
+          description: Commandes passées par le compte
+          items:
+            $ref: '#/components/schemas/ExportedOrder'
+        messages:
+          type: array
+          items:
+            $ref: '../schemas/message.schema.json'
+    ExportedOrder:
+      type: object
+      required: [id, status, total_price, delivery_mode, notes, created_at, items]
       properties:
         id:
           type: string
-          example: user-001
-        email:
-          type: string
-          format: email
-          example: user@example.com
-        first_name:
-          type: string
-          example: Jean
-        last_name:
-          type: string
-          example: Dupont
-        role:
-          type: string
-          enum: [CONSUMER, PRODUCER, ADMIN]
-          example: CONSUMER
-        phone:
-          type: string
-          example: '+33612345678'
-        avatar_url:
-          type: string
-          format: uri
-          example: https://example.com/avatar.jpg
+          format: uuid
+        status:
+          $ref: '../schemas/order.schema.json#/$defs/OrderStatus'
+        total_price:
+          type: number
+        delivery_mode:
+          $ref: '../schemas/order.schema.json#/$defs/DeliveryMode'
+        notes:
+          type: [string, 'null']
         created_at:
           type: string
           format: date-time
-          example: 2025-04-01T10:00:00Z
-    Error:
-      type: object
-      required:
-        - error
-        - status
-      properties:
-        error:
-          type: string
-          example: Champs manquants
-        status:
-          type: integer
-          example: 400
-          enum: [400, 401, 403, 404, 500]
-        details:
-          type: object
-          additionalProperties: true
-          example:
-            field: phone
-            message: Format invalide
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_name, quantity, unit_price]
+            properties:
+              product_name:
+                type: string
+              quantity:
+                type: integer
+              unit_price:
+                type: number
+            additionalProperties: false
+      additionalProperties: false
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    WrongPassword:
+      description: Mot de passe actuel incorrect
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Compte introuvable (déjà supprimé)
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

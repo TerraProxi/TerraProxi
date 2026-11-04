@@ -1,6 +1,7 @@
 import { createApp } from '../../src/app'
 import { db } from '../../src/db/client'
 import { runMigrations } from '../../src/db/migrate'
+import { assertResponseConforms } from '../conformance/spec-contract'
 
 export const app = createApp()
 
@@ -26,6 +27,9 @@ export async function call<T = any>(
   const text = await res.text()
   let body: unknown = text
   try { body = text ? JSON.parse(text) : null } catch { /* corps non JSON */ }
+
+  // Contrat : chaque réponse obtenue pendant les tests doit être décrite par specs/api
+  assertResponseConforms(method, path, res.status, body)
   return { status: res.status, body: body as T }
 }
 

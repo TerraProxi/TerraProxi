@@ -1,78 +1,34 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "producer.schema.json",
+  "title": "Producer",
+  "description": "Fiche producteur (table producers). first_name, last_name et categories sont présents en lecture (GET), distance_km uniquement dans une recherche géolocalisée.",
   "type": "object",
-  "required": [
-    "id",
-    "user_id",
-    "company_name",
-    "is_verified",
-    "created_at"
-  ],
+  "required": ["id", "user_id", "company_name", "is_verified", "created_at", "latitude", "longitude"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "user_id": {
-      "type": "string"
-    },
-    "company_name": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
-    },
-    "address": {
-      "type": "string"
-    },
-    "city": {
-      "type": "string"
-    },
-    "postal_code": {
-      "type": "string"
-    },
-    "latitude": {
-      "type": "number",
-      "minimum": -90,
-      "maximum": 90
-    },
-    "longitude": {
-      "type": "number",
-      "minimum": -180,
-      "maximum": 180
-    },
-    "website_url": {
-      "type": "string",
-      "format": "uri"
-    },
-    "banner_url": {
-      "type": "string",
-      "format": "uri"
-    },
-    "is_verified": {
-      "type": "boolean"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "first_name": {
-      "type": "string"
-    },
-    "last_name": {
-      "type": "string"
-    },
-    "distance_km": {
-      "type": "number",
-      "minimum": 0
-    },
-    "rating": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 5
-    },
-    "review_count": {
-      "type": "integer",
-      "minimum": 0
+    "id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string", "format": "uuid" },
+    "company_name": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "description": { "type": ["string", "null"], "maxLength": 5000 },
+    "address": { "type": ["string", "null"], "maxLength": 500 },
+    "city": { "type": ["string", "null"], "maxLength": 100 },
+    "postal_code": { "type": ["string", "null"], "pattern": "^[0-9]{5}$" },
+    "website_url": { "type": ["string", "null"], "maxLength": 500 },
+    "banner_url": { "type": ["string", "null"], "maxLength": 500 },
+    "opening_hours": { "type": ["string", "null"], "maxLength": 500, "examples": ["Mer. et sam. 9 h – 13 h"] },
+    "is_verified": { "type": "boolean" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "latitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+    "longitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+    "first_name": { "type": "string", "description": "Prénom du titulaire du compte" },
+    "last_name": { "type": "string" },
+    "distance_km": { "type": ["number", "null"], "minimum": 0 },
+    "categories": {
+      "type": "array",
+      "description": "Libellés des catégories de ses produits disponibles (ex. « Fruits & Légumes »)",
+      "items": { "type": "string" },
+      "uniqueItems": true
     }
-  }
+  },
+  "additionalProperties": false
 }

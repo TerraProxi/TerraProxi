@@ -40,7 +40,7 @@ const producerBody = t.Object({
   description:   t.Optional(t.String({ maxLength: 5000 })),
   address:       t.Optional(t.String({ maxLength: 500 })),
   city:          t.Optional(t.String({ maxLength: 100 })),
-  postal_code:   t.Optional(t.String({ maxLength: 10 })),
+  postal_code:   t.Optional(t.String({ pattern: '^[0-9]{5}$' })),
   latitude:      t.Optional(t.Number({ minimum: -90, maximum: 90 })),
   longitude:     t.Optional(t.Number({ minimum: -180, maximum: 180 })),
   website_url:   t.Optional(t.String({ maxLength: 500 })),

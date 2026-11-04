@@ -7,6 +7,7 @@
 | Niveau | Outil | Où | Quand |
 |--------|-------|----|-------|
 | Contrats d'API | Spectral (règles OpenAPI) | `specs/api/*.yaml` | `pnpm spec:lint`, CI |
+| Conformité aux specs | `bun test` + Ajv | `apps/api/tests/conformance` | `pnpm test`, CI |
 | Typage | TypeScript strict | API, web, mobile | `pnpm typecheck`, CI |
 | Unitaires | `bun test` | `apps/api/tests/unit` | `pnpm test`, CI |
 | Intégration | `bun test` + PostgreSQL/PostGIS réel | `apps/api/tests/integration` | `pnpm test`, CI (service PostGIS) |
@@ -21,7 +22,15 @@ sont ignorés et seuls les tests unitaires tournent.
 
 ## 2. Tests automatisés — résultats
 
-Dernière exécution : 04/11/2026 — **59 tests, 59 réussis, 0 échec** (192 assertions, ~20 s).
+Dernière exécution : 04/11/2026 — **115 tests, 115 réussis, 0 échec** (~25 s).
+
+### Conformité aux specs
+
+| Contrôle | Résultat |
+|----------|----------|
+| Les 28 routes de l'API et celles de `specs/api` sont identiques (aucune manquante, aucune en trop, aucune décrite deux fois) | ✅ |
+| Paramètres de requête et champs de corps identiques, route par route (50 vérifications) | ✅ |
+| Chaque réponse obtenue par les tests d'intégration a un code documenté et un corps conforme au schéma de la spec, champs en trop refusés | ✅ |
 
 ### Unitaires
 
@@ -38,14 +47,14 @@ Dernière exécution : 04/11/2026 — **59 tests, 59 réussis, 0 échec** (192 a
 | Connexion / rôles | 200 / 401 ; route protégée 401 sans jeton ou jeton invalide ; 403 consommateur sur route producteur | ✅ |
 | Sessions | refresh token à usage unique (rejeu refusé) ; déconnexion révoque ; changement de mot de passe révoque toutes les sessions | ✅ |
 | Supervision | `/health` → `ok` / `database: up` | ✅ |
-| Profil producteur | 404 avant création ; 201 puis 200 (upsert) ; position conservée ; horaires | ✅ |
+| Profil producteur | 404 avant création ; 201 puis 200 (upsert) ; position conservée ; horaires ; 403 pour un consommateur ; fiche publique sans compte, 400 / 404 sur identifiant invalide ou inconnu | ✅ |
 | Recherche géolocalisée | producteur dans le rayon, trié par distance ; aucun résultat hors rayon ; 400 si `lat` sans `lon` ; catégories déduites des produits | ✅ |
-| Catalogue | 403 modification par un autre producteur ; mise à jour ; produits masqués visibles dans « mon catalogue » mais pas en public ; suppression ; 400 catégorie inconnue / identifiant non UUID | ✅ |
+| Catalogue | filtres catégorie et texte ; 403 modification par un autre producteur ; mise à jour ; produits masqués visibles dans « mon catalogue » mais pas en public ; suppression ; 400 catégorie inconnue / identifiant non UUID | ✅ |
 | Commandes | total calculé côté serveur ; stock réservé ; 400 stock insuffisant sans décrément ; **8 commandes simultanées sur 5 unités → 5 acceptées, 3 refusées, stock 0** ; 400 produit d'un autre producteur ; 400 livraison sans adresse ; producteur ne peut pas commander | ✅ |
 | Statuts | PENDING → PREPARING refusé (409) ; PAID → PREPARING → READY → COMPLETED ; annulation client avec remise en stock ; annulation refusée une fois payée ; tiers 403 | ✅ |
 | Paiement Stripe | montant en centimes ; intent réutilisé ; webhook sans JWT ; signature invalide → 400 ; webhook valide → PAID ; intent étranger ignoré ; commande d'un autre → 403 ; Stripe non configuré → 503 | ✅ |
 | Messagerie | envoi (contenu nettoyé) ; boîte de réception par interlocuteur ; compteur de non-lus ; lecture marque comme lu ; nom du producteur affiché ; message vide, à soi-même, destinataire inconnu refusés | ✅ |
-| RGPD | export JSON complet sans hash ; suppression du compte : messages et sessions effacés, commandes anonymisées, accès refusé ensuite ; suppression d'un producteur : lignes de commande gardent le nom du produit | ✅ |
+| RGPD | export JSON complet sans hash (consommateur et producteur) ; suppression du compte : messages et sessions effacés, commandes anonymisées, accès refusé ensuite ; suppression d'un producteur : lignes de commande gardent le nom du produit | ✅ |
 | Prévisions IA | réservées au producteur propriétaire (403 sinon) | ✅ |
 
 Commande : `pnpm test` (avec `TEST_DATABASE_URL`). Détail : `apps/api/tests/`.

@@ -1,54 +1,26 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.schema.json",
+  "title": "User",
+  "description": "Utilisateur tel que renvoyé par l'API (jamais de hash de mot de passe). Table users.",
   "type": "object",
-  "required": [
-    "id",
-    "email",
-    "first_name",
-    "last_name",
-    "role",
-    "is_active",
-    "gdpr_consent",
-    "created_at"
-  ],
+  "required": ["id", "email", "first_name", "last_name", "role", "created_at"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "email": {
+    "id": { "type": "string", "format": "uuid" },
+    "email": { "type": "string", "format": "email", "maxLength": 255, "description": "Toujours en minuscules" },
+    "first_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "last_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "role": { "$ref": "#/$defs/UserRole" },
+    "phone": { "type": ["string", "null"], "maxLength": 20 },
+    "avatar_url": { "type": ["string", "null"], "maxLength": 500 },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "UserRole": {
       "type": "string",
-      "format": "email"
-    },
-    "first_name": {
-      "type": "string"
-    },
-    "last_name": {
-      "type": "string"
-    },
-    "role": {
-      "type": "string",
-      "enum": [
-        "CONSUMER",
-        "PRODUCER",
-        "ADMIN"
-      ]
-    },
-    "phone": {
-      "type": "string"
-    },
-    "avatar_url": {
-      "type": "string",
-      "format": "uri"
-    },
-    "is_active": {
-      "type": "boolean"
-    },
-    "gdpr_consent": {
-      "type": "boolean"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
+      "enum": ["CONSUMER", "PRODUCER", "ADMIN"],
+      "description": "ADMIN est réservé ; l'inscription ne propose que CONSUMER et PRODUCER"
     }
   }
 }

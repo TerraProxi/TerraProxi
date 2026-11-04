@@ -1,42 +1,41 @@
-Feature: Assistant IA TerraProxi
-  En tant que consommateur
-  Je veux discuter avec un assistant IA
-  Afin de trouver des producteurs locaux et obtenir des conseils culinaires
+# language: fr
+# Contrat : specs/api/ai-chat-api.yaml, specs/schemas/ai-chat.schema.json
+# Vérifié par : apps/api/tests/integration/stripe-ai.test.ts (prévisions) ;
+#               l'assistant dépend de Gemini et est vérifié en recette (docs/tests.md §3).
 
-  Background:
-    Given je suis authentifié en tant que consommateur
+Fonctionnalité: Assistant IA
 
-  Scenario: Recherche de fournisseurs locaux
-    When POST /api/ai/chat with:
-      | message | Où acheter des légumes bio ? |
-      | lat     | 48.8566                      |
-      | lon     | 2.3522                       |
-    Then response status is 200
-    And response body matches schema "AiChatResponse"
-    And response body "reply" is not empty
-    And response body "producer_links" is an array
+  Contexte:
+    Étant donné un utilisateur connecté
+    Et une clé GEMINI_API_KEY configurée
 
-  Scenario: Question culinaire avec contexte producteurs
-    When POST /api/ai/chat with:
-      | message | Propose une recette avec des tomates et du chèvre |
-    Then response status is 200
-    And response body matches schema "AiChatResponse"
-    And response body "reply" contains "recette"
+  Scénario: Recherche de producteurs proches
+    Quand je demande "Où trouver des fraises près de chez moi ?" avec ma position
+    Alors la réponse contient un texte et des liens vers des producteurs du catalogue injecté
+    Et aucun producteur ou produit hors de ce catalogue n'est renvoyé
 
-  Scenario: Conversation avec historique
-    When POST /api/ai/chat with:
-      | message | Et avec du basilic ? |
-      | history | [{"role":"user","content":"Recette tomates"},{"role":"assistant","content":"Voici une salade caprese..."}] |
-    Then response status is 200
-    And response body matches schema "AiChatResponse"
+  Scénario: Rayon sans producteur
+    Quand je demande avec une position sans producteur dans le rayon
+    Alors l'assistant propose les producteurs les plus proches et le signale
 
-  Scenario: Message vide rejeté
-    When POST /api/ai/chat with:
-      | message |   |
-    Then response status is 400
+  Scénario: Actions sur le panier
+    Étant donné mon panier envoyé dans "cart_context"
+    Quand je demande d'ajouter 2 kg de tomates
+    Alors la réponse contient une action "add_to_cart" sur un produit du catalogue
 
-  Scenario: Accès sans authentification
-    Given je ne suis pas authentifié
-    When POST /api/ai/chat with:
-      | message | Bonjour |
-    Then response status is 401
+  Scénario: Requêtes refusées
+    Quand j'envoie un message vide
+    Alors la réponse est 400
+    Quand j'appelle l'assistant sans jeton
+    Alors la réponse est 401
+    Quand la clé Gemini est absente ou que Gemini ne répond pas
+    Alors la réponse est 503
+
+Fonctionnalité: Prévisions de la demande
+
+  Scénario: Réservées au producteur propriétaire
+    Étant donné deux producteurs A et B
+    Quand A demande la prévision de sa fiche
+    Alors il reçoit une ligne par produit avec la prévision et la confiance
+    Quand B demande la prévision de la fiche de A
+    Alors la réponse est 403

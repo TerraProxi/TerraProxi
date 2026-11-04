@@ -124,16 +124,17 @@ export const usersRoutes = new Elysia({ prefix: '/users' })
           [user.sub],
         ),
         db.query(
-          `SELECT id, company_name, description, address, city, postal_code, website_url,
-                  opening_hours, ST_Y(location) AS latitude, ST_X(location) AS longitude, created_at
+          `SELECT id, user_id, company_name, description, address, city, postal_code, website_url,
+                  banner_url, opening_hours, is_verified, created_at,
+                  ST_Y(location) AS latitude, ST_X(location) AS longitude
            FROM producers WHERE user_id = $1`,
           [user.sub],
         ),
         db.query(
-          `SELECT o.id, o.status, o.total_price, o.delivery_mode, o.notes, o.created_at,
+          `SELECT o.id, o.status, o.total_price::float AS total_price, o.delivery_mode, o.notes, o.created_at,
                   COALESCE(json_agg(json_build_object(
                     'product_name', oi.product_name, 'quantity', oi.quantity,
-                    'unit_price', oi.unit_price)) FILTER (WHERE oi.id IS NOT NULL), '[]') AS items
+                    'unit_price', oi.unit_price::float)) FILTER (WHERE oi.id IS NOT NULL), '[]') AS items
            FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id
            WHERE o.consumer_id = $1
            GROUP BY o.id ORDER BY o.created_at DESC`,

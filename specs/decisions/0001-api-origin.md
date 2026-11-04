@@ -141,3 +141,16 @@ TerraProxi requires a backend capable of:
 - [Prisma Documentation](https://www.prisma.io/docs/)
 - PostGIS Spatial Reference: https://postgis.net/documentation/
 - [Monolith Readability Ratio (MRR)](https://delivery-person.org/blog/mrr.html)
+## Amendement — 04/11/2026
+
+La décision (monolithe Elysia + PostgreSQL/PostGIS) est confirmée. Deux choix d'outillage ont
+changé pendant la réalisation :
+
+| Prévu | Réalisé | Raison |
+|-------|---------|--------|
+| Prisma (ORM, migrations) | `pg` avec requêtes SQL paramétrées ; migrations SQL versionnées (`infrastructure/database/migrations`, `apps/api/src/db/migrate.ts`) | Les requêtes spatiales PostGIS (`ST_DWithin`, `ST_Distance`) s'écrivent directement en SQL ; pas de couche à apprendre |
+| Vitest + mocks de base | `bun test` contre une vraie base PostGIS (`TEST_DATABASE_URL`) | Les contraintes, transactions et requêtes spatiales sont testées telles qu'en production |
+
+La sûreté des contrats ne repose plus sur les types Prisma mais sur les tests de conformité
+(`apps/api/tests/conformance`) : chaque route est comparée à `specs/api`, et chaque réponse
+obtenue en test est validée contre son schéma. Voir ADR-0002.

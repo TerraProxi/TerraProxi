@@ -1,206 +1,119 @@
 openapi: 3.1.0
 info:
-  title: TerraProxi API - Authentication
-  version: 1.0.0
+  title: TerraProxi API - Authentification
+  version: 1.1.0
   description: |
-    API pour l'authentification des utilisateurs (inscription, connexion, gestion du profil)
+    Inscription, connexion et sessions. Le jeton d'accès (JWT, 15 min) est renouvelé avec un
+    refresh token opaque (7 jours, usage unique) ; seule son empreinte SHA-256 est stockée.
+    Implémentation : apps/api/src/routes/auth.routes.ts — scénarios : specs/features/auth.feature.
   contact:
     name: TerraProxi Team
     email: dev@terraproxi.fr
   license:
     name: Proprietary
-    url: https://www.terraproxi.fr/legal
+    url: https://app.terraproxi.fr/legal
 servers:
   - url: https://gateway.terraproxi.fr/api
-    description: Production environment
+    description: Production
   - url: http://localhost:3002/api
-    description: Development environment
+    description: Développement
 tags:
   - name: Auth
-    description: Authentification et gestion des utilisateurs
-security:
-  - bearerAuth: []
+    description: Authentification et sessions
+
 paths:
   /auth/register:
     post:
       summary: Inscription
-      description: |
-        Crée un nouveau compte utilisateur. Le consentement RGPD est obligatoire.
-        Le rôle par défaut est CONSUMER si non spécifié.
+      description: Crée un compte CONSUMER (par défaut) ou PRODUCER. Le consentement RGPD est obligatoire ; l'email est enregistré en minuscules.
       operationId: register
-      tags:
-        - Auth
+      tags: [Auth]
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - email
-                - password
-                - first_name
-                - last_name
-                - gdpr_consent
+              required: [email, password, first_name, last_name, gdpr_consent]
               properties:
                 email:
                   type: string
                   format: email
-                  minLength: 1
-                  example: user@example.com
+                  maxLength: 255
+                  example: alice@example.com
                 password:
                   type: string
                   minLength: 8
-                  example: password123
+                  maxLength: 128
                 first_name:
                   type: string
                   minLength: 1
-                  example: Jean
+                  maxLength: 100
                 last_name:
                   type: string
                   minLength: 1
-                  example: Dupont
+                  maxLength: 100
                 role:
                   type: string
                   enum: [CONSUMER, PRODUCER]
-                  example: CONSUMER
+                  default: CONSUMER
                 gdpr_consent:
                   type: boolean
-                  example: true
+                  description: Doit valoir true, sinon 400
+              additionalProperties: false
       responses:
         '201':
-          description: Utilisateur créé avec succès
+          description: Compte créé, session ouverte
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - user
-                  - access_token
-                properties:
-                  user:
-                    $ref: '#/components/schemas/User'
-                  access_token:
-                    type: string
-                    description: Token JWT pour l'authentification future
-                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+                $ref: '#/components/schemas/Session'
         '400':
-          description: Requête invalide (consentement RGPD manquant ou email déjà utilisé)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
         '409':
-          description: Email déjà utilisé
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Conflict'
+
   /auth/login:
     post:
       summary: Connexion
-      description: |
-        Connecte un utilisateur existant avec son email et mot de passe.
-        Retourne le jeton d'accès.
+      description: Vérifie l'email et le mot de passe (bcrypt). Un compte désactivé est refusé comme un mauvais mot de passe.
       operationId: login
-      tags:
-        - Auth
+      tags: [Auth]
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - email
-                - password
+              required: [email, password]
               properties:
                 email:
                   type: string
                   format: email
-                  example: user@example.com
                 password:
                   type: string
-                  example: password123
+                  minLength: 1
+              additionalProperties: false
       responses:
         '200':
-          description: Connexion réussie
+          description: Session ouverte
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - user
-                  - access_token
-                properties:
-                  user:
-                    $ref: '#/components/schemas/User'
-                  access_token:
-                    type: string
-                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
-                  refresh_token:
-                    type: string
-                    description: Jeton opaque (7 jours, usage unique) pour POST /auth/refresh
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Email ou mot de passe incorrect (ou compte inactive)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /auth/me:
-    get:
-      summary: Profil courant
-      description: |
-        Récupère le profil de l'utilisateur authentifié.
-      operationId: getMe
-      tags:
-        - Auth
-      responses:
-        '200':
-          description: Profil de l'utilisateur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: Token manquant ou invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Utilisateur introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
+
   /auth/refresh:
     post:
       summary: Renouveler la session
-      description: |
-        Échange un refresh token contre une nouvelle paire de jetons.
-        Le refresh token est à usage unique (rotation) ; seule son empreinte SHA-256 est stockée.
+      description: Échange un refresh token valide contre une nouvelle paire de jetons ; l'ancien refresh token est consommé.
       operationId: refreshSession
-      tags:
-        - Auth
+      tags: [Auth]
       security: []
       requestBody:
         required: true
@@ -214,26 +127,18 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [access_token, refresh_token]
-                properties:
-                  access_token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/TokenPair'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Refresh token inconnu, expiré ou déjà utilisé
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
+
   /auth/logout:
     post:
       summary: Déconnexion
-      description: Révoque le refresh token côté serveur.
+      description: Révoque le refresh token côté serveur. Répond 204 même si le jeton était déjà invalide.
       operationId: logout
-      tags:
-        - Auth
+      tags: [Auth]
       security: []
       requestBody:
         required: true
@@ -244,78 +149,89 @@ paths:
       responses:
         '204':
           description: Session révoquée
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/me:
+    get:
+      summary: Utilisateur courant
+      description: Renvoie l'utilisateur correspondant au jeton d'accès.
+      operationId: getCurrentUser
+      tags: [Auth]
+      responses:
+        '200':
+          description: Utilisateur
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/user.schema.json'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
-        Génére lors de l'inscription ou de la connexion.
   schemas:
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token:
+          type: string
+          description: JWT (claims sub, role), 15 minutes
+        refresh_token:
+          type: string
+          description: Jeton opaque, 7 jours, usage unique
+      additionalProperties: false
+    Session:
+      type: object
+      required: [user, access_token, refresh_token]
+      properties:
+        user:
+          $ref: '../schemas/user.schema.json'
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+      additionalProperties: false
     RefreshTokenBody:
       type: object
-      required:
-        - refresh_token
+      required: [refresh_token]
       properties:
         refresh_token:
           type: string
-          description: Jeton opaque reçu à l'inscription, à la connexion ou au dernier renouvellement
-    User:
-      type: object
-      required:
-        - id
-        - email
-        - first_name
-        - last_name
-        - role
-        - created_at
-      properties:
-        id:
-          type: string
-          example: user-001
-        email:
-          type: string
-          format: email
-          example: user@example.com
-        first_name:
-          type: string
-          example: Jean
-        last_name:
-          type: string
-          example: Dupont
-        role:
-          type: string
-          enum: [CONSUMER, PRODUCER, ADMIN]
-          example: CONSUMER
-        phone:
-          type: string
-          example: '+33612345678'
-        avatar_url:
-          type: string
-          format: uri
-          example: https://example.com/avatar.jpg
-        created_at:
-          type: string
-          format: date-time
-          example: 2025-04-01T10:00:00Z
-    Error:
-      type: object
-      required:
-        - error
-        - status
-      properties:
-        error:
-          type: string
-          example: Email manquant
-        status:
-          type: integer
-          example: 400
-          enum: [400, 401, 403, 404, 409, 500]
-        details:
-          type: object
-          additionalProperties: true
-          example:
-            field: email
-            message: Email déjà utilisé
+          minLength: 1
+      additionalProperties: false
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Identifiants, jeton ou session invalides
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Utilisateur introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Conflict:
+      description: Email déjà utilisé
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

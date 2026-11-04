@@ -1,450 +1,226 @@
 openapi: 3.1.0
 info:
-  title: TerraProxi API - Products
-  version: 1.0.0
+  title: TerraProxi API - Catalogue
+  version: 1.1.0
   description: |
-    API de gestion du catalogue de produits
+    Catalogue public et gestion des produits par leur producteur.
+    Implémentation : apps/api/src/routes/products.routes.ts — scénarios : specs/features/products.feature.
   contact:
     name: TerraProxi Team
     email: dev@terraproxi.fr
   license:
     name: Proprietary
-    url: https://www.terraproxi.fr/legal
+    url: https://app.terraproxi.fr/legal
 servers:
   - url: https://gateway.terraproxi.fr/api
-    description: Production environment
+    description: Production
   - url: http://localhost:3002/api
-    description: Development environment
+    description: Développement
 tags:
   - name: Products
-    description: Catalogue de produits des producteurs
-security:
-  - bearerAuth: []
+    description: Catalogue produits
+
 paths:
   /products:
     get:
-      summary: Liste des produits
-      description: |
-        Récupère le catalogue des produits avec plusieurs filtres.
+      summary: Catalogue public
+      description: Produits de tous les producteurs, les plus récents d'abord, filtrables.
       operationId: listProducts
-      tags:
-        - Products
+      tags: [Products]
+      security: []
       parameters:
         - name: producer_id
           in: query
-          description: Filtre par producteur (optionnel)
-          required: false
           schema:
             type: string
-            example: prod-001
+            format: uuid
         - name: category
           in: query
-          description: Filtre par catégorie (optionnel)
-          required: false
           schema:
-            type: string
-            example: FRUITS_VEGETABLES
+            $ref: '../schemas/product.schema.json#/$defs/ProductCategory'
         - name: available
           in: query
-          description: Filtrer uniquement les produits disponibles (true ou false)
-          required: false
+          description: true ou false ; absent = tous les produits
           schema:
             type: boolean
-            allowEmptyValue: false
-            example: true
         - name: search
           in: query
-          description: Terme de recherche (match du nom ou de la description)
-          required: false
+          description: Recherche insensible à la casse dans le nom et la description
           schema:
             type: string
-            example: tomate
+            maxLength: 100
         - name: limit
           in: query
-          description: "Nombre maximum de résultats (défaut: 40, max: 100)"
-          required: false
+          description: Nombre de résultats (défaut 40, plafonné à 100)
           schema:
             type: integer
             minimum: 1
-            maximum: 100
-            example: 40
+            default: 40
         - name: offset
           in: query
-          description: "Pagination (défaut: 0)"
-          required: false
           schema:
             type: integer
             minimum: 0
-            example: 0
+            default: 0
       responses:
         '200':
-          description: Liste des produits
+          description: Produits
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Product'
+                  $ref: '../schemas/product.schema.json'
         '400':
-          description: Requête invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
     post:
-      summary: Créer un produit pour ce producteur
-      description: |
-        Ajoute un nouveau produit au catalogue du producteur connecté.
-        Rôle requis: PRODUCER
+      summary: Créer un produit
+      description: Le produit est rattaché à la fiche du producteur connecté (404 si elle n'existe pas).
       operationId: createProduct
-      tags:
-        - Products
-      security:
-        - bearerAuth: []  # rôle PRODUCER requis
+      tags: [Products]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductInput'
+              $ref: '../schemas/product.schema.json#/$defs/ProductInput'
       responses:
         '201':
           description: Produit créé
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Product'
+                $ref: '../schemas/product.schema.json'
         '400':
-          description: Données invalides
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Non authentifié ou mauvais rôle
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Suffisance de rôle insuffisante
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Forbidden'
         '404':
-          description: Profil producteur introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur interne
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /products/{id}:
-    get:
-      summary: Détail d'un produit
-      description: Récupère le détail complet d'un produit spécifique
-      operationId: getProductById
-      tags:
-        - Products
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Identifiant du produit
-          schema:
-            type: string
-            example: sku-001
-      responses:
-        '200':
-          description: Détail du produit
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-        '404':
-          description: Produit introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur serveur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    put:
-      summary: Modifier un produit
-      description: |
-        Met à jour un produit appartenant au producteur connecté.
-        Rôle requis: PRODUCER
-      operationId: updateProduct
-      tags:
-        - Products
-      security:
-        - bearerAuth: []  # rôle PRODUCER requis
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Identifiant du produit
-          schema:
-            type: string
-            example: sku-001
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductInput'
-      responses:
-        '200':
-          description: Produit mis à jour
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Product'
-        '400':
-          description: Données invalides
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Non authentifié ou mauvais rôle
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Suffisance de rôle insuffisante
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Produit introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Le produit n'appartient pas à ce producteur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur interne
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Supprimer un produit
-      description: |
-        Supprime un produit appartenant au producteur connecté.
-        Rôle requis: PRODUCER
-      operationId: deleteProduct
-      tags:
-        - Products
-      security:
-        - bearerAuth: []  # rôle PRODUCER requis
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Identifiant du produit
-          schema:
-            type: string
-            example: sku-001
-      responses:
-        '204':
-          description: Produit supprimé
-          content:
-            application/json:
-              schema:
-                type: object
-                description: No content
-        '401':
-          description: Non authentifié ou mauvais rôle
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Suffisance de rôle insuffisante
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Produit introuvable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Le produit n'appartient pas à ce producteur
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Erreur interne
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
+
   /products/mine:
     get:
       summary: Mon catalogue
-      description: Produits du producteur connecté, y compris ceux masqués (is_available = false).
+      description: Produits du producteur connecté, masqués compris, triés par nom.
       operationId: listMyProducts
-      tags:
-        - Products
-      security:
-        - bearerAuth: []
+      tags: [Products]
       responses:
         '200':
-          description: Liste des produits
+          description: Produits
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Product'
+                  $ref: '../schemas/product.schema.json'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Réservé au rôle PRODUCER
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/Forbidden'
         '404':
-          description: Profil producteur pas encore créé
+          $ref: '#/components/responses/NotFound'
+
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Fiche produit
+      description: Accessible sans compte.
+      operationId: getProduct
+      tags: [Products]
+      security: []
+      responses:
+        '200':
+          description: Produit, avec producer_name et producer_city
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '../schemas/product.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Modifier un produit
+      description: Réservé au producteur propriétaire. unit, category et is_available absents sont conservés.
+      operationId: updateProduct
+      tags: [Products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/product.schema.json#/$defs/ProductInput'
+      responses:
+        '200':
+          description: Produit modifié
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/product.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Supprimer un produit
+      description: Réservé au producteur propriétaire. Les lignes de commande existantes gardent le nom du produit.
+      operationId: deleteProduct
+      tags: [Products]
+      responses:
+        '204':
+          description: Produit supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
-  schemas:
-    ProductCategory:
-      type: string
-      enum:
-        - FRUITS_VEGETABLES
-        - DAIRY
-        - MEAT
-        - BEVERAGES
-        - FINE_GROCERY
-        - CRAFTS
-        - FLOWERS_PLANTS
-        - OTHER
-    Product:
-      type: object
-      required:
-        - id
-        - producer_id
-        - name
-        - price
-        - stock
-        - unit
-        - category
-        - is_available
-        - created_at
-      properties:
-        id:
-          type: string
-          example: sku-001
-        producer_id:
-          type: string
-          description: Producteur propriétaire du produit
-          example: prod-001
-        name:
-          type: string
-          minLength: 1
-          description: Nom du produit
-          example: Œufs Plein Air
-        description:
-          type: string
-          description: Description du produit
-          example: Œufs de poules élevées en plein air
-        price:
-          type: number
-          format: float
-          minimum: 0
-          description: Prix unitaire en euros
-          example: 6.5
-        stock:
-          type: integer
-          minimum: 0
-          description: Quantité disponible
-          example: 25
-        unit:
-          type: string
-          description: Unité de vente (kg, boîte, pièce, L...)
-          example: boîte de 12
-        category:
-          $ref: '#/components/schemas/ProductCategory'
-          example: DAIRY
-        image_url:
-          type: string
-          format: uri
-          description: URL de l'image du produit
-          example: https://images.unsplash.com/photo-1582722134903...
-        is_available:
-          type: boolean
-          description: Indique si le produit est disponible
-          example: true
-        created_at:
-          type: string
-          format: date-time
-          description: Date de création
-          example: 2025-04-01T08:20:00Z
-    ProductInput:
-      allOf:
-        - $ref: '#/components/schemas/Product'
-        - type: object
-          required:
-            - producer_id
-          properties:
-            producer_id:
-              type: string
-              description: Producteur propriétaire (requis pour la création)
-              example: prod-001
-    Error:
-      type: object
-      required:
-        - error
-        - status
-      properties:
-        error:
-          type: string
-          example: Produit introuvable
-        status:
-          type: integer
-          example: 404
-          enum: [400, 401, 403, 404, 409, 500]
-        details:
-          type: object
-          additionalProperties: true
-          example:
-            field: phone
-            message: Format invalide
+  responses:
+    BadRequest:
+      description: Paramètre ou corps invalide
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Forbidden:
+      description: Rôle PRODUCER requis, ou produit d'un autre producteur
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Produit ou fiche producteur introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

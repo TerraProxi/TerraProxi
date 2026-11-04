@@ -1,6 +1,7 @@
 # TerraProxi — Spécification API
 
-> Contrats de référence : `specs/api/*.yaml` (OpenAPI 3.1, vérifiés par `pnpm spec:lint`).
+> Contrats de référence : `specs/api/*.yaml` (OpenAPI 3.1) et `specs/schemas/*.json`. Le lint (`pnpm spec:lint`)
+> et les tests de conformité (`pnpm test`) garantissent que l'API leur correspond exactement — voir `specs/README.md`.
 > Documentation interactive générée par Elysia : `https://gateway.terraproxi.fr/swagger`
 > (production) ou `http://localhost:3002/swagger` (dev).
 

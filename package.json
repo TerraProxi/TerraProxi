@@ -18,13 +18,9 @@
     "db:migrate": "pnpm --filter @terraproxi/api db:migrate",
     "db:seed": "pnpm --filter @terraproxi/api db:seed",
     "spec:lint": "spectral lint \"specs/api/*.yaml\" --ruleset spectral.json --fail-severity error",
-    "spec:generate:ts": "openapi-typescript specs/api/*.yaml -o apps/api/src/types/api.types.ts",
-    "spec:generate:mobile": "openapi-typescript specs/api/*.yaml -o apps/mobile/src/types/api.types.ts",
-    "spec:generate:web": "openapi-typescript specs/api/*.yaml -o apps/web/src/types/api.types.ts",
-    "spec:check": "pnpm spec:lint && pnpm spec:generate:ts"
+    "spec:check": "pnpm spec:lint && pnpm --filter @terraproxi/api test tests/conformance"
   },
   "devDependencies": {
-    "openapi-typescript": "^6.7.3",
     "@stoplight/spectral-cli": "^6.6.0",
     "typescript": "^5.4.5"
   },

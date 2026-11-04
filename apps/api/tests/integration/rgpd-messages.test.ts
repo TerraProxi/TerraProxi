@@ -59,6 +59,11 @@ describe.skipIf(!hasTestDatabase)('RGPD', () => {
     expect(res.body.orders).toHaveLength(1)
     expect(res.body.orders[0].items[0].product_name).toBe('Tomates')
     expect(res.body.messages).toHaveLength(1)
+    expect(res.body.producer).toBeNull()
+
+    const producerExport = await call('GET', '/api/users/me/export', { token: producer.token })
+    expect(producerExport.status).toBe(200)
+    expect(producerExport.body.producer).toMatchObject({ id: producerId, company_name: expect.any(String) })
   })
 
   test('droit à l\'oubli : compte, messages et sessions supprimés, commandes anonymisées', async () => {
