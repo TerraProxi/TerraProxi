@@ -68,6 +68,7 @@ Voir [`docs/setup.md`](docs/setup.md) pour le guide complet.
 | [docs/guide-utilisateur.md](docs/guide-utilisateur.md) | Guide consommateur & producteur |
 | [docs/rgpd.md](docs/rgpd.md) | Conformité RGPD |
 | [docs/tests.md](docs/tests.md) | Plan de tests |
+| [docs/maintenance.md](docs/maintenance.md) | Maintenance (déploiement, sauvegardes, supervision) |
 | [BACKLOG.md](BACKLOG.md) | Backlog produit (référence Trello) |
 | [architecture.md](architecture.md) | Architecture détaillée |
 | [folder_structure.md](folder_structure.md) | Structure des dossiers |
