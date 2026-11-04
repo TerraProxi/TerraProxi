@@ -144,6 +144,9 @@ paths:
                   access_token:
                     type: string
                     example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+                  refresh_token:
+                    type: string
+                    description: Jeton opaque (7 jours, usage unique) pour POST /auth/refresh
         '401':
           description: Email ou mot de passe incorrect (ou compte inactive)
           content:
@@ -189,6 +192,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      summary: Renouveler la session
+      description: |
+        Échange un refresh token contre une nouvelle paire de jetons.
+        Le refresh token est à usage unique (rotation) ; seule son empreinte SHA-256 est stockée.
+      operationId: refreshSession
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenBody'
+      responses:
+        '200':
+          description: Nouvelle paire de jetons
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, refresh_token]
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+        '401':
+          description: Refresh token inconnu, expiré ou déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/logout:
+    post:
+      summary: Déconnexion
+      description: Révoque le refresh token côté serveur.
+      operationId: logout
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenBody'
+      responses:
+        '204':
+          description: Session révoquée
 components:
   securitySchemes:
     bearerAuth:
@@ -199,6 +254,14 @@ components:
         Token JWT à fournir dans l'en-tête Authorization: Bearer <token>
         Génére lors de l'inscription ou de la connexion.
   schemas:
+    RefreshTokenBody:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: Jeton opaque reçu à l'inscription, à la connexion ou au dernier renouvellement
     User:
       type: object
       required:
@@ -228,7 +291,7 @@ components:
           example: CONSUMER
         phone:
           type: string
-          example: +33612345678
+          example: '+33612345678'
         avatar_url:
           type: string
           format: uri

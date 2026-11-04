@@ -1,37 +1,43 @@
 #!/usr/bin/env bash
-# Script de déploiement sur le serveur OVH
-# Usage : ./deploy.sh [--skip-build]
-# Prérequis : Docker, docker compose, fichier .env présent dans /opt/terraproxi
+# Déploiement sur le serveur OVH — voir docs/maintenance.md
+# Usage : ./infrastructure/docker/deploy.sh [--skip-build]
+# Prérequis : Docker + docker compose, dépôt cloné dans /opt/terraproxi, .env renseigné
 
 set -euo pipefail
 
-APP_DIR="/opt/terraproxi"
+APP_DIR="${APP_DIR:-/opt/terraproxi}"
+HEALTH_URL="${HEALTH_URL:-https://gateway.terraproxi.fr/health}"
+HEALTH_RETRIES=12
 cd "$APP_DIR"
 
 echo "=== TerraProxi — Déploiement $(date) ==="
 
-# 1. Récupérer la dernière version du code
-git pull origin main
+# 1. Dernière version du code
+git pull --ff-only origin main
+echo "--- Version : $(git rev-parse --short HEAD)"
 
-# 2. Build des images (sauf si --skip-build)
+# 2. Build des images (contexte = racine du dépôt, cf. docker-compose.yml)
 if [[ "${1:-}" != "--skip-build" ]]; then
-  echo "--- Build de l'image API..."
-  docker build -t terraproxi-back:latest ./apps/api
-
-  echo "--- Build de l'image Front..."
-  docker build -t terraproxi-front:latest ./apps/web
+  echo "--- Build des images API et front..."
+  docker compose build back front
 fi
 
-# 3. Redémarrage des services
+# 3. Redémarrage : l'API applique ses migrations au démarrage
 echo "--- Redémarrage des conteneurs..."
-docker compose pull caddy  # Màj de Caddy si besoin
-docker compose up -d --force-recreate back front caddy
+docker compose pull caddy db
+docker compose up -d --remove-orphans
 
-# 4. Vérification du healthcheck
+# 4. Vérification : /health renvoie 200 uniquement si PostgreSQL répond
 echo "--- Attente du healthcheck API..."
-sleep 5
-curl -sf https://gateway.terraproxi.fr/health | grep -q '"status":"ok"' \
-  && echo "✓ API répond correctement" \
-  || (echo "✗ API ne répond pas !" && exit 1)
+for attempt in $(seq 1 "$HEALTH_RETRIES"); do
+  if curl -sf "$HEALTH_URL" | grep -q '"status":"ok"'; then
+    echo "✓ API opérationnelle (tentative $attempt)"
+    echo "=== Déploiement terminé avec succès ==="
+    exit 0
+  fi
+  sleep 5
+done
 
-echo "=== Déploiement terminé avec succès ==="
+echo "✗ L'API ne répond pas — derniers logs :"
+docker compose logs --tail=50 back
+exit 1

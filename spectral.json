@@ -1,11 +1,7 @@
 {
-  "extends": ["@stoplight/spectral-rulesets/oas/strict"],
+  "extends": [["spectral:oas", "recommended"]],
   "rules": {
-    "info-null": "off",
-    "info-description": "warn",
-    "springschema-required": "warn",
-    "info-contact": "warn",
-    "info-license-url": "warn",
-    "info-contact-url": "warn"
+    "info-contact": "off",
+    "oas3-api-servers": "off"
   }
 }
