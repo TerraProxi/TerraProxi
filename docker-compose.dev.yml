@@ -1,4 +1,6 @@
-# Compose pour développement local — expose les ports pour faciliter le debug
+# Développement local
+#   docker compose -f docker-compose.dev.yml up -d db        → base seule (API/web lancés avec pnpm)
+#   docker compose -f docker-compose.dev.yml up -d --build   → base + API + web en conteneurs
 services:
   db:
     image: postgis/postgis:16-3.4-alpine
@@ -11,12 +13,40 @@ services:
       - "5432:5432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
-      - ./infrastructure/database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app_user -d terraproxi"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://app_user:devpassword@db:5432/terraproxi
+      JWT_SECRET: dev-only-secret-change-me-0123456789abcdef
+      NODE_ENV: development
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      - "3002:3002"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3002/api
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "3000:8080"
+    depends_on:
+      - api
 
 volumes:
   pgdata_dev:

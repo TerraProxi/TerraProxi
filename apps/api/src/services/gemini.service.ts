@@ -58,7 +58,7 @@ function getGeminiConfig() {
       'Assistant IA indisponible : GEMINI_API_KEY non configurée',
     )
   }
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash'
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash'
   return { apiKey, model }
 }
 

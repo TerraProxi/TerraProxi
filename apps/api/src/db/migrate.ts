@@ -13,6 +13,24 @@ import { db, withTransaction, closeDb } from './client'
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
   ?? resolve(import.meta.dir, '../../../..', 'infrastructure', 'database', 'migrations')
 
+/**
+ * Les bases créées avant ce script (001 joué par docker-entrypoint-initdb.d)
+ * ont le schéma mais pas de journal : on marque 001 comme appliquée pour ne
+ * pas rejouer ses CREATE TYPE / CREATE TABLE.
+ */
+async function baselineLegacyDatabase(firstMigration: string | undefined, log: (msg: string) => void) {
+  if (!firstMigration) return
+  const state = await db.query<{ logged: number; has_users: boolean }>(
+    `SELECT (SELECT COUNT(*)::int FROM migration_log) AS logged,
+            to_regclass('public.users') IS NOT NULL AS has_users`,
+  )
+  const { logged, has_users } = state.rows[0]
+  if (logged === 0 && has_users) {
+    await db.query('INSERT INTO migration_log (filename) VALUES ($1)', [firstMigration])
+    log(`[migrate] base existante détectée : ${firstMigration} marquée comme appliquée`)
+  }
+}
+
 export async function runMigrations(log: (msg: string) => void = console.log): Promise<string[]> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS migration_log (
@@ -22,10 +40,11 @@ export async function runMigrations(log: (msg: string) => void = console.log): P
     )
   `)
 
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort()
+  await baselineLegacyDatabase(files[0], log)
+
   const applied = await db.query<{ filename: string }>('SELECT filename FROM migration_log')
   const appliedSet = new Set(applied.rows.map((r) => r.filename))
-
-  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort()
   const newlyApplied: string[] = []
 
   for (const file of files) {
