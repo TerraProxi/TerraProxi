@@ -137,8 +137,8 @@ async function fetchAvailableProducts(
 
 /**
  * Charge le catalogue producteurs + produits via la couche db unifiée.
- * PostgreSQL si disponible, sinon fallback mock (seed.ts) — même interface,
- * mêmes champs injectés dans le prompt Gemini.
+ * Lit PostgreSQL (alimenté en démo par `pnpm db:seed`) ; ces champs sont
+ * injectés dans le prompt Gemini.
  */
 export interface ProducerCatalogResult {
   producers: CatalogProducer[]
