@@ -90,8 +90,12 @@ export interface SanitizedProductPick {
   quantity_options: number[]
 }
 
+export interface SanitizedCartActionClear {
+  type: 'clear_cart'
+}
+
 export interface AiProductPickInput {
-  product_id: string
+  product_id?: string
   short_label?: string
   quantity_options?: number[]
 }
@@ -242,6 +246,7 @@ export function sanitizeProductPicks(
   const sanitized: SanitizedProductPick[] = []
 
   for (const pick of picks.slice(0, 5)) {
+    if (!pick.product_id) continue
     const product = productMap.get(pick.product_id)
     if (!product) continue
 

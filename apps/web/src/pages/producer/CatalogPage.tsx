@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { AxiosError } from 'axios'
 import { MainLayout } from '../../components/layout/MainLayout'
-import { productsService, type Product } from '../../services/products.service'
+import { productsService, toProductInput, type Product } from '../../services/products.service'
+import { apiErrorMessage } from '../../services/api'
 import { Badge } from '../../components/ui/Badge'
 
 const CATEGORIES = [
@@ -30,22 +33,35 @@ export function CatalogPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Partial<Product> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasProfile, setHasProfile] = useState(true)
 
-  const load = () => productsService.list().then(({ data }) => setProducts(data)).finally(() => setLoading(false))
+  const load = () => productsService.mine()
+    .then(({ data }) => setProducts(data))
+    .catch((err) => {
+      if (err instanceof AxiosError && err.response?.status === 404) setHasProfile(false)
+      else setError(apiErrorMessage(err, 'Impossible de charger le catalogue'))
+    })
+    .finally(() => setLoading(false))
 
   useEffect(() => { load() }, [])
 
   const handleSave = async () => {
     if (!editing) return
+    const input = toProductInput(editing)
+    if (!input.name) {
+      setError('Le nom du produit est obligatoire')
+      return
+    }
     setSaving(true)
+    setError(null)
     try {
-      if (editing.id) {
-        await productsService.update(editing.id, editing)
-      } else {
-        await productsService.create(editing as Omit<Product, 'id' | 'created_at' | 'producer_name'>)
-      }
+      if (editing.id) await productsService.update(editing.id, input)
+      else await productsService.create(input)
       setEditing(null)
       await load()
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Enregistrement impossible'))
     } finally {
       setSaving(false)
     }
@@ -53,8 +69,22 @@ export function CatalogPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer ce produit ?')) return
-    await productsService.delete(id)
-    setProducts((p) => p.filter((x) => x.id !== id))
+    try {
+      await productsService.delete(id)
+      setProducts((p) => p.filter((x) => x.id !== id))
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Suppression impossible'))
+    }
+  }
+
+  if (!loading && !hasProfile) {
+    return (
+      <MainLayout>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-4)' }}>Mon catalogue</h1>
+        <p style={{ marginBottom: 'var(--space-4)' }}>Créez d'abord votre fiche producteur : elle rend vos produits visibles sur la carte.</p>
+        <Link to="/producer/profile" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>Créer ma fiche producteur →</Link>
+      </MainLayout>
+    )
   }
 
   const fieldStyle = {
@@ -78,6 +108,8 @@ export function CatalogPage() {
           + Ajouter un produit
         </button>
       </div>
+
+      {error && <div className="tp-alert tp-alert--error" role="alert">{error}</div>}
 
       {/* Formulaire */}
       {editing && (

@@ -24,11 +24,9 @@ interface ProducerData {
   is_verified: boolean
   first_name: string
   last_name: string
-  distance_km: number
-  rating: number
-  review_count: number
+  distance_km?: number | null
   categories: string[]
-  is_open: boolean
+  opening_hours?: string | null
 }
 
 export function ProducerProfileScreen({ route, navigation }: Props) {
@@ -154,11 +152,12 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         <Text style={styles.producerName}>{producer.company_name}</Text>
         <Text style={styles.producerMeta}>{producer.city}</Text>
 
-        <View style={styles.ratingBadge}>
-          <MaterialCommunityIcons name="star" size={18} color={Colors.yellow500} />
-          <Text style={styles.ratingText}>{producer.rating}</Text>
-          <Text style={styles.reviewCount}>({producer.review_count} avis)</Text>
-        </View>
+        {producer.opening_hours ? (
+          <View style={styles.ratingBadge}>
+            <MaterialCommunityIcons name="clock-outline" size={18} color={Colors.primary} />
+            <Text style={styles.reviewCount}>{producer.opening_hours}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.shopBtn} onPress={handleShop}>
@@ -180,7 +179,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         <View style={styles.aboutCard}>
           <Text style={styles.aboutText}>{producer.description}</Text>
           <View style={styles.categoryPills}>
-            {producer.categories.map((cat) => (
+            {(producer.categories ?? []).map((cat) => (
               <View key={cat} style={styles.categoryPill}>
                 <Text style={styles.categoryPillText}>{cat}</Text>
               </View>
@@ -200,7 +199,9 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           </View>
           <View style={styles.locationInfo}>
             <Text style={styles.addressText}>{producer.address}</Text>
-            <Text style={styles.distanceText}>{producer.distance_km} km de vous</Text>
+            {producer.distance_km != null && (
+              <Text style={styles.distanceText}>{producer.distance_km.toFixed(1)} km de vous</Text>
+            )}
           </View>
           <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />

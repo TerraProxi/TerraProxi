@@ -1,218 +1,243 @@
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
-import { db } from '../db/client'
-import { notFound, forbidden, badRequest } from '../utils/errors'
-import type { Order, OrderItem, Product } from '../models/types'
+import { db, withTransaction } from '../db/client'
+import { AppError, badRequest, forbidden, notFound } from '../utils/errors'
+import { canTransition, shouldRestock, type OrderActor } from '../services/order-status'
+import type { Order, OrderStatus } from '../models/types'
 
-const orderItemSchema = t.Object({
-  product_id: t.String(),
-  quantity:   t.Integer({ minimum: 1 }),
-})
+const DEFAULT_LIMIT = 20
+const MAX_LIMIT = 100
+
+const ORDER_STATUSES = ['PENDING', 'PAID', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'] as const
+const statusSchema = t.Union(ORDER_STATUSES.map((s) => t.Literal(s)))
+
+const ITEMS_JSON = `COALESCE(json_agg(json_build_object(
+    'id', oi.id, 'product_id', oi.product_id, 'product_name', oi.product_name,
+    'quantity', oi.quantity, 'unit_price', oi.unit_price::float
+  ) ORDER BY oi.product_name) FILTER (WHERE oi.id IS NOT NULL), '[]') AS items`
+
+const ORDER_COLUMNS = `o.id, o.consumer_id, o.producer_id, o.status, o.total_price::float AS total_price,
+  o.delivery_mode, o.delivery_address, o.notes, o.stripe_payment_intent, o.created_at, o.updated_at`
+
+async function findProducerId(userId: string): Promise<string | null> {
+  const res = await db.query<{ id: string }>('SELECT id FROM producers WHERE user_id = $1', [userId])
+  return res.rows[0]?.id ?? null
+}
 
 export const ordersRoutes = new Elysia({ prefix: '/orders' })
   .use(authGuard())
 
-  /** POST /api/orders — création d'une commande depuis le panier */
+  /**
+   * POST /api/orders — commande auprès d'un producteur (ORDER-3).
+   * Les prix viennent de la base, jamais du client. Le stock est réservé dans la
+   * même transaction avec un UPDATE conditionnel : deux commandes simultanées ne
+   * peuvent pas vendre la même unité.
+   */
   .post(
     '/',
     async ({ body, user, set }) => {
-      const { producer_id, items, notes } = body
-
-      if (!items.length) throw badRequest('La commande doit contenir au moins un article')
-
-      // Vérification stock et calcul du total
-      let total = 0
-      const enriched: Array<{ product: Product; quantity: number }> = []
-
-      for (const item of items) {
-        const res = await db.query<Product>(
-          'SELECT * FROM products WHERE id = $1 AND producer_id = $2 AND is_available = true',
-          [item.product_id, producer_id],
-        )
-        const product = res.rows[0]
-        if (!product) throw badRequest(`Produit ${item.product_id} indisponible`)
-        if (product.stock < item.quantity) {
-          throw badRequest(`Stock insuffisant pour ${product.name}`)
-        }
-        total += Number(product.price) * item.quantity
-        enriched.push({ product, quantity: item.quantity })
+      if (user.role !== 'CONSUMER') throw forbidden()
+      const { producer_id, items, notes, delivery_mode = 'pickup', delivery_address } = body
+      if (delivery_mode === 'delivery' && !delivery_address?.trim()) {
+        throw badRequest('Adresse de livraison requise')
       }
 
-      // Transaction DB : création commande + lignes + décrément stock
-      const client = await db.getClient()
-      try {
-        await client.query('BEGIN')
+      const quantities = new Map<string, number>()
+      for (const item of items) {
+        quantities.set(item.product_id, (quantities.get(item.product_id) ?? 0) + item.quantity)
+      }
+
+      const order = await withTransaction(async (client) => {
+        let total = 0
+        const lines: Array<{ id: string; name: string; price: number; quantity: number }> = []
+
+        // Ordre stable des verrous de ligne : évite les interblocages entre commandes
+        for (const [productId, quantity] of [...quantities].sort(([a], [b]) => a.localeCompare(b))) {
+          const reserved = await client.query<{ id: string; name: string; price: string }>(
+            `UPDATE products SET stock = stock - $1
+             WHERE id = $2 AND producer_id = $3 AND is_available = true AND stock >= $1
+             RETURNING id, name, price`,
+            [quantity, productId, producer_id],
+          )
+          const product = reserved.rows[0]
+          if (!product) {
+            const exists = await client.query<{ name: string }>(
+              'SELECT name FROM products WHERE id = $1 AND producer_id = $2 AND is_available = true',
+              [productId, producer_id],
+            )
+            throw exists.rows[0]
+              ? badRequest(`Stock insuffisant pour ${exists.rows[0].name}`)
+              : badRequest(`Produit ${productId} indisponible chez ce producteur`)
+          }
+          const price = Number(product.price)
+          total += price * quantity
+          lines.push({ id: product.id, name: product.name, price, quantity })
+        }
 
         const orderRes = await client.query<Order>(
-          `INSERT INTO orders (consumer_id, producer_id, total_price, notes)
-           VALUES ($1, $2, $3, $4) RETURNING *`,
-          [user.sub, producer_id, total.toFixed(2), notes],
+          `INSERT INTO orders (consumer_id, producer_id, total_price, notes, delivery_mode, delivery_address)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, consumer_id, producer_id, status, total_price::float AS total_price,
+                     delivery_mode, delivery_address, notes, created_at`,
+          [user.sub, producer_id, total.toFixed(2), notes?.trim() || null, delivery_mode,
+            delivery_mode === 'delivery' ? delivery_address!.trim() : null],
         )
-        const order = orderRes.rows[0]
+        const created = orderRes.rows[0]
 
-        for (const { product, quantity } of enriched) {
+        for (const line of lines) {
           await client.query(
-            `INSERT INTO order_items (order_id, product_id, quantity, unit_price)
-             VALUES ($1, $2, $3, $4)`,
-            [order.id, product.id, quantity, product.price],
-          )
-          await client.query(
-            'UPDATE products SET stock = stock - $1 WHERE id = $2',
-            [quantity, product.id],
+            `INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [created.id, line.id, line.name, line.quantity, line.price],
           )
         }
+        return {
+          ...created,
+          items: lines.map((l) => ({
+            product_id: l.id, product_name: l.name, quantity: l.quantity, unit_price: l.price,
+          })),
+        }
+      })
 
-        await client.query('COMMIT')
-
-        set.status = 201
-        return order
-      } catch (err) {
-        await client.query('ROLLBACK')
-        throw err
-      } finally {
-        client.release()
-      }
+      set.status = 201
+      return order
     },
     {
       body: t.Object({
-        producer_id: t.String(),
-        items:       t.Array(orderItemSchema, { minItems: 1 }),
-        notes:       t.Optional(t.String()),
+        producer_id:      t.String({ format: 'uuid' }),
+        items:            t.Array(t.Object({
+          product_id: t.String({ format: 'uuid' }),
+          quantity:   t.Integer({ minimum: 1, maximum: 999 }),
+        }), { minItems: 1, maxItems: 50 }),
+        notes:            t.Optional(t.String({ maxLength: 1000 })),
+        delivery_mode:    t.Optional(t.Union([t.Literal('pickup'), t.Literal('delivery')])),
+        delivery_address: t.Optional(t.String({ maxLength: 500 })),
       }),
       detail: { summary: 'Créer une commande', tags: ['Orders'] },
     },
   )
 
-  /** GET /api/orders — liste selon le rôle (consommateur ou producteur) */
+  /** GET /api/orders — historique consommateur (ORDER-5) ou commandes reçues (ORDER-6). */
   .get(
     '/',
     async ({ user, query }) => {
-      const { status, limit = 20, offset = 0 } = query
+      const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT)
+      const offset = query.offset ?? 0
 
-      if (user.role === 'CONSUMER') {
-        const result = await db.query(
-          `SELECT o.*,
-                  pr.company_name AS producer_name,
-                  json_agg(json_build_object(
-                    'id', oi.id, 'quantity', oi.quantity, 'unit_price', oi.unit_price,
-                    'product_name', p.name, 'product_id', oi.product_id
-                  )) AS items
-           FROM orders o
-           JOIN producers pr ON pr.id = o.producer_id
-           JOIN order_items oi ON oi.order_id = o.id
-           JOIN products p ON p.id = oi.product_id
-           WHERE o.consumer_id = $1
-           ${status ? 'AND o.status = $4' : ''}
-           GROUP BY o.id, pr.company_name
-           ORDER BY o.created_at DESC
-           LIMIT $2 OFFSET $3`,
-          status ? [user.sub, limit, offset, status] : [user.sub, limit, offset],
-        )
-        return result.rows
+      let ownerFilter: string
+      let ownerId: string
+      if (user.role === 'PRODUCER') {
+        const producerId = await findProducerId(user.sub)
+        if (!producerId) return []
+        ownerFilter = 'o.producer_id = $1'
+        ownerId = producerId
+      } else {
+        ownerFilter = 'o.consumer_id = $1'
+        ownerId = user.sub
       }
 
-      // PRODUCER : voir les commandes liées à ses produits
-      const producer = await db.query(
-        'SELECT id FROM producers WHERE user_id = $1',
-        [user.sub],
-      )
-      if (!producer.rows[0]) return []
+      const params: unknown[] = [ownerId, limit, offset]
+      if (query.status) params.push(query.status)
 
       const result = await db.query(
-        `SELECT o.*,
-                u.first_name || ' ' || u.last_name AS consumer_name,
-                json_agg(json_build_object(
-                  'id', oi.id, 'quantity', oi.quantity, 'unit_price', oi.unit_price,
-                  'product_name', p.name, 'product_id', oi.product_id
-                )) AS items
+        `SELECT ${ORDER_COLUMNS},
+                pr.company_name AS producer_name,
+                COALESCE(u.first_name || ' ' || u.last_name, 'Client supprimé') AS consumer_name,
+                ${ITEMS_JSON}
          FROM orders o
-         JOIN users u ON u.id = o.consumer_id
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
-         WHERE o.producer_id = $1
-         ${status ? 'AND o.status = $4' : ''}
-         GROUP BY o.id, consumer_name
+         LEFT JOIN producers pr ON pr.id = o.producer_id
+         LEFT JOIN users u ON u.id = o.consumer_id
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+         WHERE ${ownerFilter} ${query.status ? 'AND o.status = $4' : ''}
+         GROUP BY o.id, pr.company_name, u.first_name, u.last_name
          ORDER BY o.created_at DESC
          LIMIT $2 OFFSET $3`,
-        status
-          ? [producer.rows[0].id, limit, offset, status]
-          : [producer.rows[0].id, limit, offset],
+        params,
       )
       return result.rows
     },
     {
       query: t.Object({
-        status: t.Optional(t.String()),
-        limit:  t.Optional(t.Number()),
-        offset: t.Optional(t.Number()),
+        status: t.Optional(statusSchema),
+        limit:  t.Optional(t.Integer({ minimum: 1 })),
+        offset: t.Optional(t.Integer({ minimum: 0 })),
       }),
       detail: { summary: 'Liste des commandes', tags: ['Orders'] },
     },
   )
 
-  /** GET /api/orders/:id */
+  /** GET /api/orders/:id — réservé au client et au producteur concernés. */
   .get(
     '/:id',
     async ({ params, user }) => {
-      const result = await db.query(
-        `SELECT o.*,
-                json_agg(json_build_object(
-                  'id', oi.id, 'product_id', oi.product_id, 'quantity', oi.quantity,
-                  'unit_price', oi.unit_price, 'product_name', p.name
-                )) AS items
+      const result = await db.query<Order & { producer_user_id: string | null }>(
+        `SELECT ${ORDER_COLUMNS}, pr.company_name AS producer_name, pr.user_id AS producer_user_id,
+                ${ITEMS_JSON}
          FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN products p ON p.id = oi.product_id
+         LEFT JOIN producers pr ON pr.id = o.producer_id
+         LEFT JOIN order_items oi ON oi.order_id = o.id
          WHERE o.id = $1
-         GROUP BY o.id`,
+         GROUP BY o.id, pr.company_name, pr.user_id`,
         [params.id],
       )
       const order = result.rows[0]
       if (!order) throw notFound('Commande')
+      if (order.consumer_id !== user.sub && order.producer_user_id !== user.sub) throw forbidden()
 
-      // Accès uniquement au consommateur concerné ou au producteur
-      const producer = await db.query(
-        'SELECT id FROM producers WHERE user_id = $1',
-        [user.sub],
-      )
-      const isProducer = producer.rows[0]?.id === order.producer_id
-      if (order.consumer_id !== user.sub && !isProducer) throw forbidden()
-
-      return order
+      const { producer_user_id: _owner, ...publicOrder } = order
+      return publicOrder
     },
-    { detail: { summary: 'Détail d\'une commande', tags: ['Orders'] } },
+    {
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      detail: { summary: 'Détail d\'une commande', tags: ['Orders'] },
+    },
   )
 
-  /** PATCH /api/orders/:id/status — producteur met à jour le statut */
+  /**
+   * PATCH /api/orders/:id/status — avancement par le producteur, annulation par
+   * le client tant que la commande n'est pas payée (services/order-status.ts).
+   */
   .patch(
     '/:id/status',
     async ({ params, body, user }) => {
-      const producer = await db.query(
-        'SELECT id FROM producers WHERE user_id = $1',
-        [user.sub],
-      )
+      return withTransaction(async (client) => {
+        const res = await client.query<{ status: OrderStatus; consumer_id: string | null; producer_user_id: string | null }>(
+          `SELECT o.status, o.consumer_id, pr.user_id AS producer_user_id
+           FROM orders o LEFT JOIN producers pr ON pr.id = o.producer_id
+           WHERE o.id = $1
+           FOR UPDATE OF o`,
+          [params.id],
+        )
+        const current = res.rows[0]
+        if (!current) throw notFound('Commande')
 
-      const order = await db.query<Order>(
-        'SELECT * FROM orders WHERE id = $1',
-        [params.id],
-      )
-      if (!order.rows[0]) throw notFound('Commande')
+        let actor: OrderActor
+        if (current.producer_user_id === user.sub) actor = 'PRODUCER'
+        else if (current.consumer_id === user.sub) actor = 'CONSUMER'
+        else throw forbidden()
 
-      const isOwner = producer.rows[0]?.id === order.rows[0].producer_id
-      const isConsumer = order.rows[0].consumer_id === user.sub
+        if (!canTransition(actor, current.status, body.status)) {
+          throw new AppError(409, `Transition ${current.status} → ${body.status} non autorisée`)
+        }
 
-      // Seul le producteur peut changer le statut ; le consommateur peut annuler
-      if (!isOwner && !(isConsumer && body.status === 'CANCELLED')) {
-        throw forbidden()
-      }
+        if (shouldRestock(body.status)) {
+          await client.query(
+            `UPDATE products p SET stock = p.stock + oi.quantity
+             FROM order_items oi
+             WHERE oi.order_id = $1 AND oi.product_id = p.id`,
+            [params.id],
+          )
+        }
 
-      const result = await db.query<Order>(
-        'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
-        [body.status, params.id],
-      )
-      return result.rows[0]
+        const updated = await client.query(
+          `UPDATE orders o SET status = $1 WHERE o.id = $2 RETURNING ${ORDER_COLUMNS}`,
+          [body.status, params.id],
+        )
+        return updated.rows[0]
+      })
     },
     {
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
       body: t.Object({
         status: t.Union([
           t.Literal('PREPARING'),

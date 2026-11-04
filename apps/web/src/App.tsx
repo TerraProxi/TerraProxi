@@ -23,6 +23,12 @@ import { MessagesPage }  from './pages/consumer/MessagesPage'
 import { ProducerDashboardPage } from './pages/producer/DashboardPage'
 import { CatalogPage }           from './pages/producer/CatalogPage'
 import { OrdersManagePage }      from './pages/producer/OrdersManagePage'
+import { ProducerProfilePage as ProducerProfileEditPage } from './pages/producer/ProfilePage'
+
+// Compte & pages légales
+import { AccountPage }     from './pages/account/AccountPage'
+import { PrivacyPage }     from './pages/legal/PrivacyPage'
+import { LegalNoticePage } from './pages/legal/LegalNoticePage'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -54,6 +60,9 @@ export function App() {
             {/* Auth */}
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/privacy"  element={<PrivacyPage />} />
+            <Route path="/legal"    element={<LegalNoticePage />} />
+            <Route path="/account"  element={<RequireAuth><AccountPage /></RequireAuth>} />
 
             {/* Consommateur */}
             <Route path="/cart"              element={<RequireAuth><CartPage /></RequireAuth>} />
@@ -66,6 +75,7 @@ export function App() {
             <Route path="/producer/dashboard" element={<RequireProducer><ProducerDashboardPage /></RequireProducer>} />
             <Route path="/producer/catalog"   element={<RequireProducer><CatalogPage /></RequireProducer>} />
             <Route path="/producer/orders"    element={<RequireProducer><OrdersManagePage /></RequireProducer>} />
+            <Route path="/producer/profile"   element={<RequireProducer><ProducerProfileEditPage /></RequireProducer>} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

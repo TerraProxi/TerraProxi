@@ -48,7 +48,7 @@ export function ProducerMap({
                   {p.company_name}
                 </strong>
                 {p.city && <span style={{ fontSize: 13, color: '#666' }}>📍 {p.city}</span>}
-                {p.distance_km !== undefined && (
+                {p.distance_km != null && (
                   <span style={{ fontSize: 12, color: '#888', display: 'block', marginTop: 2 }}>
                     à {p.distance_km.toFixed(1)} km
                   </span>

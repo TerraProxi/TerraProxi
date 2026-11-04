@@ -11,6 +11,9 @@
   --color-danger:     #DC2626;
   --color-warning:    #F59E0B;
   --color-success:    #5BAE6A;
+  /* Variantes foncées : texte blanc lisible (contraste WCAG AA ≥ 4,5:1) */
+  --color-secondary-strong: #3B7A48;
+  --color-primary-strong:   #1F6670;
 
   /* Typographie — CDC §4 */
   --font-heading: 'Montserrat', sans-serif;

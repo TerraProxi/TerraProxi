@@ -61,7 +61,7 @@ paths:
             example: tomate
         - name: limit
           in: query
-          description: Nombre maximum de résultats (défaut: 40, max: 100)
+          description: "Nombre maximum de résultats (défaut: 40, max: 100)"
           required: false
           schema:
             type: integer
@@ -70,7 +70,7 @@ paths:
             example: 40
         - name: offset
           in: query
-          description: Pagination (défaut: 0)
+          description: "Pagination (défaut: 0)"
           required: false
           schema:
             type: integer
@@ -106,7 +106,7 @@ paths:
       tags:
         - Products
       security:
-        - bearerAuth: ['- PRODUCER']
+        - bearerAuth: []  # rôle PRODUCER requis
       requestBody:
         required: true
         content:
@@ -193,7 +193,7 @@ paths:
       tags:
         - Products
       security:
-        - bearerAuth: ['- PRODUCER']
+        - bearerAuth: []  # rôle PRODUCER requis
       parameters:
         - name: id
           in: path
@@ -260,7 +260,7 @@ paths:
       tags:
         - Products
       security:
-        - bearerAuth: ['- PRODUCER']
+        - bearerAuth: []  # rôle PRODUCER requis
       parameters:
         - name: id
           in: path
@@ -303,6 +303,36 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Erreur interne
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /products/mine:
+    get:
+      summary: Mon catalogue
+      description: Produits du producteur connecté, y compris ceux masqués (is_available = false).
+      operationId: listMyProducts
+      tags:
+        - Products
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des produits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '403':
+          description: Réservé au rôle PRODUCER
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Profil producteur pas encore créé
           content:
             application/json:
               schema:

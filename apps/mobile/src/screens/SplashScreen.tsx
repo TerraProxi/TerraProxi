@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors } from '../theme'
+import { useAuthStore } from '../store/auth.store'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -32,8 +33,10 @@ export function SplashScreen() {
     ])
     anim.start()
 
+    // Utilisateur déjà connecté → directement l'application, sinon l'onboarding
     const timer = setTimeout(() => {
-      nav.navigate('Onboarding')
+      const { isAuthenticated } = useAuthStore.getState()
+      nav.reset({ index: 0, routes: [{ name: isAuthenticated ? 'Tabs' : 'Onboarding' }] })
     }, 3000)
 
     return () => {

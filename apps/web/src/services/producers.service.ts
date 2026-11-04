@@ -12,10 +12,24 @@ export interface Producer {
   longitude?: number
   website_url?: string
   banner_url?: string
+  opening_hours?: string
   is_verified: boolean
   first_name?: string
   last_name?: string
-  distance_km?: number
+  distance_km?: number | null
+}
+
+export interface ProducerInput {
+  company_name: string
+  description?: string
+  address?: string
+  city?: string
+  postal_code?: string
+  latitude?: number
+  longitude?: number
+  website_url?: string
+  banner_url?: string
+  opening_hours?: string
 }
 
 export interface ProducersQuery {
@@ -34,6 +48,8 @@ export const producersService = {
   getById: (id: string) =>
     api.get<Producer>(`/producers/${id}`),
 
-  createOrUpdate: (data: Partial<Producer>) =>
-    api.post<Producer>('/producers', data),
+  /** Profil producteur du compte connecté (404 tant qu'il n'est pas créé). */
+  me: () => api.get<Producer>('/producers/me'),
+
+  createOrUpdate: (data: ProducerInput) => api.post<Producer>('/producers', data),
 }

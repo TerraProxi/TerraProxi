@@ -13,32 +13,35 @@ export const jwtPlugin = new Elysia({ name: 'jwt' }).use(
   }),
 )
 
+const isUserRole = (value: unknown): value is UserRole =>
+  value === 'CONSUMER' || value === 'PRODUCER' || value === 'ADMIN'
+
 /**
- * Extrait et vérifie le Bearer token JWT de la requête.
- * Injecte `user: JwtPayload` dans le contexte si valide.
+ * Vérifie le Bearer token JWT et injecte `user: JwtPayload` dans le contexte.
+ *
+ * `as: 'scoped'` est indispensable : sans lui, Elysia limite le `derive` au
+ * plugin lui-même et les routes du module parent ne reçoivent jamais `user`.
+ * Pas de `name` : Elysia dédupliquerait le plugin entre modules de routes et
+ * certains modules se retrouveraient sans garde.
  */
 export const authGuard = (roles?: UserRole[]) =>
-  new Elysia({ name: `auth-guard-${roles?.join('-') ?? 'any'}` })
+  new Elysia()
     .use(jwtPlugin)
-    .derive(async ({ jwt, headers, set }) => {
+    .derive({ as: 'scoped' }, async ({ jwt, headers }) => {
       const authHeader = headers.authorization
       if (!authHeader?.startsWith('Bearer ')) {
-        set.status = 401
         throw new AppError(401, 'Token manquant')
       }
 
-      const token = authHeader.slice(7)
-      const payload = await jwt.verify(token) as JwtPayload | false
-
-      if (!payload) {
-        set.status = 401
+      const payload = await jwt.verify(authHeader.slice(7))
+      if (!payload || typeof payload.sub !== 'string' || !isUserRole(payload.role)) {
         throw new AppError(401, 'Token invalide ou expiré')
       }
 
       if (roles && !roles.includes(payload.role)) {
-        set.status = 403
         throw new AppError(403, 'Accès non autorisé pour ce rôle')
       }
 
-      return { user: payload }
+      const user: JwtPayload = { sub: payload.sub, role: payload.role }
+      return { user }
     })

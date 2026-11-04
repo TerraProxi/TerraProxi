@@ -34,28 +34,38 @@ Clients (Web + Mobile)
     │ (Bun)   │    │ + PostGIS │
     └─────────┘    └──────────┘
          │
-    ┌────▼────┐
-    │  Stripe │ (paiements uniquement)
-    └─────────┘
+    ┌────▼─────────────┐
+    │ Stripe · Gemini  │ (paiement, assistant IA)
+    └──────────────────┘
 ```
 
 ## Démarrage rapide
 
 ```bash
-# Cloner et installer
 git clone https://github.com/TerraProxi/TerraProxi.git
-cd TerraProxi && cp .env.example .env
+cd TerraProxi && cp .env.example .env     # renseigner JWT_SECRET
 pnpm install
 
-# Lancer la DB (PostgreSQL + PostGIS)
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml up -d db
+pnpm db:migrate && pnpm db:seed           # schéma + données de démonstration
 
-# API : http://localhost:3002/swagger
-pnpm dev:api
-
-# Web : http://localhost:3000
-pnpm dev:web
+pnpm dev:api    # http://localhost:3002/swagger
+pnpm dev:web    # http://localhost:3000
 ```
+
+Comptes de démo : `jean@exemple.com` (consommateur) et `ferme@exemple.com` (producteur),
+mot de passe `TerraProxi2026!`.
+
+## Qualité
+
+```bash
+pnpm spec:lint    # contrats OpenAPI
+pnpm typecheck    # API, web, mobile
+pnpm test         # 59 tests API (unitaires + intégration PostGIS, TEST_DATABASE_URL)
+```
+
+La CI GitHub Actions exécute ces vérifications, construit les images Docker et vérifie que l'API
+démarre et migre la base à chaque pull request.
 
 Voir [`docs/setup.md`](docs/setup.md) pour le guide complet.
 
@@ -67,7 +77,7 @@ Voir [`docs/setup.md`](docs/setup.md) pour le guide complet.
 | [docs/api-specs.md](docs/api-specs.md) | Endpoints API |
 | [docs/guide-utilisateur.md](docs/guide-utilisateur.md) | Guide consommateur & producteur |
 | [docs/rgpd.md](docs/rgpd.md) | Conformité RGPD |
-| [docs/tests.md](docs/tests.md) | Plan de tests |
+| [docs/tests.md](docs/tests.md) | Plan de tests, résultats et recette |
 | [docs/maintenance.md](docs/maintenance.md) | Maintenance (déploiement, sauvegardes, supervision) |
 | [BACKLOG.md](BACKLOG.md) | Backlog produit (référence Trello) |
 | [architecture.md](architecture.md) | Architecture détaillée |

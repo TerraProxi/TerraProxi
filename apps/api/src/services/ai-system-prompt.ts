@@ -4,8 +4,7 @@ import { buildCartContextSection, type CartContext } from './ai-cart.service'
 
 /**
  * Prompt système TerraProxi — identité, garde-fous et catalogue injecté.
- * Le catalogue provient de fetchProducerCatalog() qui lit PostgreSQL
- * ou les données mock selon la disponibilité du backend (voir db/client.ts).
+ * Le catalogue provient de fetchProducerCatalog(), qui lit PostgreSQL.
  */
 export function buildSystemInstruction(
   catalog: CatalogProducer[],

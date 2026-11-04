@@ -20,9 +20,9 @@
 
 1. Sur la fiche d'un producteur, parcourir ses produits disponibles.
 2. Cliquer **Ajouter au panier** sur un ou plusieurs produits.
-   > Un panier ne peut contenir des produits que d'un seul producteur à la fois.
+   > Le panier peut regrouper plusieurs producteurs : une commande est créée par producteur.
 3. Accéder au **Panier** (icône 🛒 dans le menu).
-4. Vérifier les quantités, puis cliquer **Commander**.
+4. Vérifier les quantités, choisir le retrait chez le producteur (ou la livraison sur mobile), puis cliquer **Commander**.
 5. Sur la page de **Paiement**, saisir vos informations de carte via Stripe.
 6. Valider — vous recevrez une confirmation et la commande passera en statut **Payée**.
 
@@ -31,6 +31,7 @@
 - Onglet **Commandes** : liste de toutes vos commandes avec leur statut actuel.
 - Statuts possibles : En attente → Payée → En préparation → Prête → Terminée.
 - Une commande **Prête** signifie qu'elle est disponible pour le retrait chez le producteur.
+- Tant qu'elle n'est pas payée, une commande peut être **annulée** depuis la liste : les produits sont remis en vente.
 
 ### Contacter un producteur
 
@@ -44,11 +45,10 @@
 ### Créer son espace producteur
 
 1. S'inscrire en choisissant le rôle **Producteur**.
-2. Depuis le tableau de bord, renseigner les informations de votre exploitation :
-   - Nom de l'entreprise / exploitation
-   - Description de votre activité
-   - Adresse et ville (utilisée pour la géolocalisation sur la carte)
-3. Enregistrer. Votre fiche apparaît sur la carte pour les consommateurs.
+2. Le tableau de bord propose **Créer ma fiche producteur** (aussi accessible via **Mon profil**) :
+   - nom de l'exploitation, présentation, horaires d'ouverture, site web, photo de couverture ;
+   - adresse, code postal et ville, puis **📍 Localiser l'adresse** : la position est calculée automatiquement.
+3. Enregistrer. Votre fiche apparaît sur la carte ; vous pouvez ensuite ajouter vos produits.
 
 ### Gérer son catalogue
 
@@ -64,6 +64,11 @@
 - Une fois la commande préparée, cliquer **Prête** — le consommateur peut venir la récupérer.
 - Après le retrait, cliquer **Terminée**.
 
+### Tableau de bord
+
+- Chiffre du jour (commandes payées), commandes à préparer, produits en stock faible.
+- **Prévisions de la semaine prochaine** : quantités estimées d'après vos ventes des 8 dernières semaines, avec une alerte si le stock est insuffisant.
+
 ### Messagerie
 
 - Répondre aux messages des consommateurs depuis l'onglet **Messages**.
@@ -73,7 +78,9 @@
 
 ## Données personnelles & RGPD
 
-- Vous pouvez supprimer votre compte et toutes vos données à tout moment depuis les paramètres du compte → **Supprimer mon compte**.
+- Page **Mon compte** (web) : modifier vos informations, votre email et votre mot de passe.
+- **Télécharger mes données** : export complet au format JSON (profil, commandes, messages).
+- **Supprimer mon compte** (web : Mon compte ; mobile : Profil → Support) : vos messages et votre fiche sont effacés ; vos commandes passées sont conservées de façon anonyme pour la comptabilité.
 - Vos données ne sont jamais vendues à des tiers.
 - Hébergement exclusivement en France / Union Européenne (OVH).
-- Politique de confidentialité complète disponible sur le site.
+- Politique de confidentialité et mentions légales : liens en bas de chaque page du site.

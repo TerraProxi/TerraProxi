@@ -14,20 +14,6 @@ export interface LoginPayload {
   password: string
 }
 
-export const authService = {
-  register: (data: RegisterPayload) =>
-    api.post<{ user: User; access_token: string }>('/auth/register', data),
-
-  login: (data: LoginPayload) =>
-    api.post<{ user: User; access_token: string }>('/auth/login', data),
-
-  me: () => api.get<User>('/auth/me'),
-
-  updateProfile: (data: Partial<User>) => api.patch<User>('/users/profile', data),
-
-  deleteAccount: () => api.delete('/users/me'),
-}
-
 export interface User {
   id: string
   email: string
@@ -37,4 +23,38 @@ export interface User {
   phone?: string
   avatar_url?: string
   created_at: string
+}
+
+interface SessionResponse {
+  user: User
+  access_token: string
+  refresh_token: string
+}
+
+export interface ProfileUpdate {
+  first_name?: string
+  last_name?: string
+  phone?: string
+}
+
+export const authService = {
+  register: (data: RegisterPayload) => api.post<SessionResponse>('/auth/register', data),
+
+  login: (data: LoginPayload) => api.post<SessionResponse>('/auth/login', data),
+
+  logout: (refreshToken: string) => api.post('/auth/logout', { refresh_token: refreshToken }),
+
+  me: () => api.get<User>('/auth/me'),
+
+  updateProfile: (data: ProfileUpdate) => api.patch<User>('/users/profile', data),
+
+  changePassword: (current_password: string, new_password: string) =>
+    api.put('/users/me/password', { current_password, new_password }),
+
+  changeEmail: (current_password: string, new_email: string) =>
+    api.put<User>('/users/me/email', { current_password, new_email }),
+
+  exportData: () => api.get<Record<string, unknown>>('/users/me/export'),
+
+  deleteAccount: () => api.delete('/users/me'),
 }

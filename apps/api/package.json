@@ -5,9 +5,13 @@
   "scripts": {
     "dev": "bun --env-file=../../.env --env-file=.env run --watch src/index.ts",
     "start": "bun --env-file=../../.env --env-file=.env run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "lint": "bunx tsc --noEmit",
-    "db:migrate": "bun run src/db/migrate.ts"
+    "build": "bun build src/index.ts --outdir dist --target bun --minify --external pg-native",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "db:migrate": "bun run src/db/migrate.ts",
+    "db:seed": "bun run src/db/seed.ts"
   },
   "dependencies": {
     "@elysiajs/bearer": "^1.1.2",
@@ -17,12 +21,14 @@
     "@sinclair/typebox": "^0.34.0",
     "bcryptjs": "^2.4.3",
     "elysia": "^1.1.12",
+    "exact-mirror": "0.2.9",
     "pg": "^8.12.0",
     "stripe": "^16.3.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/bun": "1.3.5",
     "@types/pg": "^8.11.6",
     "@types/uuid": "^10.0.0",
     "typescript": "^5.4.5"

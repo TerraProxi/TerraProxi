@@ -134,7 +134,7 @@ export function MapPage() {
                       📍 {p.city}
                     </span>
                   )}
-                  {p.distance_km !== undefined && (
+                  {p.distance_km != null && (
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', display: 'block', marginTop: 2 }}>
                       {p.distance_km.toFixed(1)} km
                     </span>

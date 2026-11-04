@@ -175,6 +175,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /messages/unread-count:
+    get:
+      summary: Nombre de messages non lus
+      description: Alimente le badge de notification (MSG-4).
+      operationId: countUnreadMessages
+      tags:
+        - Messages
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Compteur
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unread_count]
+                properties:
+                  unread_count:
+                    type: integer
+                    minimum: 0
+                    example: 2
+        '401':
+          description: Non authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     bearerAuth:

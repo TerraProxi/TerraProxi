@@ -18,7 +18,7 @@ gateway.terraproxi.fr {
 }
 
 app.terraproxi.fr {
-  reverse_proxy front:80
+  reverse_proxy front:8080
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
