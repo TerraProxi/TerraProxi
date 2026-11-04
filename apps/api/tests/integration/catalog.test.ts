@@ -32,6 +32,7 @@ describe.skipIf(!hasTestDatabase)('Producteurs et catalogue', () => {
     expect(near.status).toBe(200)
     expect(near.body.map((p: { id: string }) => p.id)).toContain(producerId)
     expect(near.body[0].distance_km).toBeLessThan(5)
+    expect(near.body[0].categories).toEqual(['Fruits & Légumes'])
 
     const far = await call('GET', '/api/producers?lat=48.85&lon=2.35&radius=10')
     expect(far.body).toHaveLength(0)

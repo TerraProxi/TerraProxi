@@ -12,7 +12,28 @@ const PRODUCER_COLUMNS = `
   p.id, p.user_id, p.company_name, p.description, p.address, p.city, p.postal_code,
   p.website_url, p.banner_url, p.opening_hours, p.is_verified, p.created_at,
   u.first_name, u.last_name,
-  ST_Y(p.location) AS latitude, ST_X(p.location) AS longitude`
+  ST_Y(p.location) AS latitude, ST_X(p.location) AS longitude,
+  ARRAY(SELECT DISTINCT pc.category::text FROM products pc
+        WHERE pc.producer_id = p.id AND pc.is_available ORDER BY 1) AS category_codes`
+
+/** Libellés affichés par les applications (même liste que le web). */
+const CATEGORY_LABELS: Record<string, string> = {
+  FRUITS_VEGETABLES: 'Fruits & Légumes',
+  DAIRY: 'Produits laitiers',
+  MEAT: 'Viandes',
+  BEVERAGES: 'Boissons',
+  FINE_GROCERY: 'Épicerie fine',
+  CRAFTS: 'Artisanat',
+  FLOWERS_PLANTS: 'Fleurs & Plantes',
+  OTHER: 'Autre',
+}
+
+/** Ajoute `categories` (libellés) déduites des produits disponibles du producteur. */
+function withCategories(row: Record<string, unknown>) {
+  const { category_codes, ...rest } = row
+  const codes = Array.isArray(category_codes) ? (category_codes as string[]) : []
+  return { ...rest, categories: codes.map((c) => CATEGORY_LABELS[c] ?? c) }
+}
 
 const producerBody = t.Object({
   company_name:  t.String({ minLength: 1, maxLength: 255 }),
@@ -71,7 +92,7 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
          LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params,
       )
-      return result.rows
+      return result.rows.map((row) => withCategories(row))
     },
     {
       query: t.Object({
@@ -97,7 +118,7 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
         [params.id],
       )
       if (!result.rows[0]) throw notFound('Producteur')
-      return result.rows[0]
+      return withCategories(result.rows[0])
     },
     {
       params: t.Object({ id: t.String({ format: 'uuid' }) }),
@@ -118,7 +139,7 @@ export const producersRoutes = new Elysia({ prefix: '/producers' })
         [user.sub],
       )
       if (!result.rows[0]) throw notFound('Profil producteur')
-      return result.rows[0]
+      return withCategories(result.rows[0])
     },
     { detail: { summary: 'Mon profil producteur', tags: ['Producers'] } },
   )
