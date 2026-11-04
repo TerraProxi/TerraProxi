@@ -1,150 +1,165 @@
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
-import { notFound, forbidden } from '../utils/errors'
+import { badRequest, notFound } from '../utils/errors'
 import type { Producer } from '../models/types'
+
+const DEFAULT_RADIUS_KM = 30
+const DEFAULT_LIMIT = 20
+const MAX_LIMIT = 100
+
+const PRODUCER_COLUMNS = `
+  p.id, p.user_id, p.company_name, p.description, p.address, p.city, p.postal_code,
+  p.website_url, p.banner_url, p.opening_hours, p.is_verified, p.created_at,
+  u.first_name, u.last_name,
+  ST_Y(p.location) AS latitude, ST_X(p.location) AS longitude`
+
+const producerBody = t.Object({
+  company_name:  t.String({ minLength: 1, maxLength: 255 }),
+  description:   t.Optional(t.String({ maxLength: 5000 })),
+  address:       t.Optional(t.String({ maxLength: 500 })),
+  city:          t.Optional(t.String({ maxLength: 100 })),
+  postal_code:   t.Optional(t.String({ maxLength: 10 })),
+  latitude:      t.Optional(t.Number({ minimum: -90, maximum: 90 })),
+  longitude:     t.Optional(t.Number({ minimum: -180, maximum: 180 })),
+  website_url:   t.Optional(t.String({ maxLength: 500 })),
+  banner_url:    t.Optional(t.String({ maxLength: 500 })),
+  opening_hours: t.Optional(t.String({ maxLength: 500 })),
+})
 
 export const producersRoutes = new Elysia({ prefix: '/producers' })
 
   /**
-   * GET /api/producers
-   * Recherche géolocalisée : lat, lon, radius (km), category, limit, offset
+   * GET /api/producers — recherche géolocalisée (PROD-3).
+   * lat/lon/radius (km) filtrent avec ST_DWithin sur l'index GiST ; search filtre le nom.
    */
   .get(
     '/',
     async ({ query }) => {
-      const { lat, lon, radius = 30, limit = 20, offset = 0, search } = query
-
-      if (lat !== undefined && lon !== undefined) {
-        // Requête spatiale PostGIS — ST_DWithin sur géographie
-        const sql = `
-          SELECT
-            p.*,
-            u.first_name, u.last_name, u.email,
-            ST_Y(p.location::geometry) AS latitude,
-            ST_X(p.location::geometry) AS longitude,
-            ST_Distance(
-              p.location::geography,
-              ST_GeogFromText('POINT(' || $2 || ' ' || $1 || ')')
-            ) / 1000 AS distance_km
-          FROM producers p
-          JOIN users u ON u.id = p.user_id
-          WHERE ST_DWithin(
-            p.location::geography,
-            ST_GeogFromText('POINT(' || $2 || ' ' || $1 || ')'),
-            $3 * 1000
-          )
-          ${search ? "AND (p.company_name ILIKE $5 OR p.description ILIKE $5)" : ''}
-          ORDER BY distance_km ASC
-          LIMIT $4
-          OFFSET ${offset}
-        `
-        const params: unknown[] = [lat, lon, radius, limit]
-        if (search) params.push(`%${search}%`)
-
-        const result = await db.query(sql, params)
-        return result.rows
+      const { lat, lon, search } = query
+      const radiusKm = query.radius ?? DEFAULT_RADIUS_KM
+      const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT)
+      const offset = query.offset ?? 0
+      const hasGeo = lat !== undefined && lon !== undefined
+      if ((lat === undefined) !== (lon === undefined)) {
+        throw badRequest('lat et lon doivent être fournis ensemble')
       }
 
-      // Sans géolocalisation — liste simple
+      const params: unknown[] = []
+      const where: string[] = []
+      let distanceSelect = 'NULL::float AS distance_km'
+
+      if (hasGeo) {
+        params.push(lon, lat)
+        const point = 'ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography'
+        distanceSelect = `ST_Distance(p.location::geography, ${point}) / 1000 AS distance_km`
+        params.push(radiusKm * 1000)
+        where.push(`ST_DWithin(p.location::geography, ${point}, $${params.length})`)
+      }
+      if (search) {
+        params.push(`%${search}%`)
+        where.push(`(p.company_name ILIKE $${params.length} OR p.description ILIKE $${params.length})`)
+      }
+      params.push(limit, offset)
+
       const result = await db.query(
-        `SELECT p.*, u.first_name, u.last_name,
-                ST_Y(p.location::geometry) AS latitude,
-                ST_X(p.location::geometry) AS longitude
+        `SELECT ${PRODUCER_COLUMNS}, ${distanceSelect}
          FROM producers p
          JOIN users u ON u.id = p.user_id
-         ${search ? "WHERE p.company_name ILIKE $1 OR p.description ILIKE $1" : ''}
-         ORDER BY p.created_at DESC
-         LIMIT ${limit} OFFSET ${offset}`,
-        search ? [`%${search}%`] : [],
+         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+         ORDER BY ${hasGeo ? 'distance_km ASC' : 'p.created_at DESC'}
+         LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params,
       )
       return result.rows
     },
     {
       query: t.Object({
-        lat:    t.Optional(t.Number()),
-        lon:    t.Optional(t.Number()),
-        radius: t.Optional(t.Number()),
-        limit:  t.Optional(t.Number()),
-        offset: t.Optional(t.Number()),
-        search: t.Optional(t.String()),
+        lat:    t.Optional(t.Number({ minimum: -90, maximum: 90 })),
+        lon:    t.Optional(t.Number({ minimum: -180, maximum: 180 })),
+        radius: t.Optional(t.Number({ minimum: 0.1, maximum: 500 })),
+        limit:  t.Optional(t.Integer({ minimum: 1 })),
+        offset: t.Optional(t.Integer({ minimum: 0 })),
+        search: t.Optional(t.String({ maxLength: 100 })),
       }),
       detail: { summary: 'Liste des producteurs (géolocalisée)', tags: ['Producers'] },
     },
   )
 
-  /** GET /api/producers/:id — fiche publique d'un producteur */
+  /** GET /api/producers/:id — fiche publique (PROD-5). */
   .get(
     '/:id',
     async ({ params }) => {
       const result = await db.query(
-        `SELECT p.*,
-                u.first_name, u.last_name, u.email,
-                ST_Y(p.location::geometry) AS latitude,
-                ST_X(p.location::geometry) AS longitude
-         FROM producers p
-         JOIN users u ON u.id = p.user_id
+        `SELECT ${PRODUCER_COLUMNS}
+         FROM producers p JOIN users u ON u.id = p.user_id
          WHERE p.id = $1`,
         [params.id],
       )
       if (!result.rows[0]) throw notFound('Producteur')
       return result.rows[0]
     },
-    { detail: { summary: 'Fiche producteur', tags: ['Producers'] } },
+    {
+      params: t.Object({ id: t.String({ format: 'uuid' }) }),
+      detail: { summary: 'Fiche producteur', tags: ['Producers'] },
+    },
   )
 
-  /** POST /api/producers — création du profil producteur (rôle PRODUCER) */
   .use(authGuard(['PRODUCER']))
+
+  /** GET /api/producers/me — profil producteur du compte connecté (404 s'il n'existe pas encore). */
+  .get(
+    '/me',
+    async ({ user }) => {
+      const result = await db.query(
+        `SELECT ${PRODUCER_COLUMNS}
+         FROM producers p JOIN users u ON u.id = p.user_id
+         WHERE p.user_id = $1`,
+        [user.sub],
+      )
+      if (!result.rows[0]) throw notFound('Profil producteur')
+      return result.rows[0]
+    },
+    { detail: { summary: 'Mon profil producteur', tags: ['Producers'] } },
+  )
+
+  /** POST /api/producers — création ou mise à jour du profil producteur (PROD-1 / PROD-2). */
   .post(
     '/',
     async ({ body, user, set }) => {
-      const { company_name, description, address, city, postal_code,
-              latitude, longitude, website_url } = body
-
-      const existing = await db.query<Producer>(
-        'SELECT id FROM producers WHERE user_id = $1',
-        [user.sub],
-      )
-      if (existing.rows.length > 0) {
-        // Mise à jour si déjà existant
-        const upd = await db.query<Producer>(
-          `UPDATE producers SET
-             company_name = $1, description = $2, address = $3,
-             city = $4, postal_code = $5,
-             location = ST_SetSRID(ST_MakePoint($6, $7), 4326),
-             website_url = $8
-           WHERE user_id = $9
-           RETURNING id, company_name, description, city, is_verified`,
-          [company_name, description, address, city, postal_code,
-            longitude, latitude, website_url, user.sub],
-        )
-        return upd.rows[0]
-      }
-
-      const result = await db.query<Producer>(
+      const hasLocation = body.latitude !== undefined && body.longitude !== undefined
+      const result = await db.query<Producer & { inserted: boolean }>(
         `INSERT INTO producers
-           (user_id, company_name, description, address, city, postal_code,
-            location, website_url)
+           (user_id, company_name, description, address, city, postal_code, location,
+            website_url, banner_url, opening_hours)
          VALUES ($1, $2, $3, $4, $5, $6,
-                 ST_SetSRID(ST_MakePoint($7, $8), 4326), $9)
-         RETURNING id, company_name, description, city, is_verified`,
-        [user.sub, company_name, description, address, city, postal_code,
-          longitude, latitude, website_url],
+                 CASE WHEN $7::boolean THEN ST_SetSRID(ST_MakePoint($8, $9), 4326) END,
+                 $10, $11, $12)
+         ON CONFLICT (user_id) DO UPDATE SET
+           company_name  = EXCLUDED.company_name,
+           description   = EXCLUDED.description,
+           address       = EXCLUDED.address,
+           city          = EXCLUDED.city,
+           postal_code   = EXCLUDED.postal_code,
+           location      = COALESCE(EXCLUDED.location, producers.location),
+           website_url   = EXCLUDED.website_url,
+           banner_url    = EXCLUDED.banner_url,
+           opening_hours = EXCLUDED.opening_hours
+         RETURNING id, user_id, company_name, description, address, city, postal_code,
+                   website_url, banner_url, opening_hours, is_verified, created_at,
+                   ST_Y(location) AS latitude, ST_X(location) AS longitude,
+                   (xmax = 0) AS inserted`,
+        [user.sub, body.company_name.trim(), body.description ?? null, body.address ?? null,
+          body.city ?? null, body.postal_code ?? null, hasLocation,
+          body.longitude ?? null, body.latitude ?? null, body.website_url ?? null,
+          body.banner_url ?? null, body.opening_hours ?? null],
       )
-      set.status = 201
-      return result.rows[0]
+      const { inserted, ...producer } = result.rows[0]
+      set.status = inserted ? 201 : 200
+      return producer
     },
     {
-      body: t.Object({
-        company_name: t.String({ minLength: 1 }),
-        description:  t.Optional(t.String()),
-        address:      t.Optional(t.String()),
-        city:         t.Optional(t.String()),
-        postal_code:  t.Optional(t.String()),
-        latitude:     t.Optional(t.Number()),
-        longitude:    t.Optional(t.Number()),
-        website_url:  t.Optional(t.String()),
-      }),
-      detail: { summary: 'Créer/mettre à jour le profil producteur', tags: ['Producers'] },
+      body: producerBody,
+      detail: { summary: 'Créer/mettre à jour mon profil producteur', tags: ['Producers'] },
     },
   )

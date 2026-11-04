@@ -2,13 +2,17 @@
  * EPIC 11 — Assistant IA & extensions ML
  *
  * POST /ai/chat : assistant conversationnel Gemini avec contexte producteurs.
- * GET  /ai/recommendations, /ai/forecast : stubs ML (historique commandes).
+ * GET  /ai/recommendations, /ai/forecast : statistiques sur l'historique des commandes.
  */
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
 import { fetchProducerCatalog } from '../services/ai-catalog.service'
 import { chatWithGemini } from '../services/gemini.service'
+import { forbidden, notFound } from '../utils/errors'
+
+const RECOMMENDATION_LIMIT = 10
+const FORECAST_WEEKS = 8
 
 const chatHistoryItem = t.Object({
   role: t.Union([t.Literal('user'), t.Literal('assistant')]),
@@ -82,29 +86,31 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
   )
 
   /**
-   * GET /api/ai/recommendations
-   * Produits recommandés (collaborative filtering simplifié).
+   * GET /api/ai/recommendations (AI-2)
+   * Produits les plus commandés par les autres clients, que je n'ai jamais achetés.
    */
   .get(
     '/recommendations',
     async ({ user }) => {
       const result = await db.query(
-        `SELECT p.*, COUNT(oi.id) AS order_count
+        `SELECT p.id, p.producer_id, p.name, p.description, p.price::float AS price, p.unit,
+                p.category, p.image_url, pr.company_name AS producer_name,
+                COUNT(oi.id)::int AS order_count
          FROM products p
+         JOIN producers pr ON pr.id = p.producer_id
          JOIN order_items oi ON oi.product_id = p.id
          JOIN orders o ON o.id = oi.order_id
          WHERE o.status = 'COMPLETED'
            AND p.is_available = true
-           AND p.id NOT IN (
-             SELECT DISTINCT oi2.product_id
-             FROM order_items oi2
+           AND NOT EXISTS (
+             SELECT 1 FROM order_items oi2
              JOIN orders o2 ON o2.id = oi2.order_id
-             WHERE o2.consumer_id = $1
+             WHERE o2.consumer_id = $1 AND oi2.product_id = p.id
            )
-         GROUP BY p.id
+         GROUP BY p.id, pr.company_name
          ORDER BY order_count DESC
-         LIMIT 10`,
-        [user.sub],
+         LIMIT $2`,
+        [user.sub, RECOMMENDATION_LIMIT],
       )
       return result.rows
     },
@@ -112,31 +118,46 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
   )
 
   /**
-   * GET /api/ai/forecast/:producerId
-   * Prévision de la demande (moyennes historiques).
+   * GET /api/ai/forecast/:producerId (AI-1) — réservé au producteur concerné.
+   * Moyenne mobile des quantités vendues (commandes terminées) sur les
+   * FORECAST_WEEKS dernières semaines ; la confiance dépend du nombre de
+   * semaines avec des ventes.
    */
   .get(
     '/forecast/:producerId',
-    async ({ params }) => {
-      const result = await db.query(
-        `SELECT
-           p.id, p.name,
-           AVG(oi.quantity) AS avg_weekly_qty,
-           COUNT(DISTINCT o.id) AS total_orders,
-           MAX(o.created_at) AS last_order_at
+    async ({ params, user }) => {
+      const owner = await db.query<{ user_id: string }>(
+        'SELECT user_id FROM producers WHERE id = $1',
+        [params.producerId],
+      )
+      if (!owner.rows[0]) throw notFound('Producteur')
+      if (owner.rows[0].user_id !== user.sub) throw forbidden()
+
+      const result = await db.query<{
+        id: string; name: string; unit: string; stock: number; sold_qty: number; weeks_with_sales: number
+      }>(
+        `SELECT p.id, p.name, p.unit, p.stock,
+                COALESCE(SUM(oi.quantity) FILTER (WHERE o.id IS NOT NULL), 0)::int AS sold_qty,
+                COUNT(DISTINCT date_trunc('week', o.created_at))::int AS weeks_with_sales
          FROM products p
          LEFT JOIN order_items oi ON oi.product_id = p.id
-         LEFT JOIN orders o ON o.id = oi.order_id AND o.status = 'COMPLETED'
+         LEFT JOIN orders o ON o.id = oi.order_id
+                           AND o.status = 'COMPLETED'
+                           AND o.created_at >= NOW() - make_interval(weeks => $2)
          WHERE p.producer_id = $1
-         GROUP BY p.id, p.name
-         ORDER BY total_orders DESC`,
-        [params.producerId],
+         GROUP BY p.id
+         ORDER BY sold_qty DESC, p.name`,
+        [params.producerId, FORECAST_WEEKS],
       )
       return result.rows.map((r) => ({
         ...r,
-        forecast_next_week: Math.round(Number(r.avg_weekly_qty ?? 0)),
-        confidence: r.total_orders >= 10 ? 'HIGH' : r.total_orders >= 3 ? 'MEDIUM' : 'LOW',
+        avg_weekly_qty: Number((r.sold_qty / FORECAST_WEEKS).toFixed(2)),
+        forecast_next_week: Math.ceil(r.sold_qty / FORECAST_WEEKS),
+        confidence: r.weeks_with_sales >= 6 ? 'HIGH' : r.weeks_with_sales >= 3 ? 'MEDIUM' : 'LOW',
       }))
     },
-    { detail: { summary: 'Prévision de la demande', tags: ['AI'] } },
+    {
+      params: t.Object({ producerId: t.String({ format: 'uuid' }) }),
+      detail: { summary: 'Prévision de la demande', tags: ['AI'] },
+    },
   )
