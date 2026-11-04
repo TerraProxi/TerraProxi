@@ -1,117 +1,129 @@
 # TerraProxi — Spécification API
 
-> La documentation interactive complète est générée automatiquement par Elysia.js et disponible à :  
-> `https://gateway.terraproxi.fr/swagger` (production) ou `http://localhost:3002/swagger` (dev)
-
----
+> Contrats de référence : `specs/api/*.yaml` (OpenAPI 3.1, vérifiés par `pnpm spec:lint`).
+> Documentation interactive générée par Elysia : `https://gateway.terraproxi.fr/swagger`
+> (production) ou `http://localhost:3002/swagger` (dev).
 
 ## Authentification
 
-Tous les endpoints protégés requièrent un header :
+Les routes protégées attendent `Authorization: Bearer <access_token>`.
 
+- `access_token` : JWT signé, valable 15 minutes, contient l'identifiant et le rôle.
+- `refresh_token` : jeton opaque valable 7 jours, **à usage unique**, échangé sur
+  `POST /api/auth/refresh` contre une nouvelle paire. Le web et le mobile le font automatiquement
+  à la première réponse 401.
+
+Rôles : `CONSUMER`, `PRODUCER`, `ADMIN`. Un rôle insuffisant renvoie 403.
+
+## Format des erreurs
+
+Toutes les erreurs suivent `specs/contracts/error-envelope.schema.json` :
+
+```json
+{ "error": "Données invalides", "status": 400, "details": { "field": "password", "message": "…" } }
 ```
-Authorization: Bearer <access_token>
-```
 
-Le token est obtenu lors de la connexion (`POST /api/auth/login`) ou de l'inscription.
-
----
+| Code | Cas |
+|------|-----|
+| 400 | Corps, paramètre ou identifiant invalide ; règle métier (stock, adresse) |
+| 401 | Jeton absent, invalide ou expiré |
+| 403 | Rôle insuffisant ou ressource d'un autre utilisateur |
+| 404 | Ressource introuvable |
+| 409 | Conflit : email déjà utilisé, transition de statut interdite |
+| 503 | PostgreSQL, Stripe ou Gemini indisponible / non configuré |
 
 ## Endpoints
+
+### Supervision
+
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| GET | `/health` | — | 200 `{"status":"ok","database":"up"}` ; 503 si la base ne répond pas |
 
 ### Auth
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| POST | `/api/auth/register` | ❌ | Inscription (email, mot de passe, RGPD) |
-| POST | `/api/auth/login` | ❌ | Connexion — retourne un JWT |
-| GET | `/api/auth/me` | ✅ | Profil de l'utilisateur courant |
+| POST | `/api/auth/register` | — | Inscription (consentement RGPD obligatoire) → utilisateur + jetons |
+| POST | `/api/auth/login` | — | Connexion → utilisateur + jetons |
+| POST | `/api/auth/refresh` | — | Rotation du refresh token |
+| POST | `/api/auth/logout` | — | Révoque le refresh token |
+| GET | `/api/auth/me` | ✅ | Utilisateur courant |
 
-### Users
+### Compte et RGPD
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/users/profile` | ✅ | Mon profil complet |
-| PATCH | `/api/users/profile` | ✅ | Modifier mon profil |
-| DELETE | `/api/users/me` | ✅ | Supprimer mon compte (RGPD) |
+| GET | `/api/users/profile` | ✅ | Mon profil |
+| PATCH | `/api/users/profile` | ✅ | Modifier prénom, nom, téléphone, avatar |
+| PUT | `/api/users/me/password` | ✅ | Changer de mot de passe (révoque les sessions) |
+| PUT | `/api/users/me/email` | ✅ | Changer d'email (mot de passe actuel requis) |
+| GET | `/api/users/me/export` | ✅ | Export JSON de toutes mes données |
+| DELETE | `/api/users/me` | ✅ | Supprimer mon compte (commandes anonymisées) |
 
 ### Producteurs
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/producers` | ❌ | Liste / recherche géolocalisée |
-| GET | `/api/producers/:id` | ❌ | Fiche d'un producteur |
-| POST | `/api/producers` | ✅ PRODUCER | Créer / mettre à jour son profil |
-
-**Paramètres de géolocalisation pour `GET /api/producers` :**
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `lat` | number | Latitude (WGS84) |
-| `lon` | number | Longitude (WGS84) |
-| `radius` | number | Rayon en km (défaut : 30) |
-| `search` | string | Recherche texte libre |
-| `limit` | number | Pagination (défaut : 20) |
-| `offset` | number | Décalage (défaut : 0) |
+| GET | `/api/producers?lat&lon&radius&search&limit&offset` | — | Recherche (PostGIS `ST_DWithin`, tri par distance) ; `categories` déduites des produits |
+| GET | `/api/producers/:id` | — | Fiche publique |
+| GET | `/api/producers/me` | PRODUCER | Ma fiche (404 si pas encore créée) |
+| POST | `/api/producers` | PRODUCER | Créer (201) ou mettre à jour (200) ma fiche |
 
 ### Produits
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/products` | ❌ | Catalogue avec filtres |
-| GET | `/api/products/:id` | ❌ | Détail d'un produit |
-| POST | `/api/products` | ✅ PRODUCER | Créer un produit |
-| PUT | `/api/products/:id` | ✅ PRODUCER | Modifier son produit |
-| DELETE | `/api/products/:id` | ✅ PRODUCER | Supprimer son produit |
+| GET | `/api/products?producer_id&category&available&search&limit&offset` | — | Catalogue public |
+| GET | `/api/products/:id` | — | Fiche produit |
+| GET | `/api/products/mine` | PRODUCER | Mon catalogue, produits masqués compris |
+| POST | `/api/products` | PRODUCER | Créer un produit |
+| PUT | `/api/products/:id` | PRODUCER (propriétaire) | Modifier |
+| DELETE | `/api/products/:id` | PRODUCER (propriétaire) | Supprimer |
+
+Catégories : `FRUITS_VEGETABLES`, `DAIRY`, `MEAT`, `BEVERAGES`, `FINE_GROCERY`, `CRAFTS`,
+`FLOWERS_PLANTS`, `OTHER`.
 
 ### Commandes
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| POST | `/api/orders` | ✅ CONSUMER | Créer une commande |
-| GET | `/api/orders` | ✅ | Mes commandes (selon rôle) |
-| GET | `/api/orders/:id` | ✅ | Détail d'une commande |
-| PATCH | `/api/orders/:id/status` | ✅ PRODUCER | Avancer le statut |
+| POST | `/api/orders` | CONSUMER | Commande chez un producteur ; prix lus en base, stock réservé atomiquement |
+| GET | `/api/orders?status&limit&offset` | ✅ | Mes commandes (client) ou commandes reçues (producteur) |
+| GET | `/api/orders/:id` | client ou producteur concerné | Détail |
+| PATCH | `/api/orders/:id/status` | client ou producteur concerné | Changer le statut (voir ci-dessous) |
 
-**Cycle de vie d'une commande :**
+Cycle de vie (`apps/api/src/services/order-status.ts`) :
+
 ```
-PENDING → PAID (via Stripe webhook) → PREPARING → READY → COMPLETED
-       ↘                                                  ↗
-                         CANCELLED
+PENDING ──(webhook Stripe)──▶ PAID ──▶ PREPARING ──▶ READY ──▶ COMPLETED
+   └────────────────▶ CANCELLED ◀───────┴───────────┘
 ```
 
-### Paiements Stripe
+- Producteur : PAID → PREPARING → READY → COMPLETED ; annulation jusqu'à PREPARING.
+- Client : annulation uniquement tant que la commande est PENDING.
+- Toute annulation remet les quantités en stock. Une transition interdite renvoie 409.
+
+### Paiement Stripe
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| POST | `/api/stripe/payment-intent` | ✅ CONSUMER | Créer un PaymentIntent |
-| POST | `/api/stripe/webhook` | ❌ (signature Stripe) | Webhook — passage PAID |
+| POST | `/api/stripe/payment-intent` | CONSUMER (propriétaire) | Crée ou réutilise le PaymentIntent d'une commande PENDING |
+| POST | `/api/stripe/webhook` | signature Stripe | `payment_intent.succeeded` → commande PAID |
 
-### Messages
+### Messagerie
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| GET | `/api/messages` | ✅ | Liste des conversations |
-| GET | `/api/messages/:partnerId` | ✅ | Thread d'une conversation |
+| GET | `/api/messages` | ✅ | Conversations (dernier message, non-lus), plus récentes d'abord |
+| GET | `/api/messages/unread-count` | ✅ | Total de messages non lus |
+| GET | `/api/messages/:partnerId?limit&before` | ✅ | Fil de discussion (marque les messages reçus comme lus) |
 | POST | `/api/messages` | ✅ | Envoyer un message |
 
----
+### IA
 
-## Codes de retour
-
-| Code | Signification |
-|------|--------------|
-| 200 | Succès |
-| 201 | Ressource créée |
-| 204 | Suppression réussie (pas de corps) |
-| 400 | Données invalides |
-| 401 | Token manquant ou invalide |
-| 403 | Rôle insuffisant |
-| 404 | Ressource introuvable |
-| 409 | Conflit (ex: email déjà utilisé) |
-| 500 | Erreur serveur |
-
-Toutes les erreurs retournent :
-```json
-{ "error": "Message d'erreur", "statusCode": 4xx }
-```
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| POST | `/api/ai/chat` | ✅ | Assistant Gemini avec le catalogue des producteurs proches |
+| GET | `/api/ai/recommendations` | ✅ | Produits populaires jamais achetés par l'utilisateur |
+| GET | `/api/ai/forecast/:producerId` | PRODUCER (propriétaire) | Prévision hebdomadaire (moyenne mobile sur 8 semaines) |

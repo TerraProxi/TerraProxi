@@ -1,6 +1,6 @@
 # TerraProxi — Documentation de maintenance
 
-*Version 1 — 04/11/2026 — Équipe TerraProxi (projet 2427-25)*
+*Version 2 — 04/11/2026 — Équipe TerraProxi (projet 2427-25)*
 
 Ce document décrit les opérations courantes pour maintenir la plateforme TerraProxi en production : déploiement, sauvegardes et restauration, supervision, mises à jour et gestion des incidents.
 
@@ -10,7 +10,7 @@ Ce document décrit les opérations courantes pour maintenir la plateforme Terra
 |---------|--------|
 | Serveur | VPS OVH, Ubuntu, Docker + Docker Compose v2 |
 | Répertoire applicatif | `/opt/terraproxi` (clone du dépôt GitHub, branche `main`) |
-| Conteneurs | `db` (PostgreSQL 16 + PostGIS), `back` (API Bun / Elysia), `front` (React servi par nginx), `caddy` (reverse proxy HTTPS) |
+| Conteneurs | `db` (PostgreSQL 16 + PostGIS), `back` (API Bun / Elysia, utilisateur non root), `front` (React servi par nginx non root, port 8080), `caddy` (reverse proxy HTTPS) |
 | DNS / CDN | Cloudflare |
 | Configuration | fichier `/opt/terraproxi/.env` (jamais versionné) |
 | Paiement | Stripe (clés et secret de webhook dans `.env`) |
@@ -25,13 +25,15 @@ cd /opt/terraproxi
 ./infrastructure/docker/deploy.sh --skip-build   # redémarrage sans reconstruire les images
 ```
 
-Le script récupère la dernière version de `main`, reconstruit les images, redémarre les conteneurs, puis vérifie l'endpoint de santé de l'API.
+Le script récupère la dernière version de `main`, reconstruit les images (`docker compose build`), redémarre les conteneurs, puis interroge `/health` pendant une minute. En cas d'échec, il affiche les 50 dernières lignes de journal de l'API et sort en erreur.
+
+**Migrations** : le conteneur `back` applique les migrations en attente à chaque démarrage (`bun dist/db/migrate.js`), chacune dans une transaction, avant de lancer l'API. Une migration en échec empêche l'API de démarrer et `deploy.sh` le signale. Les scripts d'annulation se trouvent dans `infrastructure/database/migrations/down/`.
 
 **Avant chaque déploiement :**
 
 1. Vérifier que la branche `main` a été relue (pull request validée) et que les tests passent.
 2. Lancer une sauvegarde manuelle de la base (voir §3).
-3. Vérifier si de nouvelles migrations SQL ont été ajoutées dans `infrastructure/database/migrations/`.
+3. Vérifier si de nouvelles migrations SQL ont été ajoutées dans `infrastructure/database/migrations/`, et que la CI GitHub Actions est verte.
 
 **Retour arrière (rollback) :**
 
@@ -42,7 +44,7 @@ git checkout <commit>                # revenir à la version stable
 ./infrastructure/docker/deploy.sh
 ```
 
-Si une migration a modifié le schéma, restaurer aussi la sauvegarde prise avant le déploiement.
+Si une migration a modifié le schéma, jouer son script `down/` ou restaurer la sauvegarde prise avant le déploiement.
 
 ## 3. Sauvegardes et restauration
 
@@ -50,8 +52,10 @@ Si une migration a modifié le schéma, restaurer aussi la sauvegarde prise avan
 
 ```bash
 # Crontab du serveur
-0 3 * * * /opt/terraproxi/infrastructure/docker/backup.sh
+0 3 * * * /opt/terraproxi/infrastructure/docker/backup.sh >> /var/log/terraproxi-backup.log 2>&1
 ```
+
+Le script lit `POSTGRES_USER` et `POSTGRES_DB` dans `.env` (cron n'hérite d'aucune variable), passe par `docker compose exec` sur le service `db` et sort en erreur si le dump est vide.
 
 **Sauvegarde manuelle** :
 
@@ -64,8 +68,11 @@ Si une migration a modifié le schéma, restaurer aussi la sauvegarde prise avan
 **Restauration** :
 
 ```bash
-gunzip -c /opt/terraproxi/backups/terraproxi_AAAAMMJJ_HHMMSS.sql.gz \
-  | docker exec -i "$(docker ps -qf 'name=db')" psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+cd /opt/terraproxi && set -a && source .env && set +a
+docker compose stop back
+gunzip -c backups/terraproxi_AAAAMMJJ_HHMMSS.sql.gz \
+  | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+docker compose start back
 ```
 
 Tester la restauration une fois par mois sur un environnement de préproduction.
@@ -74,7 +81,7 @@ Tester la restauration une fois par mois sur un environnement de préproduction.
 
 | Contrôle | Comment | Fréquence |
 |----------|---------|-----------|
-| Santé de l'API | `GET /health` (utilisé par le healthcheck Docker) | continue |
+| Santé de l'API | `GET /health` : 200 avec `"database":"up"`, **503** si PostgreSQL ne répond pas (healthcheck Docker et `deploy.sh`) | continue |
 | État des conteneurs | `docker compose ps` | quotidienne |
 | Journaux | `docker compose logs -f back` (ou `front`, `caddy`, `db`) | en cas d'alerte |
 | Espace disque | `df -h` (sauvegardes, volumes Docker) | hebdomadaire |

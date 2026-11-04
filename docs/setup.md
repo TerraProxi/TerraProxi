@@ -1,141 +1,170 @@
-# TerraProxi — Guide de démarrage
+# TerraProxi — Guide d'installation
 
 ## Prérequis
 
-| Outil | Version minimale |
-|-------|-----------------|
-| Bun   | 1.1+            |
-| Node  | 20+             |
-| pnpm  | 9+              |
-| Docker Desktop | 26+ |
-| Docker Compose | v2 (plugin) |
+| Outil | Version |
+|-------|---------|
+| Node.js | 20+ |
+| pnpm | 9 (`corepack enable` ou `npm i -g pnpm@9`) |
+| Bun | 1.3+ (exécute l'API et ses tests) |
+| Docker Desktop / Docker Engine | 26+ avec Compose v2 |
+
+> **Windows** : clonez le dépôt dans un chemin court (ex. `C:\dev\TerraProxi`). Les dossiers
+> `node_modules/.pnpm` dépassent sinon la limite de 260 caractères et Bun ne trouve plus ses modules.
 
 ---
 
-## Démarrage rapide en local (développement)
+## Démarrage en local
 
-### 1. Cloner et installer
+### 1. Cloner, configurer, installer
 
 ```bash
 git clone https://github.com/TerraProxi/TerraProxi.git
 cd TerraProxi
-cp .env.example .env          # Remplir les valeurs manquantes
+cp .env.example .env
 pnpm install
 ```
 
-### 2. Lancer la base de données (PostgreSQL + PostGIS)
+Dans `.env`, remplacez au minimum `JWT_SECRET` (`openssl rand -base64 48`). Les valeurs par
+défaut de `DATABASE_URL` et `TEST_DATABASE_URL` correspondent à la base de dev ci-dessous.
+
+### 2. Base PostgreSQL + PostGIS
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml up -d db
+pnpm db:migrate    # crée / met à jour le schéma (infrastructure/database/migrations)
+pnpm db:seed       # 21 comptes, 20 producteurs, 31 produits, commandes de démo
 ```
 
-La base est accessible sur `localhost:5432`.  
-Les migrations SQL s'exécutent automatiquement au démarrage du conteneur (dossier `infrastructure/database/migrations/`).
+Comptes de démonstration (mot de passe `SEED_PASSWORD`, par défaut `TerraProxi2026!`) :
 
-### 3. Démarrer l'API
+| Rôle | Email |
+|------|-------|
+| Consommateur | `jean@exemple.com` |
+| Producteur (Ferme des Garrigues) | `ferme@exemple.com` |
+
+Les migrations et le seed sont idempotents : on peut les relancer sans risque.
+
+### 3. API
 
 ```bash
 pnpm dev:api
-# ➜ http://localhost:3002
-# ➜ Swagger UI : http://localhost:3002/swagger
+# http://localhost:3002/health   → {"status":"ok","database":"up"}
+# http://localhost:3002/swagger  → documentation interactive
 ```
 
-### 4. Démarrer le front web
+L'API refuse de démarrer sans `DATABASE_URL` ni `JWT_SECRET`. Si PostgreSQL tombe, `/health`
+renvoie **503** : il n'y a plus de données de secours fictives.
+
+### 4. Site web
 
 ```bash
 pnpm dev:web
-# ➜ http://localhost:3000
+# http://localhost:3000
 ```
 
-Le proxy Vite redirige `/api/*` vers `localhost:3002`.
+Laissez `VITE_API_URL` vide en dev : Vite redirige `/api` vers l'API locale (port `API_PORT` du `.env`).
 
-### 5. Démarrer l'application mobile
+### 5. Application mobile
 
 ```bash
-cd apps/mobile
-npx expo start
+cp apps/mobile/.env.example apps/mobile/.env
+pnpm dev:mobile
 ```
 
-Scanner le QR code avec Expo Go (iOS/Android) ou lancer un émulateur.
+- Émulateur Android : l'API est jointe via `10.0.2.2` automatiquement.
+- Téléphone physique : mettez l'IP locale du PC dans `EXPO_PUBLIC_API_URL`
+  (ex. `http://192.168.1.20:3002/api`), téléphone et PC sur le même Wi-Fi.
+- Le paiement Stripe natif nécessite un *development build* (`eas build --profile development`),
+  il ne fonctionne pas dans Expo Go. Le reste de l'application fonctionne dans Expo Go.
+
+### Tout en conteneurs (sans Node local)
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+# web : http://localhost:3000 — API : http://localhost:3002
+docker compose -f docker-compose.dev.yml exec api bun dist/db/seed.js
+```
+
+---
+
+## Paiement Stripe en local
+
+1. Clés de test sur <https://dashboard.stripe.com/test/apikeys> → `STRIPE_SECRET_KEY` et
+   `VITE_STRIPE_PUBLISHABLE_KEY` / `EXPO_PUBLIC_STRIPE_KEY`.
+2. Relayer les webhooks vers l'API :
+   ```bash
+   stripe listen --forward-to localhost:3002/api/stripe/webhook
+   ```
+   Copier le secret `whsec_…` affiché dans `STRIPE_WEBHOOK_SECRET`.
+3. Carte de test : `4242 4242 4242 4242`, date future, CVC quelconque. Refus : `4000 0000 0000 0002`.
+
+Sans clés Stripe, l'API répond 503 sur le paiement et le site affiche « paiement non configuré » ;
+le reste de l'application fonctionne.
+
+## Assistant IA
+
+Renseigner `GEMINI_API_KEY` (<https://aistudio.google.com/apikey>). Sans clé, `/api/ai/chat` répond 503.
+
+---
+
+## Vérifications
+
+```bash
+pnpm spec:lint     # specs OpenAPI (Spectral)
+pnpm typecheck     # TypeScript : API, web, mobile
+pnpm test          # tests API — nécessite TEST_DATABASE_URL (base VIDÉE à chaque exécution)
+pnpm build:web
+```
+
+Créer la base de test une fois :
+
+```bash
+docker compose -f docker-compose.dev.yml exec db createdb -U app_user terraproxi_test
+```
+
+Les mêmes vérifications tournent dans GitHub Actions (`.github/workflows/ci.yml`) à chaque push et
+pull request, ainsi que le build des images Docker et un test de démarrage de l'API.
 
 ---
 
 ## Variables d'environnement
 
-Voir `.env.example` à la racine pour la liste complète.  
-**Ne jamais committer le fichier `.env`** — il est dans `.gitignore`.
+Liste complète et commentée : [`.env.example`](../.env.example). Le `.env` n'est jamais committé.
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | URL de connexion PostgreSQL |
-| `JWT_SECRET` | Clé secrète JWT (32+ caractères aléatoires) |
-| `STRIPE_SECRET_KEY` | Clé secrète Stripe (sk_test_ en dev) |
-| `STRIPE_WEBHOOK_SECRET` | Secret du webhook Stripe |
-| `STRIPE_PUBLISHABLE_KEY` | Clé publique Stripe (côté front) |
+| Variable | Rôle |
+|----------|------|
+| `DATABASE_URL` | Connexion PostgreSQL de l'API |
+| `TEST_DATABASE_URL` | Base des tests d'intégration (vidée à chaque exécution) |
+| `JWT_SECRET` | Signature des jetons d'accès (32+ caractères aléatoires) |
+| `JWT_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` | Durées : 15 min / 7 jours |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Paiement côté API |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | Clé publique Stripe du site |
+| `VITE_API_URL` | URL publique de l'API pour le build de production du site |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Assistant IA |
+| `CORS_ORIGINS` | Origines autorisées en production |
+| `SEED_PASSWORD` | Mot de passe des comptes de démo |
 
 ---
 
-## Architecture des dossiers
+## Arborescence
 
 ```
 TerraProxi/
 ├── apps/
-│   ├── api/        # Bun + Elysia.js (port 3002)
+│   ├── api/        # Bun + Elysia (port 3002) — src/, tests/
 │   ├── web/        # React + Vite (port 3000)
 │   └── mobile/     # React Native + Expo
-├── packages/
-│   └── shared-types/   # Types TypeScript communs
+├── specs/          # Contrats : OpenAPI, JSON Schema, Gherkin, ADR
 ├── infrastructure/
-│   ├── database/migrations/  # Scripts SQL versionnés
-│   └── docker/   # Scripts backup + deploy
-├── docs/           # Documentation
+│   ├── database/migrations/   # SQL versionné (+ down/ pour annuler)
+│   └── docker/                # deploy.sh, backup.sh
+├── docs/
 ├── docker-compose.yml       # Production
-├── docker-compose.dev.yml   # Développement local
-├── Caddyfile       # Reverse proxy HTTPS
-└── .env.example
+├── docker-compose.dev.yml   # Développement
+└── Caddyfile                # Reverse proxy HTTPS
 ```
 
----
+## Production
 
-## Déploiement OVH
-
-Voir [`notes_projet.md`](../notes_projet.md) pour le détail complet (OVH, Cloudflare, Docker).
-
-Résumé rapide :
-
-```bash
-# Sur le serveur OVH (en tant qu'admin)
-cd /opt/terraproxi
-./infrastructure/docker/deploy.sh
-```
-
-Le script : pull le code → build les images → redémarre les conteneurs → vérifie le healthcheck.
-
----
-
-## Sauvegardes automatiques
-
-Configurer le cron sur le serveur :
-
-```bash
-# Sauvegarde quotidienne à 3h du matin
-0 3 * * * /opt/terraproxi/infrastructure/docker/backup.sh
-```
-
-Les dumps `.sql.gz` sont conservés 30 jours dans `/opt/terraproxi/backups/`.
-
----
-
-## Tests
-
-```bash
-# Tests unitaires API (à implémenter avec bun:test)
-cd apps/api && bun test
-
-# Vérification TypeScript
-pnpm lint
-```
-
-Pour les tests Stripe, utiliser les cartes de test Stripe :
-- Succès : `4242 4242 4242 4242`
-- Refus : `4000 0000 0000 0002`
+Déploiement, sauvegardes, supervision et incidents : [`docs/maintenance.md`](maintenance.md).
