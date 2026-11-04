@@ -122,7 +122,7 @@ export function ProducerProfilePage() {
 
         <div className="tp-grid-2">
           <Input label="Adresse" id="address" value={form.address ?? ''} onChange={(e) => set('address')(e.target.value)} />
-          <Input label="Code postal" id="postal_code" inputMode="numeric" maxLength={10} value={form.postal_code ?? ''}
+          <Input label="Code postal" id="postal_code" inputMode="numeric" maxLength={5} pattern="[0-9]{5}" value={form.postal_code ?? ''}
             onChange={(e) => set('postal_code')(e.target.value)} />
           <Input label="Ville" id="city" value={form.city ?? ''} onChange={(e) => set('city')(e.target.value)} />
           <Input label="Horaires d'ouverture" id="opening_hours" placeholder="Mer. et sam. 9 h – 13 h"

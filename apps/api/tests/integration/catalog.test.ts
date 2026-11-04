@@ -40,6 +40,37 @@ describe.skipIf(!hasTestDatabase)('Producteurs et catalogue', () => {
     expect((await call('GET', '/api/producers?lat=43.6')).status).toBe(400)
   })
 
+  test('fiche publique sans compte ; identifiant non UUID → 400', async () => {
+    const { producerId } = await createProducerWithProduct()
+    const res = await call('GET', `/api/producers/${producerId}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ id: producerId, city: 'Montpellier', categories: ['Fruits & Légumes'] })
+    expect((await call('GET', '/api/producers/pas-un-uuid')).status).toBe(400)
+    expect((await call('GET', '/api/producers/00000000-0000-4000-8000-000000000000')).status).toBe(404)
+  })
+
+  test('fiche producteur réservée au rôle PRODUCER', async () => {
+    const consumer = await registerAccount('CONSUMER')
+    const res = await call('POST', '/api/producers', { token: consumer.token, body: { company_name: 'Intrus' } })
+    expect(res.status).toBe(403)
+    expect((await call('GET', '/api/producers/me', { token: consumer.token })).status).toBe(403)
+  })
+
+  test('catalogue filtrable par catégorie et par texte', async () => {
+    const { account, producerId } = await createProducerWithProduct()
+    await call('POST', '/api/products', {
+      token: account.token,
+      body: { name: 'Pélardon affiné', description: 'Fromage de chèvre', price: 2.55, stock: 8, category: 'DAIRY' },
+    })
+
+    const dairy = await call('GET', `/api/products?producer_id=${producerId}&category=DAIRY`)
+    expect(dairy.body.map((p: { name: string }) => p.name)).toEqual(['Pélardon affiné'])
+
+    const search = await call('GET', '/api/products?search=chèvre')
+    expect(search.body.map((p: { name: string }) => p.name)).toEqual(['Pélardon affiné'])
+    expect(search.body[0].producer_name).toStartWith('Ferme ')
+  })
+
   test('CRUD produit réservé au propriétaire', async () => {
     const owner = await createProducerWithProduct()
     const other = await createProducerWithProduct()
