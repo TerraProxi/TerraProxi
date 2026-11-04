@@ -1,14 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
+import { useUnreadMessages } from '../../hooks/useUnreadMessages'
 
 export function Header() {
   const { isAuthenticated, user, logout } = useAuth()
   const { count } = useCart()
+  const unread = useUnreadMessages(isAuthenticated)
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate('/')
   }
 
@@ -71,7 +73,8 @@ export function Header() {
                 to="/cart"
                 style={{ position: 'relative', color: 'var(--color-dark)' }}
               >
-                🛒
+                <span aria-hidden="true">🛒</span>
+                <span className="sr-only">Panier ({count} article(s))</span>
                 {count > 0 && (
                   <span
                     style={{
@@ -105,6 +108,25 @@ export function Header() {
                 style={{ color: 'var(--color-dark)', fontWeight: 500 }}
               >
                 Messages
+                {unread > 0 && (
+                  <span
+                    aria-label={`${unread} message(s) non lu(s)`}
+                    style={{
+                      marginLeft: 6,
+                      background: '#B91C1C',
+                      color: '#fff',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '0 7px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </Link>
+              <Link to="/account" style={{ color: 'var(--color-dark)', fontWeight: 500 }}>
+                Mon compte
               </Link>
               <button
                 onClick={handleLogout}

@@ -5,21 +5,25 @@ export type OrderStatus =
 
 export interface OrderItem {
   id: string
-  product_id: string
+  product_id: string | null
   product_name: string
   quantity: number
   unit_price: number
 }
 
+export type DeliveryMode = 'pickup' | 'delivery'
+
 export interface Order {
   id: string
-  consumer_id: string
-  producer_id: string
+  consumer_id: string | null
+  producer_id: string | null
   producer_name?: string
   consumer_name?: string
   status: OrderStatus
   total_price: number
   notes?: string
+  delivery_mode: DeliveryMode
+  delivery_address?: string | null
   items: OrderItem[]
   created_at: string
 }
@@ -28,7 +32,12 @@ export interface CreateOrderPayload {
   producer_id: string
   items: { product_id: string; quantity: number }[]
   notes?: string
+  delivery_mode?: DeliveryMode
+  delivery_address?: string
 }
+
+/** Annulation possible côté client tant que la commande n'est pas payée. */
+export const isCancellableByConsumer = (status: OrderStatus) => status === 'PENDING'
 
 export const ordersService = {
   create: (data: CreateOrderPayload) =>

@@ -26,6 +26,8 @@ export const messagesService = {
   thread: (partnerId: string, params?: { limit?: number; before?: string }) =>
     api.get<Message[]>(`/messages/${partnerId}`, { params }),
 
+  unreadCount: () => api.get<{ unread_count: number }>('/messages/unread-count'),
+
   send: (receiver_id: string, content: string) =>
     api.post<Message>('/messages', { receiver_id, content }),
 }

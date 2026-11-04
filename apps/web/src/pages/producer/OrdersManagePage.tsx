@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { ordersService, type Order, type OrderStatus } from '../../services/orders.service'
+import { apiErrorMessage } from '../../services/api'
 import { Badge } from '../../components/ui/Badge'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -26,8 +27,12 @@ export function OrdersManagePage() {
   const advance = async (order: Order) => {
     const next = NEXT_STATUS[order.status]
     if (!next) return
-    await ordersService.updateStatus(order.id, next)
-    setOrders((os) => os.map((o) => o.id === order.id ? { ...o, status: next } : o))
+    try {
+      await ordersService.updateStatus(order.id, next)
+      setOrders((os) => os.map((o) => o.id === order.id ? { ...o, status: next } : o))
+    } catch (err) {
+      window.alert(apiErrorMessage(err, 'Mise à jour du statut impossible'))
+    }
   }
 
   const STATUSES = ['ALL', 'PENDING', 'PAID', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED']

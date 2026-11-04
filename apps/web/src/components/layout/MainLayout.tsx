@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Header } from './Header'
 
 interface Props {
@@ -24,6 +25,10 @@ export function MainLayout({ children, fullWidth = false }: Props) {
         }}
       >
         © {new Date().getFullYear()} TerraProxi — Produits locaux, liens directs.
+        <nav aria-label="Informations légales" style={{ marginTop: 'var(--space-2)', display: 'flex', gap: 'var(--space-4)', justifyContent: 'center' }}>
+          <Link to="/legal" style={{ color: '#fff', textDecoration: 'underline' }}>Mentions légales</Link>
+          <Link to="/privacy" style={{ color: '#fff', textDecoration: 'underline' }}>Confidentialité</Link>
+        </nav>
       </footer>
     </div>
   )

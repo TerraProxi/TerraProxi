@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { ordersService, type Order } from '../../services/orders.service'
+import { apiErrorMessage } from '../../services/api'
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '')
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim()
+const isStripeConfigured = Boolean(STRIPE_KEY && !STRIPE_KEY.includes('CHANGE_ME'))
+
+/** Chargé à la première ouverture de la page de paiement, jamais sans clé publique. */
+let stripePromise: Promise<Stripe | null> | null = null
+const getStripe = () => (stripePromise ??= loadStripe(STRIPE_KEY!))
 
 function CheckoutForm({ order }: { order: Order }) {
   const stripe = useStripe()
@@ -115,16 +121,19 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!orderId) return
+    if (!isStripeConfigured) {
+      setError('Le paiement en ligne n’est pas configuré sur cet environnement (VITE_STRIPE_PUBLISHABLE_KEY).')
+    }
     ;(async () => {
       try {
         const { data: o } = await ordersService.getById(orderId)
         setOrder(o)
-        if (o.status === 'PENDING') {
+        if (o.status === 'PENDING' && isStripeConfigured) {
           const { data } = await ordersService.createPaymentIntent(orderId)
           setClientSecret(data.client_secret)
         }
-      } catch {
-        setError('Impossible de charger la commande')
+      } catch (err) {
+        setError(apiErrorMessage(err, 'Impossible de charger la commande'))
       } finally {
         setLoading(false)
       }
@@ -145,7 +154,7 @@ export function CheckoutPage() {
         )}
 
         {order && clientSecret && (
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <Elements stripe={getStripe()} options={{ clientSecret }}>
             <CheckoutForm order={order} />
           </Elements>
         )}
