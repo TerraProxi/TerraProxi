@@ -79,7 +79,7 @@ jobs:
           docker run -d --name db --network ci \
             -e POSTGRES_DB=terraproxi -e POSTGRES_USER=app_user -e POSTGRES_PASSWORD=pw \
             postgis/postgis:16-3.4-alpine
-          until docker exec db pg_isready -U app_user -d terraproxi; do sleep 2; done
+          until docker exec db pg_isready -h 127.0.0.1 -U app_user -d terraproxi; do sleep 2; done
           docker run -d --name api --network ci -p 3002:3002 \
             -e DATABASE_URL=postgres://app_user:pw@db:5432/terraproxi \
             -e JWT_SECRET=ci-only-secret-0123456789abcdefghij \

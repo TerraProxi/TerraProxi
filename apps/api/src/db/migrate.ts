@@ -8,10 +8,26 @@
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { db, withTransaction, closeDb } from './client'
+import { db, withTransaction, closeDb, pingDb } from './client'
 
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
   ?? resolve(import.meta.dir, '../../../..', 'infrastructure', 'database', 'migrations')
+
+const DB_WAIT_ATTEMPTS = Number(process.env.DB_WAIT_ATTEMPTS ?? 30)
+const DB_WAIT_DELAY_MS = 2_000
+
+/**
+ * Au premier démarrage, l'image PostGIS initialise la base puis redémarre le
+ * serveur : on attend qu'il accepte les connexions TCP avant de migrer.
+ */
+export async function waitForDatabase(log: (msg: string) => void = console.log): Promise<void> {
+  for (let attempt = 1; attempt <= DB_WAIT_ATTEMPTS; attempt++) {
+    if (await pingDb()) return
+    log(`[migrate] base indisponible, nouvel essai ${attempt}/${DB_WAIT_ATTEMPTS}…`)
+    await Bun.sleep(DB_WAIT_DELAY_MS)
+  }
+  throw new Error(`PostgreSQL injoignable après ${DB_WAIT_ATTEMPTS} essais`)
+}
 
 /**
  * Les bases créées avant ce script (001 joué par docker-entrypoint-initdb.d)
@@ -63,7 +79,8 @@ export async function runMigrations(log: (msg: string) => void = console.log): P
 }
 
 if (import.meta.main) {
-  runMigrations()
+  waitForDatabase()
+    .then(() => runMigrations())
     .then(() => closeDb())
     .catch(async (err) => {
       console.error('[migrate] FAILED', err)

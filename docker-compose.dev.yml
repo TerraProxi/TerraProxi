@@ -14,7 +14,7 @@ services:
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app_user -d terraproxi"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U app_user -d terraproxi"]
       interval: 5s
       timeout: 3s
       retries: 10
