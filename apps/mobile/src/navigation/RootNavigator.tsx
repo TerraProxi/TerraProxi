@@ -13,6 +13,7 @@ import { CheckoutScreen } from '../screens/CheckoutScreen'
 import { MessagesScreen } from '../screens/MessagesScreen'
 import { ChatScreen } from '../screens/ChatScreen'
 import { OrdersScreen } from '../screens/OrdersScreen'
+import { FavoritesScreen } from '../screens/FavoritesScreen'
 import { useUiStore } from '../store/ui.store'
 
 export type RootStackParamList = {
@@ -28,6 +29,7 @@ export type RootStackParamList = {
   Orders: undefined
   Checkout: { orderId: string; pendingOrderIds?: string[] }
   Messages: undefined
+  Favorites: undefined
   Conversation: { partnerId: string; partnerName: string }
 }
 
@@ -75,6 +77,7 @@ export function RootNavigator() {
         <Stack.Screen name="Orders" component={OrdersScreen} options={{ headerShown: true, title: 'Mes commandes' }} />
         <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true, title: 'Paiement' }} />
         <Stack.Screen name="Messages" component={MessagesScreen} options={{ headerShown: true, title: 'Messages' }} />
+        <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ headerShown: true, title: 'Mes favoris' }} />
         <Stack.Screen name="Conversation" component={ChatScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>

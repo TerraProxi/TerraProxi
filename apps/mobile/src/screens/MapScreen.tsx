@@ -29,11 +29,9 @@ interface Producer {
   is_verified: boolean
   first_name: string
   last_name: string
-  distance_km: number
-  rating: number
-  review_count: number
+  distance_km: number | null
   categories: string[]
-  is_open: boolean
+  opening_hours?: string | null
 }
 
 const CATEGORIES = ['Tous', 'Légumes', 'Fruits', 'Vins', 'Épicerie', 'Viande', 'Fromage']
@@ -160,7 +158,7 @@ export function MapScreen() {
                 <MaterialCommunityIcons name="store" size={20} color={Colors.white} />
               </View>
               <View style={styles.markerDistance}>
-                <Text style={styles.markerDistanceText}>{Math.round(p.distance_km)} km</Text>
+                <Text style={styles.markerDistanceText}>{p.distance_km != null ? `${Math.round(p.distance_km)} km` : p.city}</Text>
               </View>
             </View>
             <Callout tooltip onPress={() => goToProducer(p.id)}>
@@ -205,7 +203,7 @@ export function MapScreen() {
                   <Text style={styles.searchResultName}>{p.company_name}</Text>
                   {p.description && <Text style={styles.searchResultTagline}>{p.description}</Text>}
                 </View>
-                <Text style={styles.searchResultDistance}>{Math.round(p.distance_km)} km</Text>
+                <Text style={styles.searchResultDistance}>{p.distance_km != null ? `${Math.round(p.distance_km)} km` : p.city}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -243,11 +241,15 @@ export function MapScreen() {
                 <Text style={styles.cardName} numberOfLines={1}>{p.company_name}</Text>
                 {p.description && <Text style={styles.cardTagline} numberOfLines={1}>{p.description}</Text>}
                 <View style={styles.cardMeta}>
-                  <View style={styles.cardRating}>
-                    <MaterialCommunityIcons name="star" size={14} color={Colors.yellow500} />
-                    <Text style={styles.cardRatingText}>{p.rating}</Text>
-                  </View>
-                  <Text style={styles.cardDistance}>{Math.round(p.distance_km)} km</Text>
+                  {p.is_verified && (
+                    <View style={styles.cardRating}>
+                      <MaterialCommunityIcons name="check-decagram" size={14} color={Colors.primary} />
+                      <Text style={styles.cardRatingText}>Vérifié</Text>
+                    </View>
+                  )}
+                  {p.distance_km != null && (
+                    <Text style={styles.cardDistance}>{Math.round(p.distance_km)} km</Text>
+                  )}
                 </View>
               </View>
             </TouchableOpacity>

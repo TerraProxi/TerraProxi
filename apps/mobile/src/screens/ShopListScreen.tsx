@@ -9,7 +9,7 @@ import * as Location from 'expo-location'
 import { Colors, Spacing, Radius } from '../theme'
 import { api } from '../services/api'
 
-type Filter = 'closest' | 'rated' | 'open'
+type Filter = 'closest' | 'verified' | 'name'
 
 interface Producer {
   id: string
@@ -26,17 +26,15 @@ interface Producer {
   is_verified: boolean
   first_name: string
   last_name: string
-  distance_km: number
-  rating: number
-  review_count: number
-  categories: string[]
-  is_open: boolean
+  distance_km: number | null
+  categories?: string[]
+  opening_hours?: string | null
 }
 
 const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
   { key: 'closest', label: 'Plus proche', icon: 'map-marker' },
-  { key: 'rated', label: 'Mieux notés', icon: 'star' },
-  { key: 'open', label: 'Ouvert', icon: 'store' },
+  { key: 'verified', label: 'Vérifiés', icon: 'check-decagram' },
+  { key: 'name', label: 'A → Z', icon: 'sort-alphabetical-ascending' },
 ]
 
 export function ShopListScreen({ navigation }: any) {
@@ -59,9 +57,7 @@ export function ShopListScreen({ navigation }: any) {
       if (searchQuery?.trim()) {
         params.search = searchQuery.trim()
       }
-      console.log('[ShopList] fetching producers with params:', JSON.stringify(params))
       const res = await api.get<Producer[]>('/producers', { params })
-      console.log('[ShopList] response:', res.data?.length, 'producers')
       setProducers(res.data)
     } catch (err: any) {
       console.error('[ShopList] fetch error:', err?.message, err?.code, err?.response?.status)
@@ -102,13 +98,13 @@ export function ShopListScreen({ navigation }: any) {
     let result = [...producers]
     switch (activeFilter) {
       case 'closest':
-        result.sort((a, b) => a.distance_km - b.distance_km)
+        result.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
         break
-      case 'rated':
-        result.sort((a, b) => b.rating - a.rating)
+      case 'verified':
+        result = result.filter((p) => p.is_verified)
         break
-      case 'open':
-        result = result.filter((p) => p.is_open)
+      case 'name':
+        result.sort((a, b) => a.company_name.localeCompare(b.company_name, 'fr'))
         break
     }
     return result
@@ -187,9 +183,11 @@ export function ShopListScreen({ navigation }: any) {
             >
               <View style={styles.imageWrapper}>
                 <Image source={{ uri: item.banner_url || undefined }} style={styles.image} />
-                <View style={[styles.badge, item.is_open ? styles.badgeOpen : styles.badgeClosed]}>
-                  <Text style={styles.badgeText}>{item.is_open ? 'OUVERT' : 'FERMÉ'}</Text>
-                </View>
+                {item.is_verified && (
+                  <View style={[styles.badge, styles.badgeOpen]}>
+                    <Text style={styles.badgeText}>VÉRIFIÉ</Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.cardContent}>
@@ -200,7 +198,9 @@ export function ShopListScreen({ navigation }: any) {
                 <View style={styles.cardBottom}>
                   <View style={styles.distanceBadge}>
                     <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primary} />
-                    <Text style={styles.distanceText}>{item.distance_km} km</Text>
+                    <Text style={styles.distanceText}>
+                      {item.distance_km != null ? `${item.distance_km.toFixed(1)} km` : '—'}
+                    </Text>
                   </View>
                   <MaterialCommunityIcons
                     name="chevron-right"

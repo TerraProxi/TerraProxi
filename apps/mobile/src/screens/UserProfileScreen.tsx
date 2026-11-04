@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator, Alert, Linking } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
@@ -10,7 +10,9 @@ import { useAuthStore } from '../store/auth.store'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
 import { useUiStore } from '../store/ui.store'
-import api from '../services/api'
+import api, { apiErrorMessage } from '../services/api'
+
+const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://app.terraproxi.fr'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -37,15 +39,17 @@ interface ProfileData {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte', badge: '3' },
+  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte' },
+  { id: 'messages', label: 'Messages', icon: 'chat-outline', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
   { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.red500, iconBg: Colors.red50, section: 'Mon Compte' },
   { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
-  { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences', badge: '5' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences' },
   { id: 'location', label: 'Localisation', icon: 'map-marker', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Préférences' },
   { id: 'darkMode', label: 'Mode sombre', icon: 'weather-night', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Préférences', hasToggle: true },
   { id: 'help', label: 'Aide', icon: 'help-circle', iconColor: Colors.accent, iconBg: '#E0F7FA', section: 'Support' },
   { id: 'report', label: 'Signaler', icon: 'flag', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
-  { id: 'terms', label: 'Conditions', icon: 'file-document', iconColor: Colors.gray600, iconBg: Colors.gray100, section: 'Support' },
+  { id: 'terms', label: 'Confidentialité', icon: 'file-document', iconColor: Colors.gray600, iconBg: Colors.gray100, section: 'Support' },
+  { id: 'deleteAccount', label: 'Supprimer mon compte', icon: 'account-remove', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
 ]
 
 const SECTION_ORDER = ['Mon Compte', 'Préférences', 'Support']
@@ -53,7 +57,7 @@ const SECTION_ICONS: Record<string, string> = { 'Mon Compte': 'account', 'Préf�
 
 export function UserProfileScreen() {
   const insets = useSafeAreaInsets()
-  const { user, isAuthenticated, logout } = useAuthStore()
+  const { user, isAuthenticated, logout, deleteAccount } = useAuthStore()
   const nav = useNavigation<Nav>()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -98,13 +102,39 @@ export function UserProfileScreen() {
     data: MENU_ITEMS.filter((i) => i.section === section),
   }))
 
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Vos messages et votre fiche producteur seront effacés. Vos commandes passées sont conservées de façon anonyme pour la comptabilité.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            deleteAccount().catch((err) => Alert.alert('Erreur', apiErrorMessage(err)))
+          },
+        },
+      ],
+    )
+  }
+
   const handleMenuPress = (item: MenuItem) => {
     switch (item.id) {
       case 'orders':
         nav.navigate('Orders')
         return
       case 'favorites':
-        nav.navigate('Tabs', { screen: 'Favoris' } as never)
+        nav.navigate('Favorites')
+        return
+      case 'messages':
+        nav.navigate('Messages')
+        return
+      case 'terms':
+        void Linking.openURL(`${WEB_URL}/privacy`)
+        return
+      case 'deleteAccount':
+        confirmDeleteAccount()
         return
       case 'cart':
         nav.navigate('Cart')
@@ -113,7 +143,6 @@ export function UserProfileScreen() {
       case 'location':
       case 'help':
       case 'report':
-      case 'terms':
         Alert.alert('Bientot disponible', `${item.label} sera disponible dans une prochaine version.`)
         return
       default:
