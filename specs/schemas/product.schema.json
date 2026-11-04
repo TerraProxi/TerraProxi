@@ -1,73 +1,47 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "product.schema.json",
+  "title": "Product",
+  "description": "Produit du catalogue (table products). producer_name est ajouté dans les listes et la fiche, producer_city dans la fiche.",
   "type": "object",
-  "required": [
-    "id",
-    "producer_id",
-    "name",
-    "price",
-    "stock",
-    "unit",
-    "category",
-    "is_available",
-    "created_at"
-  ],
+  "required": ["id", "producer_id", "name", "price", "stock", "unit", "category", "is_available", "created_at", "updated_at"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "producer_id": {
-      "type": "string"
-    },
-    "name": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
-    },
-    "price": {
-      "type": "number",
-      "minimum": 0
-    },
-    "stock": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "unit": {
-      "type": "string"
-    },
-    "category": {
+    "id": { "type": "string", "format": "uuid" },
+    "producer_id": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "description": { "type": ["string", "null"], "maxLength": 5000 },
+    "price": { "type": "number", "minimum": 0, "maximum": 100000, "description": "Prix TTC en euros" },
+    "stock": { "type": "integer", "minimum": 0 },
+    "unit": { "type": "string", "minLength": 1, "maxLength": 50, "examples": ["kg", "unité", "boîte de 12"] },
+    "category": { "$ref": "#/$defs/ProductCategory" },
+    "image_url": { "type": ["string", "null"], "maxLength": 500 },
+    "is_available": { "type": "boolean" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "producer_name": { "type": "string" },
+    "producer_city": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ProductCategory": {
       "type": "string",
-      "enum": [
-        "FRUITS_VEGETABLES",
-        "DAIRY",
-        "MEAT",
-        "BEVERAGES",
-        "FINE_GROCERY",
-        "CRAFTS",
-        "FLOWERS_PLANTS",
-        "OTHER"
-      ]
+      "enum": ["FRUITS_VEGETABLES", "DAIRY", "MEAT", "BEVERAGES", "FINE_GROCERY", "CRAFTS", "FLOWERS_PLANTS", "OTHER"]
     },
-    "image_url": {
-      "type": "string",
-      "format": "uri"
-    },
-    "is_available": {
-      "type": "boolean"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "producer_name": {
-      "type": "string"
-    },
-    "is_bestseller": {
-      "type": "boolean"
-    },
-    "is_seasonal": {
-      "type": "boolean"
+    "ProductInput": {
+      "type": "object",
+      "description": "Corps de POST /products et PUT /products/{id}",
+      "required": ["name", "price", "stock"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "price": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "stock": { "type": "integer", "minimum": 0 },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 50, "default": "unité" },
+        "category": { "$ref": "#/$defs/ProductCategory", "default": "OTHER" },
+        "image_url": { "type": "string", "maxLength": 500 },
+        "is_available": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
     }
   }
 }

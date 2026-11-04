@@ -1,61 +1,38 @@
 {
-  "$schema": "http://json-schema.org/draft/2020-12/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "error-envelope.schema.json",
-  "title": "TerraProxi API Error Envelope",
-  "description": "Standard error response format for all TerraProxi API endpoints",
+  "title": "ErrorEnvelope",
+  "description": "Format de toutes les réponses d'erreur de l'API (apps/api/src/app.ts, onError).",
   "type": "object",
   "required": ["error", "status"],
   "properties": {
     "error": {
       "type": "string",
-      "description": "Simple error message in French: cart_errors=Header should start with lowercase"
+      "minLength": 1,
+      "description": "Message lisible, en français, affichable tel quel"
     },
     "status": {
       "type": "integer",
-      "description": "HTTP status code representing the error type",
       "minimum": 400,
       "maximum": 599,
-      "examples": [400, 401, 403, 404, 409, 500]
+      "description": "Reprend le code HTTP de la réponse"
     },
     "details": {
       "type": "object",
-      "description": "Detailed validation errors when applicable",
+      "description": "Présent seulement pour une erreur de validation (400) qui concerne un champ",
+      "required": ["field"],
       "properties": {
-        "field": {
-          "type": "string",
-          "description": "Name of the field that failed validation"
-        },
-        "message": {
-          "type": "string",
-          "description": "Specific validation message in French"
-        },
-        "values": {
-          "type": "object",
-          "description": "List of invalid values"
-        }
+        "field": { "type": "string", "description": "Champ ou paramètre invalide (ex. password)" },
+        "message": { "type": "string", "description": "Règle non respectée" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
+  "additionalProperties": false,
   "examples": [
-    {
-      "error": "Email requis",
-      "status": 400,
-      "details": {
-        "field": "email",
-        "message": "Veuillez fournir une adresse email valide",
-        "values": {}
-      }
-    },
-    {
-      "error": "Commande introuvable",
-      "status": 404,
-      "details": null
-    },
-    {
-      "error": "Erreur interne du serveur",
-      "status": 500,
-      "details": null
-    }
+    { "error": "Données invalides", "status": 400, "details": { "field": "password", "message": "Expected string length greater or equal to 8" } },
+    { "error": "Commande introuvable", "status": 404 },
+    { "error": "Transition PENDING → PREPARING non autorisée", "status": 409 },
+    { "error": "Erreur interne du serveur", "status": 500 }
   ]
 }

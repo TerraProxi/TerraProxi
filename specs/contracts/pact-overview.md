@@ -1,121 +1,19 @@
-# TerraProxi Integration Contracts Overview
+# Contrats d'intégration externes
 
-## Purpose
+TerraProxi dépend de trois services tiers. Il n'y a pas de Pact broker : chaque frontière est
+décrite ci-dessous avec la façon dont elle est vérifiée.
 
-Pact contracts define integration boundaries between microservices or external dependencies. They ensure consumers and providers maintain compatible API contracts through executable verification.
+| Service | Sens | Contrat utilisé | Vérification |
+|---------|------|-----------------|--------------|
+| Stripe | API → Stripe : création / lecture de PaymentIntent | `paymentIntents.create` (montant en centimes, EUR, `metadata.order_id`), `paymentIntents.retrieve` | Faux client injecté (`setStripeClient`) dans `apps/api/tests/integration/stripe-ai.test.ts` ; recette manuelle en mode test |
+| Stripe | Stripe → API : webhook `POST /api/stripe/webhook` | Événement `payment_intent.succeeded`, en-tête `stripe-signature` vérifié sur le corps brut | Même test : signature valide / invalide, intent étranger ignoré ; en local `stripe listen --forward-to localhost:3002/api/stripe/webhook` |
+| Google Gemini | API → Gemini : `generateContent` | Sortie JSON imposée par `responseSchema` ; la réponse est revalidée et filtrée sur le catalogue (`specs/schemas/ai-chat.schema.json`) | Recette manuelle (clé requise) ; 503 si la clé manque ou si la réponse est inexploitable |
+| Base Adresse Nationale | Web → `api-adresse.data.gouv.fr/search` | `features[0].geometry.coordinates` = [lon, lat] | Recette manuelle de la fiche producteur (« Localiser l'adresse ») |
 
-## Current Status
+## Règles
 
-**Active** - Pact is part of the CI pipeline. All API endpoints include OpenAPI specs with x-pact annotations for consumer-driven contract testing.
-
-## Mock Services Required
-
-### Consumer Mocks
-- **Cart Service**: Simulate product addition, validation, invalid configurations
-- **Stripe Gateway**: Mock payment success/failure scenarios with states
-- **AI Recommendation Engine**: Return patterned recommendations with varied datasets
-- **Geolocation Service**: Simulate distance queries and coordinate validation
-
-### Provider Mocks
-- **External Payment Gateway**: Stripe webhook responses and HTTP patterns
-- **Email Service**: Bounce, open, and delivery event simulation
-
-## CI Integration
-
-### Pipeline Stages
-
-1. **Spec Validation** (`npm run spec:lint`)
-   - Check contracts conform to schema definitions
-   - Validate YAML headers and merge requests
-
-2. **Contract Testing** (`npm run pact:test`)
-   - Run consumer tests against provider mock servers
-   - Generate Pact files on pass, fail on divergence
-   - Matrix build for cross-version compatibility
-
-3. **Contract Verification** (`npm run pact:verify`)
-   - Publish Pact consumer contracts to broker
-   - Fetch provider contracts for integration testing
-   - Verify provider implementation matches contract
-
-4. **Code Generation** (`npm run pact:generate`)
-   - Type-safe interfaces from Pact contracts
-   - Request/response mocking utilities
-   - API client generators for mobile/web
-
-### CI Commands
-
-```bash
-# Lint contract schemas
-npm run spec:lint
-
-# Run Pact integration tests
-npm run pact:test
-
-# Generate TypeScript interfaces from contracts
-npm run pact:generate
-
-# Run conformance healthchecks
-npm run spec:health
-```
-
-## Contract Types
-
-### Service Contracts
-- OpenAPI 3.1 specifications in `specs/api/`
-- x-pact annotations for contract boundaries
-- Request/response validation schemas
-
-### Data Contracts
-- JSON Schema definitions in `specs/schemas/`
-- Validation rules for request bodies
-- Response shape guarantees
-
-### Behavior Contracts
-- Gherkin scenarios in `specs/features/`
-- Given-When-Then executable tests
-- Integration test coverage targets
-
-### Configuration Contracts
-- Environment variable definitions
-- Service-level configuration schemas
-- Feature flag contracts for gradual rollout
-
-## Provider Registration
-
-### Development Environment
-```bash
-npm run pact:setup:dev
-```
-
-### Production Environment
-```bash
-npm run pact:setup:prod
-```
-
-## Contract Publishing
-
-Automated publishing to Pact broker during CI:
-
-```yaml
-- name: Publish Pact Files
-  run: npx pact-broker publish pact-results \
-    --pact-broker-url=$PACT_BROKER_URL \
-    --directory= \
-    --consumer-version=$CI_COMMIT_SHA
-```
-
-## Compliance Gates
-
-- All endpoints have OpenAPI 3.1 specs (spectral validation)
-- 100% of endpoints covered by consumer tests
-- Contract tests must pass in CI before merge
-- Breaking changes require contract approval
-- Failed Pact runs block feature deployment
-
-## Documentation
-
-- [OpenAPI Schema Reference](../api)
-- [JSON Schema Definitions](../schemas)
-- [Gherkin Behavior Scenarios](../features)
-- [Contract Templates](../../tests/conformance/spec-templates)
+- Un service tiers absent ne casse pas l'API : Stripe et Gemini non configurés → 503 sur leurs
+  routes uniquement, le reste fonctionne.
+- Aucune donnée personnelle n'est envoyée à Gemini (ni nom, ni email) ; seule l'adresse saisie
+  part vers la Base Adresse Nationale.
+- Les montants viennent toujours de la base, jamais du client.

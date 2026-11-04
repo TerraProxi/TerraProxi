@@ -1,33 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "order-item.schema.json",
+  "title": "OrderItem",
+  "description": "Ligne de commande (table order_items). Le nom et le prix sont figés à la commande ; product_id devient null si le produit est supprimé.",
   "type": "object",
-  "required": [
-    "id",
-    "order_id",
-    "product_id",
-    "quantity",
-    "unit_price"
-  ],
+  "required": ["product_id", "product_name", "quantity", "unit_price"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "order_id": {
-      "type": "string"
-    },
-    "product_id": {
-      "type": "string"
-    },
-    "quantity": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "unit_price": {
-      "type": "number",
-      "minimum": 0
-    },
-    "product": {
-      "$ref": "#/components/schemas/Product"
-    }
-  }
+    "id": { "type": "string", "format": "uuid", "description": "Absent de la réponse de création" },
+    "product_id": { "type": ["string", "null"], "format": "uuid" },
+    "product_name": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "quantity": { "type": "integer", "minimum": 1, "maximum": 999 },
+    "unit_price": { "type": "number", "minimum": 0 }
+  },
+  "additionalProperties": false
 }

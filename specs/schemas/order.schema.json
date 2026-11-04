@@ -1,60 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "order.schema.json",
+  "title": "Order",
+  "description": "Commande auprès d'un producteur (table orders). consumer_id / producer_id deviennent null quand le compte est supprimé (RGPD, migration 002). Les listes et le détail ajoutent producer_name, consumer_name et items.",
   "type": "object",
-  "required": [
-    "id",
-    "consumer_id",
-    "producer_id",
-    "status",
-    "total_price",
-    "created_at"
-  ],
+  "required": ["id", "consumer_id", "producer_id", "status", "total_price", "delivery_mode", "created_at"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "consumer_id": {
-      "type": "string"
-    },
-    "producer_id": {
-      "type": "string"
-    },
-    "status": {
+    "id": { "type": "string", "format": "uuid" },
+    "consumer_id": { "type": ["string", "null"], "format": "uuid" },
+    "producer_id": { "type": ["string", "null"], "format": "uuid" },
+    "status": { "$ref": "#/$defs/OrderStatus" },
+    "total_price": { "type": "number", "minimum": 0, "description": "Calculé par le serveur à partir des prix en base" },
+    "delivery_mode": { "$ref": "#/$defs/DeliveryMode" },
+    "delivery_address": { "type": ["string", "null"], "maxLength": 500 },
+    "notes": { "type": ["string", "null"], "maxLength": 1000 },
+    "stripe_payment_intent": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "producer_name": { "type": ["string", "null"] },
+    "consumer_name": { "type": "string", "description": "« Client supprimé » si le compte n'existe plus" },
+    "items": { "type": "array", "items": { "$ref": "order-item.schema.json" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "OrderStatus": {
       "type": "string",
-      "enum": [
-        "PENDING",
-        "PAID",
-        "PREPARING",
-        "READY",
-        "COMPLETED",
-        "CANCELLED"
-      ]
+      "enum": ["PENDING", "PAID", "PREPARING", "READY", "COMPLETED", "CANCELLED"],
+      "description": "Transitions : voir apps/api/src/services/order-status.ts et features/cart-orders.feature"
     },
-    "total_price": {
-      "type": "number",
-      "minimum": 0
-    },
-    "stripe_payment_id": {
-      "type": "string"
-    },
-    "notes": {
-      "type": "string"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "consumer_name": {
-      "type": "string"
-    },
-    "producer_name": {
-      "type": "string"
-    },
-    "items": {
-      "type": "array",
-      "items": {
-        "$ref": "#/components/schemas/OrderItem"
-      }
-    }
+    "DeliveryMode": { "type": "string", "enum": ["pickup", "delivery"], "default": "pickup" }
   }
 }

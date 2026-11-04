@@ -1,14 +1,17 @@
 openapi: 3.1.0
 info:
-  title: TerraProxi API - Assistant IA
-  version: 1.0.0
+  title: TerraProxi API - Assistant IA et données
+  version: 1.1.0
   description: |
-    Assistant conversationnel alimenté par Gemini.
-    Le backend injecte le catalogue des producteurs locaux pour
-    recommander des boutiques et répondre aux questions culinaires.
+    Assistant conversationnel (Google Gemini) nourri du catalogue des producteurs proches,
+    recommandations et prévisions calculées sur l'historique des commandes.
+    Implémentation : apps/api/src/routes/ai.routes.ts — scénarios : specs/features/ai-chat.feature.
   contact:
     name: TerraProxi Team
     email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
 servers:
   - url: https://gateway.terraproxi.fr/api
     description: Production
@@ -16,65 +19,70 @@ servers:
     description: Développement
 tags:
   - name: AI
-    description: Assistant IA et recommandations
-security:
-  - bearerAuth: []
+    description: Assistant IA, recommandations et prévisions
+
 paths:
   /ai/chat:
     post:
-      summary: Envoyer un message à l'assistant IA
+      summary: Assistant IA
       description: |
-        Transmet la question de l'utilisateur à Gemini avec le contexte
-        des producteurs et produits disponibles sur TerraProxi.
-        Retourne une réponse textuelle et des liens vers les boutiques
-        pertinentes.
-      operationId: aiChat
-      tags:
-        - AI
+        Envoie la question, l'historique (10 derniers échanges retenus) et le panier à Gemini avec le
+        catalogue des producteurs dans le rayon (élargi aux plus proches si le rayon est vide).
+        Les producteurs, produits et actions renvoyés sont filtrés sur ce catalogue.
+      operationId: chatWithAssistant
+      tags: [AI]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AiChatRequest'
-            example:
-              message: "Où trouver des tomates bio près de chez moi ?"
-              lat: 48.8566
-              lon: 2.3522
-              radius_km: 30
-              history:
-                - role: user
-                  content: "Bonjour"
-                - role: assistant
-                  content: "Bonjour ! Comment puis-je vous aider à découvrir les producteurs locaux ?"
+              $ref: '../schemas/ai-chat.schema.json#/$defs/AiChatRequest'
       responses:
         '200':
           description: Réponse de l'assistant
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AiChatResponse'
+                $ref: '../schemas/ai-chat.schema.json#/$defs/AiChatResponse'
         '400':
-          description: Message invalide
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Non authentifié
+          $ref: '#/components/responses/Unauthorized'
         '503':
-          description: Service IA indisponible (clé API manquante ou erreur Gemini)
+          description: GEMINI_API_KEY absente, Gemini indisponible ou réponse inexploitable
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+
   /ai/recommendations:
     get:
-      summary: Recommandations produits (stub ML)
-      operationId: aiRecommendations
-      tags:
-        - AI
+      summary: Recommandations produits
+      description: Jusqu'à 10 produits disponibles les plus présents dans les commandes terminées, jamais achetés par l'utilisateur.
+      operationId: getRecommendations
+      tags: [AI]
       responses:
         '200':
-          description: Liste de produits recommandés
+          description: Produits recommandés
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 10
+                items:
+                  $ref: '#/components/schemas/Recommendation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /ai/forecast/{producerId}:
     get:
-      summary: Prévision de demande (stub ML)
-      operationId: aiForecast
-      tags:
-        - AI
+      summary: Prévision de la demande
+      description: |
+        Réservé au producteur propriétaire. Pour chaque produit : quantités vendues (commandes COMPLETED)
+        sur les 8 dernières semaines, moyenne hebdomadaire, prévision (arrondie au supérieur) et confiance
+        selon le nombre de semaines avec ventes (≥ 6 HIGH, ≥ 3 MEDIUM, sinon LOW).
+      operationId: getDemandForecast
+      tags: [AI]
       parameters:
         - name: producerId
           in: path
@@ -84,7 +92,33 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Prévisions par produit
+          description: Prévision par produit, meilleures ventes d'abord
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForecastLine'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Fiche d'un autre producteur
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '404':
+          description: Producteur introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+
+security:
+  - bearerAuth: []
+
 components:
   securitySchemes:
     bearerAuth:
@@ -92,67 +126,75 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
-    ChatHistoryItem:
+    Recommendation:
       type: object
-      required:
-        - role
-        - content
+      required: [id, producer_id, name, price, unit, category, producer_name, order_count]
       properties:
-        role:
+        id:
           type: string
-          enum:
-            - user
-            - assistant
-        content:
-          type: string
-          minLength: 1
-          maxLength: 4000
-    AiChatRequest:
-      type: object
-      required:
-        - message
-      properties:
-        message:
-          type: string
-          minLength: 1
-          maxLength: 2000
-        history:
-          type: array
-          maxItems: 20
-          items:
-            $ref: '#/components/schemas/ChatHistoryItem'
-        lat:
-          type: number
-        lon:
-          type: number
-        radius_km:
-          type: number
-          default: 50
-    ProducerLink:
-      type: object
-      required:
-        - producer_id
-        - company_name
-        - reason
-      properties:
+          format: uuid
         producer_id:
           type: string
           format: uuid
-        company_name:
+        name:
           type: string
-        reason:
+        description:
+          type: [string, 'null']
+        price:
+          type: number
+        unit:
           type: string
-        city:
+        category:
+          $ref: '../schemas/product.schema.json#/$defs/ProductCategory'
+        image_url:
+          type: [string, 'null']
+        producer_name:
           type: string
-    AiChatResponse:
+        order_count:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    ForecastLine:
       type: object
-      required:
-        - reply
-        - producer_links
+      required: [id, name, unit, stock, sold_qty, weeks_with_sales, avg_weekly_qty, forecast_next_week, confidence]
       properties:
-        reply:
+        id:
           type: string
-        producer_links:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProducerLink'
+          format: uuid
+        name:
+          type: string
+        unit:
+          type: string
+        stock:
+          type: integer
+          minimum: 0
+        sold_qty:
+          type: integer
+          minimum: 0
+        weeks_with_sales:
+          type: integer
+          minimum: 0
+          maximum: 9
+        avg_weekly_qty:
+          type: number
+          minimum: 0
+        forecast_next_week:
+          type: integer
+          minimum: 0
+        confidence:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+      additionalProperties: false
+  responses:
+    BadRequest:
+      description: Paramètre ou corps invalide
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

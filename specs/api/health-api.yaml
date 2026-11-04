@@ -1,0 +1,63 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Supervision
+  version: 1.1.0
+  description: |
+    Point de santé utilisé par le healthcheck Docker, Caddy et infrastructure/docker/deploy.sh.
+    Il interroge PostgreSQL à chaque appel. Implémentation : apps/api/src/app.ts.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr
+    description: Production (hors préfixe /api)
+  - url: http://localhost:3002
+    description: Développement
+tags:
+  - name: Health
+    description: Supervision
+
+paths:
+  /health:
+    get:
+      summary: État de l'API
+      description: 200 si PostgreSQL répond, 503 sinon.
+      operationId: getHealth
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: API et base disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: PostgreSQL ne répond pas (status degraded, database down)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, version, database, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+          example: 1.1.0
+        database:
+          type: string
+          enum: [up, down]
+        timestamp:
+          type: string
+          format: date-time
+      additionalProperties: false

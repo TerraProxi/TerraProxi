@@ -1,39 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "message.schema.json",
+  "title": "Message",
+  "description": "Message entre deux utilisateurs (table messages). Le fil de discussion ajoute le prénom et le nom de l'expéditeur.",
   "type": "object",
-  "required": [
-    "id",
-    "sender_id",
-    "receiver_id",
-    "content",
-    "is_read",
-    "sent_at"
-  ],
+  "required": ["id", "sender_id", "receiver_id", "content", "is_read", "sent_at"],
   "properties": {
-    "id": {
-      "type": "string"
-    },
-    "sender_id": {
-      "type": "string"
-    },
-    "receiver_id": {
-      "type": "string"
-    },
-    "content": {
-      "type": "string"
-    },
-    "is_read": {
-      "type": "boolean"
-    },
-    "sent_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "sender_name": {
-      "type": "string"
-    },
-    "receiver_name": {
-      "type": "string"
+    "id": { "type": "string", "format": "uuid" },
+    "sender_id": { "type": "string", "format": "uuid" },
+    "receiver_id": { "type": "string", "format": "uuid" },
+    "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "is_read": { "type": "boolean" },
+    "sent_at": { "type": "string", "format": "date-time" },
+    "first_name": { "type": "string" },
+    "last_name": { "type": "string" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Conversation": {
+      "type": "object",
+      "description": "Élément de la boîte de réception : un par interlocuteur",
+      "required": ["partner_id", "partner_name", "partner_role", "last_content", "last_sent_at", "unread_count"],
+      "properties": {
+        "partner_id": { "type": "string", "format": "uuid" },
+        "partner_name": { "type": "string", "description": "Nom de l'exploitation pour un producteur, sinon prénom et nom" },
+        "partner_role": { "$ref": "user.schema.json#/$defs/UserRole" },
+        "last_content": { "type": "string" },
+        "last_sent_at": { "type": "string", "format": "date-time" },
+        "unread_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
     }
   }
 }

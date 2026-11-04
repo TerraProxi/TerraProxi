@@ -1,47 +1,53 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://terraproxi.fr/schemas/ai-chat.schema.json",
+  "$id": "ai-chat.schema.json",
   "title": "AiChat",
-  "description": "Contrats pour l'assistant IA TerraProxi (Mobile → API → Gemini)",
-  "definitions": {
-    "ChatRole": {
-      "type": "string",
-      "enum": ["user", "assistant"]
-    },
+  "description": "Contrats de l'assistant IA (client → POST /api/ai/chat → Gemini). Les identifiants renvoyés sont filtrés côté serveur : seuls ceux du catalogue injecté sont conservés.",
+  "$defs": {
     "ChatHistoryItem": {
       "type": "object",
       "required": ["role", "content"],
       "properties": {
-        "role": { "$ref": "#/definitions/ChatRole" },
-        "content": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4000
-        }
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "minLength": 1, "maxLength": 4000 }
       },
       "additionalProperties": false
     },
-    "ProducerLink": {
+    "CartContextItem": {
       "type": "object",
-      "required": ["producer_id", "company_name", "reason"],
+      "required": ["product_id", "product_name", "quantity", "unit", "price"],
       "properties": {
-        "producer_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Identifiant du producteur recommandé"
+        "product_id": { "type": "string", "minLength": 1 },
+        "product_name": { "type": "string", "minLength": 1 },
+        "quantity": { "type": "number", "minimum": 1, "maximum": 99 },
+        "unit": { "type": "string", "minLength": 1 },
+        "price": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "CartContext": {
+      "type": "object",
+      "description": "Panier courant du client, pour que l'assistant en tienne compte",
+      "required": ["groups", "total", "count"],
+      "properties": {
+        "groups": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["producer_id", "producer_name", "delivery_mode", "items", "subtotal"],
+            "properties": {
+              "producer_id": { "type": "string", "minLength": 1 },
+              "producer_name": { "type": "string", "minLength": 1 },
+              "delivery_mode": { "type": "string", "enum": ["delivery", "pickup"] },
+              "items": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/CartContextItem" } },
+              "subtotal": { "type": "number", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
         },
-        "company_name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Pourquoi ce producteur correspond à la demande"
-        },
-        "city": {
-          "type": "string"
-        }
+        "total": { "type": "number", "minimum": 0 },
+        "count": { "type": "number", "minimum": 0 }
       },
       "additionalProperties": false
     },
@@ -49,51 +55,108 @@
       "type": "object",
       "required": ["message"],
       "properties": {
-        "message": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000,
-          "description": "Question ou demande de l'utilisateur"
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "history": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/ChatHistoryItem" } },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "radius_km": { "type": "number", "minimum": 1, "maximum": 200, "default": 50 },
+        "cart_context": { "$ref": "#/$defs/CartContext" }
+      },
+      "additionalProperties": false
+    },
+    "ProducerLink": {
+      "type": "object",
+      "required": ["producer_id", "company_name", "reason"],
+      "properties": {
+        "producer_id": { "type": "string", "format": "uuid" },
+        "company_name": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "city": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ResolvedCartProduct": {
+      "type": "object",
+      "required": ["product_id", "name", "price", "unit", "producer_id", "producer_name", "image_url"],
+      "properties": {
+        "product_id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "price": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string" },
+        "producer_id": { "type": "string", "format": "uuid" },
+        "producer_name": { "type": "string" },
+        "image_url": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "CartAction": {
+      "description": "Action que le client applique à son panier",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "product", "quantity"],
+          "properties": {
+            "type": { "const": "add_to_cart" },
+            "product": { "$ref": "#/$defs/ResolvedCartProduct" },
+            "quantity": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
         },
-        "history": {
-          "type": "array",
-          "maxItems": 20,
-          "items": { "$ref": "#/definitions/ChatHistoryItem" }
+        {
+          "type": "object",
+          "required": ["type", "product_id", "product_name"],
+          "properties": {
+            "type": { "const": "remove_from_cart" },
+            "product_id": { "type": "string", "format": "uuid" },
+            "product_name": { "type": "string" }
+          },
+          "additionalProperties": false
         },
-        "lat": {
-          "type": "number",
-          "minimum": -90,
-          "maximum": 90,
-          "description": "Latitude pour prioriser les producteurs proches"
+        {
+          "type": "object",
+          "required": ["type", "product_id", "product_name", "quantity"],
+          "properties": {
+            "type": { "const": "update_cart_quantity" },
+            "product_id": { "type": "string", "format": "uuid" },
+            "product_name": { "type": "string" },
+            "quantity": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
         },
-        "lon": {
-          "type": "number",
-          "minimum": -180,
-          "maximum": 180,
-          "description": "Longitude pour prioriser les producteurs proches"
-        },
-        "radius_km": {
-          "type": "number",
-          "minimum": 1,
-          "maximum": 200,
-          "default": 50,
-          "description": "Rayon de recherche en km"
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": { "type": { "const": "clear_cart" } },
+          "additionalProperties": false
         }
+      ]
+    },
+    "ProductPick": {
+      "type": "object",
+      "description": "Produit suggéré avec des quantités prêtes à ajouter (max 5 par réponse)",
+      "required": ["product_id", "name", "short_label", "price", "unit", "producer_id", "producer_name", "image_url", "quantity_options"],
+      "properties": {
+        "product_id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "short_label": { "type": "string", "maxLength": 28 },
+        "price": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string" },
+        "producer_id": { "type": "string", "format": "uuid" },
+        "producer_name": { "type": "string" },
+        "image_url": { "type": ["string", "null"] },
+        "quantity_options": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "integer", "minimum": 1 } }
       },
       "additionalProperties": false
     },
     "AiChatResponse": {
       "type": "object",
-      "required": ["reply", "producer_links"],
+      "required": ["reply", "producer_links", "cart_actions", "product_picks", "quick_replies"],
       "properties": {
-        "reply": {
-          "type": "string",
-          "description": "Réponse textuelle de l'assistant"
-        },
-        "producer_links": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/ProducerLink" }
-        }
+        "reply": { "type": "string", "minLength": 1 },
+        "producer_links": { "type": "array", "items": { "$ref": "#/$defs/ProducerLink" } },
+        "cart_actions": { "type": "array", "items": { "$ref": "#/$defs/CartAction" } },
+        "product_picks": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/ProductPick" } },
+        "quick_replies": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     }
