@@ -13,3 +13,5 @@ ios/
 coverage/
 .pnpm-store/
 apps/api/.env
+# Clé du compte de service Google Play (eas submit) : secret, jamais versionné
+apps/mobile/google-play-service-account.json

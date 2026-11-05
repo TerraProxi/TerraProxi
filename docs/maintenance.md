@@ -95,7 +95,7 @@ Mettre en place une alerte externe (service de surveillance de disponibilité) s
 - **Système** : `sudo apt update && sudo apt upgrade` une fois par mois, et immédiatement pour un correctif de sécurité.
 - **Images Docker** : mettre à jour les versions de PostgreSQL, Caddy et nginx en fixant une version précise, jamais `latest`.
 - **Dépendances applicatives** : `pnpm outdated`, puis mise à jour sur une branche dédiée, tests et relecture avant fusion.
-- **Application mobile** : nouvelle version publiée via Expo (EAS Build), puis soumission sur Google Play et l'App Store.
+- **Application mobile** : nouvelle version publiée via Expo (EAS Build), puis soumission sur Google Play et l'App Store — procédure complète (eas init, variables, APK de test, iOS) dans [mobile-release.md](mobile-release.md). Les dépendances natives suivent le SDK Expo : les mettre à jour avec `npx expo install --fix` puis vérifier avec `npx expo-doctor`.
 
 ## 6. Gestion des secrets
 
