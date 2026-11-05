@@ -1,142 +1,162 @@
-import { useEffect, useState, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
+import { Button } from '../../components/ui/Button'
 import { messagesService, type Conversation, type Message } from '../../services/messages.service'
+import { apiErrorMessage } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { format } from 'date-fns'
-import { fr } from 'date-fns/locale'
+import { formatDate } from '../../utils/format'
+
+/** MSG-2 — le fil ouvert est rafraîchi toutes les 10 s tant que l'onglet est visible. */
+const THREAD_POLL_INTERVAL_MS = 10_000
+const MESSAGE_MAX_LENGTH = 4000
 
 export function MessagesPage() {
   const { partnerId } = useParams<{ partnerId?: string }>()
   const { user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [conversationsError, setConversationsError] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [threadError, setThreadError] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [activePartner, setActivePartner] = useState<string | null>(partnerId ?? null)
+  const [sendError, setSendError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    messagesService.conversations().then(({ data }) => setConversations(data))
+  const loadConversations = useCallback(() => {
+    messagesService.conversations()
+      .then(({ data }) => { setConversations(data); setConversationsError(null) })
+      .catch((err) => setConversationsError(apiErrorMessage(err, 'Impossible de charger vos conversations')))
   }, [])
 
-  useEffect(() => {
-    if (!activePartner) return
-    messagesService.thread(activePartner).then(({ data }) => {
-      setMessages(data)
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-    })
-  }, [activePartner])
-
-  const handleSend = async () => {
-    if (!activePartner || !newMessage.trim()) return
-    setSending(true)
+  const loadThread = useCallback(async (id: string) => {
     try {
-      const { data } = await messagesService.send(activePartner, newMessage.trim())
-      setMessages((m) => [...m, data])
+      const { data } = await messagesService.thread(id)
+      setMessages(data)
+      setThreadError(null)
+    } catch (err) {
+      setThreadError(apiErrorMessage(err, 'Impossible de charger la conversation'))
+    }
+  }, [])
+
+  useEffect(() => { loadConversations() }, [loadConversations])
+
+  useEffect(() => {
+    setMessages([])
+    setSendError(null)
+    if (!partnerId) return
+    loadThread(partnerId)
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      loadThread(partnerId)
+      loadConversations()
+    }, THREAD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [partnerId, loadThread, loadConversations])
+
+  // Défile vers le bas uniquement quand un message arrive
+  const lastMessageId = messages[messages.length - 1]?.id
+  useEffect(() => {
+    if (lastMessageId) bottomRef.current?.scrollIntoView({ block: 'end' })
+  }, [lastMessageId])
+
+  const handleSend = async (e: FormEvent) => {
+    e.preventDefault()
+    const content = newMessage.trim()
+    if (!partnerId || !content) return
+    setSending(true)
+    setSendError(null)
+    try {
+      await messagesService.send(partnerId, content)
       setNewMessage('')
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      await loadThread(partnerId)
+      loadConversations()
+    } catch (err) {
+      setSendError(apiErrorMessage(err, 'Message non envoyé, réessayez'))
     } finally {
       setSending(false)
     }
   }
 
+  const partnerName = conversations.find((c) => c.partner_id === partnerId)?.partner_name ?? 'Nouvelle conversation'
+
   return (
-    <MainLayout fullWidth>
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', height: 'calc(100vh - 65px)' }}>
-        {/* Conversations */}
-        <aside style={{ background: 'var(--color-white)', borderRight: '1px solid var(--color-border)', overflowY: 'auto' }}>
-          <div style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)' }}>💬 Messages</h2>
-          </div>
-          {conversations.length === 0 ? (
-            <p style={{ padding: 'var(--space-5)', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-              Aucune conversation.
+    <MainLayout title="Messages" fullWidth>
+      <h1 className="sr-only">Messages</h1>
+      <div className="tp-messages" data-has-thread={Boolean(partnerId)}>
+        <nav className="tp-messages__list" aria-label="Conversations">
+          <h2 style={{ fontSize: 'var(--text-lg)', padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
+            💬 Conversations
+          </h2>
+          {conversationsError && <p className="tp-alert tp-alert--error" role="alert" style={{ margin: 'var(--space-4)' }}>{conversationsError}</p>}
+          {conversations.length === 0 && !conversationsError ? (
+            <p className="tp-small tp-muted" style={{ padding: 'var(--space-5)' }}>
+              Aucune conversation. Contactez un producteur depuis sa page.
             </p>
           ) : (
             conversations.map((conv) => (
-              <button
+              <Link
                 key={conv.partner_id}
-                onClick={() => setActivePartner(conv.partner_id)}
-                style={{
-                  width: '100%',
-                  padding: 'var(--space-4) var(--space-5)',
-                  borderBottom: '1px solid var(--color-border)',
-                  background: activePartner === conv.partner_id ? '#EBF8F0' : 'transparent',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  display: 'block',
-                }}
+                to={`/messages/${conv.partner_id}`}
+                className="tp-conversation"
+                aria-current={conv.partner_id === partnerId ? 'page' : undefined}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-sm)' }}>
-                    {conv.partner_name}
-                  </strong>
+                <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <strong className="tp-small" style={{ fontFamily: 'var(--font-heading)' }}>{conv.partner_name}</strong>
                   {conv.unread_count > 0 && (
-                    <span style={{ background: 'var(--color-primary)', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                      {conv.unread_count}
-                    </span>
+                    <span className="tp-nav-badge">{conv.unread_count}<span className="sr-only"> non lu(s)</span></span>
                   )}
-                </div>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                </span>
+                <span className="tp-muted" style={{ display: 'block', fontSize: 'var(--text-xs)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {conv.last_content}
-                </p>
-              </button>
+                </span>
+              </Link>
             ))
           )}
-        </aside>
+        </nav>
 
-        {/* Thread */}
-        {activePartner ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        {partnerId ? (
+          <section className="tp-messages__thread" aria-labelledby="titre-fil">
+            <Link to="/messages" className="tp-messages__back">← Toutes les conversations</Link>
+            <h2 id="titre-fil" style={{ fontSize: 'var(--text-lg)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--color-border)', background: 'var(--color-white)' }}>
+              {partnerName}
+            </h2>
+            <div className="tp-messages__scroll" role="log" aria-live="polite" aria-relevant="additions">
+              {threadError && <p className="tp-alert tp-alert--error" role="alert">{threadError}</p>}
+              {messages.length === 0 && !threadError && <p className="tp-muted tp-small">Écrivez votre premier message.</p>}
               {messages.map((msg) => {
                 const isMe = msg.sender_id === user?.id
                 return (
-                  <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
-                    <div
-                      style={{
-                        maxWidth: '65%',
-                        background: isMe ? 'var(--color-primary)' : 'var(--color-white)',
-                        color: isMe ? '#fff' : 'var(--color-dark)',
-                        border: isMe ? 'none' : '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: 'var(--space-3) var(--space-4)',
-                        fontSize: 'var(--text-sm)',
-                      }}
-                    >
-                      <p>{msg.content}</p>
-                      <span style={{ fontSize: 10, opacity: 0.7, display: 'block', marginTop: 4 }}>
-                        {format(new Date(msg.sent_at), 'HH:mm', { locale: fr })}
-                      </span>
-                    </div>
+                  <div key={msg.id} className={`tp-bubble ${isMe ? 'tp-bubble--me' : 'tp-bubble--them'}`}>
+                    <span className="sr-only">{isMe ? 'Vous' : partnerName} : </span>
+                    {msg.content}
+                    <span style={{ fontSize: 11, opacity: 0.85, display: 'block', marginTop: 4 }}>
+                      {formatDate(msg.sent_at, 'd MMM HH:mm')}
+                    </span>
                   </div>
                 )
               })}
               <div ref={bottomRef} />
             </div>
 
-            {/* Input */}
-            <div style={{ borderTop: '1px solid var(--color-border)', padding: 'var(--space-4)', display: 'flex', gap: 'var(--space-3)' }}>
+            <form className="tp-composer" onSubmit={handleSend}>
+              <label htmlFor="nouveau-message" className="sr-only">Votre message à {partnerName}</label>
               <input
+                id="nouveau-message"
+                className="tp-input"
                 value={newMessage}
+                maxLength={MESSAGE_MAX_LENGTH}
+                autoComplete="off"
+                aria-invalid={sendError ? true : undefined}
+                aria-describedby={sendError ? 'erreur-envoi' : undefined}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                placeholder="Votre message…"
-                style={{ flex: 1, padding: '0.625rem 0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)' }}
               />
-              <button
-                onClick={handleSend}
-                disabled={!newMessage.trim() || sending}
-                style={{ background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', padding: '0 1.25rem', fontWeight: 700, cursor: 'pointer', opacity: sending ? 0.7 : 1 }}
-              >
-                Envoyer
-              </button>
-            </div>
-          </div>
+              <Button type="submit" variant="primary" loading={sending} disabled={!newMessage.trim()}>Envoyer</Button>
+            </form>
+            {sendError && <p id="erreur-envoi" className="tp-alert tp-alert--error" role="alert" style={{ margin: '0 var(--space-4) var(--space-4)' }}>{sendError}</p>}
+          </section>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
+          <div className="tp-messages__thread tp-muted" style={{ alignItems: 'center', justifyContent: 'center' }}>
             Sélectionnez une conversation
           </div>
         )}
