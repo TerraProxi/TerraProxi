@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, ScrollView, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -40,6 +40,13 @@ interface ChatMessage {
 
 const POLL_INTERVAL_MS = 10_000
 const MAX_MESSAGE_LENGTH = 4000
+const DEFAULT_PARTNER_NAME = 'Conversation'
+
+interface ConversationSummary {
+  partner_id: string
+  partner_name: string
+}
+
 const QUICK_REPLIES = ["C'est prêt ?", 'Encore du stock ?', 'Merci beaucoup !', 'À quelle heure ?']
 
 const toChatMessage = (m: ApiMessage, partnerId: string): ChatMessage => ({
@@ -58,7 +65,8 @@ function formatTimestamp(iso: string): string {
 }
 
 export function ChatScreen({ route, navigation }: Props) {
-  const { partnerId, partnerName } = route.params
+  const { partnerId } = route.params
+  const [partnerName, setPartnerName] = useState(route.params.partnerName ?? DEFAULT_PARTNER_NAME)
   const insets = useSafeAreaInsets()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const refreshUnread = useUnreadStore((s) => s.refresh)
@@ -82,6 +90,17 @@ export function ChatScreen({ route, navigation }: Props) {
       setLoading(false)
     }
   }, [partnerId, refreshUnread])
+
+  // Ouverte depuis une notification : le nom de l'interlocuteur vient de la boîte de réception
+  useEffect(() => {
+    if (route.params.partnerName || !isAuthenticated) return
+    api.get<ConversationSummary[]>('/messages')
+      .then(({ data }) => {
+        const name = data.find((c) => c.partner_id === partnerId)?.partner_name
+        if (name) setPartnerName(name)
+      })
+      .catch(() => undefined) // le libellé générique reste affiché
+  }, [route.params.partnerName, partnerId, isAuthenticated])
 
   // Chargement puis rafraîchissement périodique tant que la conversation est affichée
   useFocusEffect(useCallback(() => {
