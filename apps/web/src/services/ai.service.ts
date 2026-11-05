@@ -89,6 +89,13 @@ export interface AiChatResponse {
   quick_replies: string[]
 }
 
+export type NewsletterTone = 'chaleureux' | 'informatif' | 'festif'
+
+export interface NewsletterDraft {
+  subject: string
+  body: string
+}
+
 /** Gemini peut mettre plusieurs dizaines de secondes à répondre. */
 const CHAT_TIMEOUT_MS = 60_000
 
@@ -101,4 +108,8 @@ export const aiService = {
 
   /** AI-3 — assistant conversationnel ; 503 si l'IA n'est pas configurée ou indisponible. */
   chat: (payload: AiChatRequest) => api.post<AiChatResponse>('/ai/chat', payload, { timeout: CHAT_TIMEOUT_MS }),
+
+  /** AI-4 — brouillon de newsletter à relire ; rien n'est envoyé. */
+  newsletterDraft: (payload: { topic?: string; tone: NewsletterTone }) =>
+    api.post<NewsletterDraft>('/ai/newsletter', payload, { timeout: CHAT_TIMEOUT_MS }),
 }
