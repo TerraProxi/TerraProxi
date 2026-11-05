@@ -80,6 +80,7 @@ export function Header() {
               {!isProducer && (
                 <>
                   <NavLink to="/orders" className="tp-nav-link">Commandes</NavLink>
+                  <NavLink to="/assistant" className="tp-nav-link">Assistant</NavLink>
                 </>
               )}
               <NavLink to="/messages" className="tp-nav-link">

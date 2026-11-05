@@ -19,6 +19,7 @@ import { CartPage }      from './pages/consumer/CartPage'
 import { OrdersPage }    from './pages/consumer/OrdersPage'
 import { CheckoutPage }  from './pages/consumer/CheckoutPage'
 import { MessagesPage }  from './pages/consumer/MessagesPage'
+import { AssistantPage } from './pages/consumer/AssistantPage'
 import { OrderDetailPage } from './pages/orders/OrderDetailPage'
 
 // Producteur
@@ -59,6 +60,7 @@ export function App() {
             <Route path="/orders"            element={<RequireAuth role="CONSUMER"><OrdersPage /></RequireAuth>} />
             <Route path="/orders/:orderId"   element={<RequireAuth role="CONSUMER"><OrderDetailPage /></RequireAuth>} />
             <Route path="/checkout/:orderId" element={<RequireAuth role="CONSUMER"><CheckoutPage /></RequireAuth>} />
+            <Route path="/assistant"         element={<RequireAuth role="CONSUMER"><AssistantPage /></RequireAuth>} />
 
             {/* Producteur */}
             <Route path="/producer/dashboard"       element={<RequireAuth role="PRODUCER"><ProducerDashboardPage /></RequireAuth>} />

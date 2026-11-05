@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { ProductCard } from '../../components/producer/ProductCard'
 import { NearbyProducers } from '../../components/home/NearbyProducers'
+import { Recommendations } from '../../components/home/Recommendations'
 import { productsService, type Product } from '../../services/products.service'
 import { apiErrorMessage } from '../../services/api'
+import { useAuth } from '../../contexts/AuthContext'
 import type { MapNavigationState } from '../../hooks/useGeolocation'
 
 const HOME_PRODUCTS_LIMIT = 8
@@ -19,8 +21,10 @@ const VALUES = [
 const LOCATE_ON_MAP: MapNavigationState = { shouldLocate: true }
 
 export function HomePage() {
+  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [productsError, setProductsError] = useState<string | null>(null)
+  const isConsumer = user?.role === 'CONSUMER'
 
   useEffect(() => {
     productsService.list({ limit: HOME_PRODUCTS_LIMIT, available: 'true' })
@@ -63,6 +67,8 @@ export function HomePage() {
         </section>
 
         <NearbyProducers />
+
+        {isConsumer && <Recommendations />}
 
         <section className="tp-section" aria-labelledby="titre-produits">
           <div className="tp-page-header">
