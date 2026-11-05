@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "producer-stats.schema.json",
+  "title": "ProducerStats",
+  "description": "Tableau de bord et statistiques de vente d'un producteur (BO-1, BO-5). Seules les commandes encaissées comptent (PAID, PREPARING, READY, COMPLETED). Jours calendaires de Paris.",
+  "type": "object",
+  "required": ["period_days", "revenue_today", "orders_today", "revenue_period", "orders_period", "average_basket", "orders_to_prepare", "low_stock_threshold", "low_stock", "daily", "top_products"],
+  "properties": {
+    "period_days": { "type": "integer", "minimum": 1, "maximum": 365 },
+    "revenue_today": { "type": "number", "minimum": 0, "description": "Chiffre d'affaires du jour en euros" },
+    "orders_today": { "type": "integer", "minimum": 0 },
+    "revenue_period": { "type": "number", "minimum": 0 },
+    "orders_period": { "type": "integer", "minimum": 0 },
+    "average_basket": { "type": "number", "minimum": 0 },
+    "orders_to_prepare": { "type": "integer", "minimum": 0, "description": "Commandes PAID ou PREPARING" },
+    "low_stock_threshold": { "type": "integer", "minimum": 0 },
+    "low_stock": {
+      "type": "array",
+      "description": "Produits en vente dont le stock est inférieur ou égal au seuil",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "stock", "unit"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "stock": { "type": "integer", "minimum": 0 },
+          "unit": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "daily": {
+      "type": "array",
+      "description": "Une entrée par jour de la période, jours sans vente compris (courbe)",
+      "items": {
+        "type": "object",
+        "required": ["date", "revenue", "orders"],
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "revenue": { "type": "number", "minimum": 0 },
+          "orders": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "top_products": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "Produits les plus vendus sur la période, par chiffre d'affaires",
+      "items": {
+        "type": "object",
+        "required": ["product_id", "product_name", "quantity", "revenue"],
+        "properties": {
+          "product_id": { "type": ["string", "null"], "format": "uuid", "description": "null si le produit a été supprimé" },
+          "product_name": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 0 },
+          "revenue": { "type": "number", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

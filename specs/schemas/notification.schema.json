@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notification.schema.json",
+  "title": "Notification",
+  "description": "Notification in-app (table notifications, EPIC 7). Elle part aussi en push sur le mobile si l'appareil a enregistré un jeton Expo.",
+  "type": "object",
+  "required": ["id", "type", "title", "body", "target_type", "target_id", "is_read", "created_at"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "type": { "$ref": "#/$defs/NotificationType" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "body": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "target_type": {
+      "type": ["string", "null"],
+      "enum": ["ORDER", "CONVERSATION", "PRODUCER", null],
+      "description": "Écran ouvert au clic : commande, conversation (target_id = interlocuteur) ou fiche producteur"
+    },
+    "target_id": { "type": ["string", "null"], "format": "uuid" },
+    "is_read": { "type": "boolean" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "NotificationType": {
+      "type": "string",
+      "enum": ["NEW_ORDER", "ORDER_STATUS", "PAYMENT", "NEW_MESSAGE", "NEWSLETTER", "ACCOUNT"],
+      "description": "NEW_ORDER : commande payée à préparer (producteur) ; ORDER_STATUS : en préparation, prête, annulée, expirée (client) ; PAYMENT : paiement confirmé, refusé ou remboursé (client) ; NEW_MESSAGE : nouveau message ; NEWSLETTER : newsletter d'un producteur ; ACCOUNT : exploitation vérifiée"
+    }
+  }
+}

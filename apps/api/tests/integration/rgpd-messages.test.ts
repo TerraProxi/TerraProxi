@@ -90,8 +90,8 @@ describe.skipIf(!hasTestDatabase)('RGPD', () => {
     const producerOrders = await call('GET', '/api/orders', { token: producer.token })
     expect(producerOrders.body[0].consumer_name).toBe('Client supprimé')
 
-    // Le jeton de l'ancien compte ne donne plus accès au profil
-    expect((await call('GET', '/api/users/profile', { token: consumer.token })).status).toBe(404)
+    // Le jeton de l'ancien compte est refusé dès la requête suivante
+    expect((await call('GET', '/api/users/profile', { token: consumer.token })).status).toBe(401)
   })
 
   test('suppression d\'un producteur : ses produits disparaissent, les lignes de commande gardent le nom', async () => {

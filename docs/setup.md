@@ -158,7 +158,18 @@ Liste complète et commentée : [`.env.example`](../.env.example). Le `.env` n'e
 | `VITE_API_URL` | URL publique de l'API pour le build de production du site |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Assistant IA |
 | `CORS_ORIGINS` | Origines autorisées en production |
-| `SEED_PASSWORD` | Mot de passe des comptes de démo |
+| `SEED_PASSWORD` | Mot de passe des comptes de démo (dont `admin@terraproxi.fr`) |
+| `PUBLIC_API_URL` | URL publique de l'API sans `/api` (URL des photos envoyées) |
+| `TRUST_PROXY` | `true` derrière Caddy : IP du client lue dans `X-Forwarded-For` |
+| `UPLOAD_DIR` | Dossier des photos (défaut `apps/api/uploads`, `/app/uploads` en conteneur) |
+| `ORDER_PENDING_TTL_MINUTES` | Délai avant annulation d'une commande non payée (60) |
+| `LOG_LEVEL` | Journal JSON : `debug`, `info`, `warn`, `error`, `silent` |
+| `SWAGGER_ENABLED` | Expose `/swagger` en production (désactivé par défaut) |
+| `PUSH_NOTIFICATIONS_ENABLED` | Push mobile via Expo (`false` : notifications in-app seulement) |
+| `RATE_LIMIT_*` | Seuils anti-abus (voir `apps/api/src/utils/rate-limit.ts`) |
+
+Compte administrateur : `pnpm db:seed` crée `admin@terraproxi.fr` ; sur une base existante,
+`pnpm --filter @terraproxi/api db:promote-admin <email>` donne le rôle ADMIN à un compte.
 
 ---
 

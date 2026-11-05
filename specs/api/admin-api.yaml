@@ -1,0 +1,328 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Administration
+  version: 1.2.0
+  description: |
+    Back-office administrateur (rôle ADMIN, CDC « gestion des rôles ») : indicateurs, modération
+    des comptes, vérification des producteurs. Un compte ADMIN ne s'obtient pas à l'inscription :
+    il est créé par `pnpm db:seed` ou promu avec `pnpm --filter @terraproxi/api db:promote-admin <email>`.
+    Implémentation : apps/api/src/routes/admin.routes.ts — scénarios : specs/features/admin.feature.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production
+  - url: http://localhost:3002/api
+    description: Développement
+tags:
+  - name: Admin
+    description: Administration de la plateforme
+
+paths:
+  /admin/stats:
+    get:
+      summary: Indicateurs de la plateforme
+      description: Comptes, producteurs à vérifier, produits, commandes payées et chiffre d'affaires.
+      operationId: getPlatformStats
+      tags: [Admin]
+      responses:
+        '200':
+          description: Indicateurs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users:
+    get:
+      summary: Comptes utilisateurs
+      description: Les plus récents d'abord. search porte sur l'email, le nom et le nom de l'exploitation.
+      operationId: listUsers
+      tags: [Admin]
+      parameters:
+        - name: role
+          in: query
+          schema:
+            $ref: '../schemas/user.schema.json#/$defs/UserRole'
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Comptes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{id}:
+    patch:
+      summary: Suspendre ou réactiver un compte
+      description: |
+        Une suspension coupe immédiatement l'accès : jeton d'accès refusé dès la requête suivante,
+        sessions révoquées. Un administrateur ne peut pas suspendre son propre compte (400).
+      operationId: setUserActive
+      tags: [Admin]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: Compte modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/producers:
+    get:
+      summary: Producteurs
+      description: Les producteurs à vérifier d'abord.
+      operationId: listProducersForReview
+      tags: [Admin]
+      parameters:
+        - name: verified
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Producteurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminProducer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/producers/{id}:
+    patch:
+      summary: Vérifier un producteur
+      description: Le producteur reçoit une notification ACCOUNT lorsqu'il devient vérifié.
+      operationId: setProducerVerified
+      tags: [Admin]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_verified]
+              properties:
+                is_verified:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: Producteur modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProducer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      description: 50 par défaut, 200 au maximum
+      schema:
+        type: integer
+        minimum: 1
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+  schemas:
+    PlatformStats:
+      type: object
+      required: [consumers, producers, inactive_users, producers_to_verify, products, paid_orders, paid_revenue, paid_orders_30d]
+      properties:
+        consumers:
+          type: integer
+          minimum: 0
+        producers:
+          type: integer
+          minimum: 0
+        inactive_users:
+          type: integer
+          minimum: 0
+        producers_to_verify:
+          type: integer
+          minimum: 0
+        products:
+          type: integer
+          minimum: 0
+        paid_orders:
+          type: integer
+          minimum: 0
+        paid_revenue:
+          type: number
+          minimum: 0
+        paid_orders_30d:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    AdminUser:
+      type: object
+      required: [id, email, first_name, last_name, role, phone, is_active, created_at, producer_id, company_name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          $ref: '../schemas/user.schema.json#/$defs/UserRole'
+        phone:
+          type: [string, 'null']
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        producer_id:
+          type: [string, 'null']
+          format: uuid
+        company_name:
+          type: [string, 'null']
+      additionalProperties: false
+    AdminProducer:
+      type: object
+      required: [id, user_id, company_name, city, postal_code, website_url, is_verified, created_at, email, first_name, last_name, is_active, product_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        city:
+          type: [string, 'null']
+        postal_code:
+          type: [string, 'null']
+        website_url:
+          type: [string, 'null']
+        is_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        product_count:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+  responses:
+    BadRequest:
+      description: Données invalides
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Forbidden:
+      description: Réservé au rôle ADMIN
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Compte ou producteur introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

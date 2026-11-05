@@ -1,10 +1,12 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Supervision
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Point de santé utilisé par le healthcheck Docker, Caddy et infrastructure/docker/deploy.sh.
-    Il interroge PostgreSQL à chaque appel. Implémentation : apps/api/src/app.ts.
+    Il interroge PostgreSQL à chaque appel et indique si Stripe et Gemini sont configurés
+    (un service optionnel absent ne rend pas l'API « degraded »). Surveillé toutes les 5 minutes
+    par infrastructure/docker/healthcheck.sh, qui alerte en cas d'échec. Implémentation : apps/api/src/app.ts.
   contact:
     name: TerraProxi Team
     email: dev@terraproxi.fr
@@ -46,7 +48,7 @@ components:
   schemas:
     Health:
       type: object
-      required: [status, version, database, timestamp]
+      required: [status, version, database, db_latency_ms, uptime_s, services, timestamp]
       properties:
         status:
           type: string
@@ -57,6 +59,24 @@ components:
         database:
           type: string
           enum: [up, down]
+        db_latency_ms:
+          type: [integer, 'null']
+          minimum: 0
+          description: Temps de réponse de PostgreSQL ; null si la base ne répond pas
+        uptime_s:
+          type: integer
+          minimum: 0
+        services:
+          type: object
+          required: [stripe, ai]
+          properties:
+            stripe:
+              type: string
+              enum: [configured, missing]
+            ai:
+              type: string
+              enum: [configured, missing]
+          additionalProperties: false
         timestamp:
           type: string
           format: date-time

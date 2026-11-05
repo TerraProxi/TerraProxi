@@ -96,6 +96,15 @@ describe.skipIf(!hasTestDatabase)('Producteurs et catalogue', () => {
     expect((await call('GET', `/api/products/${owner.productId}`)).status).toBe(404)
   })
 
+  test('catalogue filtré par distance (CAT-4) : distance_km, hors rayon exclu', async () => {
+    const { productId } = await createProducerWithProduct()
+    const near = await call('GET', '/api/products?lat=43.62&lon=3.87&radius=5')
+    expect(near.body.map((p: { id: string }) => p.id)).toEqual([productId])
+    expect(near.body[0].distance_km).toBeLessThan(5)
+    expect((await call('GET', '/api/products?lat=48.85&lon=2.35&radius=10')).body).toHaveLength(0)
+    expect((await call('GET', '/api/products?lat=43.62')).status).toBe(400)
+  })
+
   test('catégorie inconnue et identifiant non UUID → 400', async () => {
     expect((await call('GET', '/api/products?category=VOITURES')).status).toBe(400)
     expect((await call('GET', '/api/products/pas-un-uuid')).status).toBe(400)

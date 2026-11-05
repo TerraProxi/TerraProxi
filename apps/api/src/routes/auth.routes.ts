@@ -3,23 +3,32 @@ import { authGuard, jwtPlugin } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
 import { hashPassword, verifyPassword } from '../utils/hash'
 import { AppError, conflict, badRequest, notFound } from '../utils/errors'
+import { rateLimits } from '../utils/rate-limit'
+import { clientIp } from '../utils/request'
 import { consumeRefreshToken, issueRefreshToken, revokeRefreshToken } from '../utils/tokens'
-import type { User, UserRole } from '../models/types'
+import { PUBLIC_USER_COLUMNS, type User, type UserRole } from '../models/types'
 
-const PUBLIC_USER_COLUMNS = 'id, email, first_name, last_name, role, phone, avatar_url, created_at'
 const UNIQUE_VIOLATION = '23505'
 
 const passwordSchema = t.String({ minLength: 8, maxLength: 128 })
 
 const refreshBody = t.Object({ refresh_token: t.String({ minLength: 1 }) })
 
+/**
+ * Empreinte comparée quand l'email est inconnu : la réponse prend le même temps
+ * qu'avec un compte existant, ce qui empêche de deviner les emails inscrits.
+ */
+let dummyHash: Promise<string> | null = null
+const getDummyHash = () => (dummyHash ??= hashPassword('terraproxi-compte-inexistant'))
+
 export const authRoutes = new Elysia({ prefix: '/auth' })
   .use(jwtPlugin)
 
   .post(
     '/register',
-    async ({ body, jwt, set }) => {
-      const { email, password, first_name, last_name, role, gdpr_consent } = body
+    async ({ body, jwt, set, request, server }) => {
+      rateLimits.registrationsPerIp.hit(clientIp(request, server))
+      const { email, password, first_name, last_name, role, gdpr_consent, newsletter_opt_in } = body
       if (!gdpr_consent) throw badRequest('Le consentement RGPD est obligatoire')
 
       const password_hash = await hashPassword(password)
@@ -27,11 +36,11 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
       try {
         const result = await db.query<User>(
           `INSERT INTO users
-             (email, password_hash, first_name, last_name, role, gdpr_consent, gdpr_consent_at)
-           VALUES ($1, $2, $3, $4, $5, true, NOW())
+             (email, password_hash, first_name, last_name, role, gdpr_consent, gdpr_consent_at, newsletter_opt_in)
+           VALUES ($1, $2, $3, $4, $5, true, NOW(), $6)
            RETURNING ${PUBLIC_USER_COLUMNS}`,
           [email.trim().toLowerCase(), password_hash, first_name.trim(), last_name.trim(),
-            role ?? 'CONSUMER'],
+            role ?? 'CONSUMER', newsletter_opt_in ?? false],
         )
         user = result.rows[0]
       } catch (err) {
@@ -49,28 +58,44 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
     },
     {
       body: t.Object({
-        email:        t.String({ format: 'email', maxLength: 255 }),
-        password:     passwordSchema,
-        first_name:   t.String({ minLength: 1, maxLength: 100 }),
-        last_name:    t.String({ minLength: 1, maxLength: 100 }),
-        role:         t.Optional(t.Union([t.Literal('CONSUMER'), t.Literal('PRODUCER')])),
-        gdpr_consent: t.Boolean(),
+        email:             t.String({ format: 'email', maxLength: 255 }),
+        password:          passwordSchema,
+        first_name:        t.String({ minLength: 1, maxLength: 100 }),
+        last_name:         t.String({ minLength: 1, maxLength: 100 }),
+        role:              t.Optional(t.Union([t.Literal('CONSUMER'), t.Literal('PRODUCER')])),
+        gdpr_consent:      t.Boolean(),
+        newsletter_opt_in: t.Optional(t.Boolean()),
       }),
       detail: { summary: 'Inscription', tags: ['Auth'] },
     },
   )
 
+  /**
+   * Connexion. Protection contre la force brute (CDC « tentatives de connexion
+   * frauduleuses ») : 5 échecs par compte et par IP, 30 échecs par IP, sur 15 min → 429.
+   */
   .post(
     '/login',
-    async ({ body, jwt }) => {
+    async ({ body, jwt, request, server }) => {
+      const email = body.email.trim().toLowerCase()
+      const ip = clientIp(request, server)
+      const accountKey = `${ip}|${email}`
+      rateLimits.loginFailuresPerAccount.assertAllowed(accountKey)
+      rateLimits.loginFailuresPerIp.assertAllowed(ip)
+
       const result = await db.query<User & { password_hash: string }>(
         `SELECT ${PUBLIC_USER_COLUMNS}, password_hash, is_active FROM users WHERE email = $1`,
-        [body.email.trim().toLowerCase()],
+        [email],
       )
-
       const user = result.rows[0]
-      const isValid = user?.is_active && await verifyPassword(body.password, user.password_hash)
-      if (!user || !isValid) throw new AppError(401, 'Email ou mot de passe incorrect')
+      const isPasswordValid = await verifyPassword(body.password, user?.password_hash ?? await getDummyHash())
+
+      if (!user || !user.is_active || !isPasswordValid) {
+        rateLimits.loginFailuresPerAccount.hit(accountKey)
+        rateLimits.loginFailuresPerIp.hit(ip)
+        throw new AppError(401, 'Email ou mot de passe incorrect')
+      }
+      rateLimits.loginFailuresPerAccount.reset(accountKey)
 
       const access_token = await jwt.sign({ sub: user.id, role: user.role })
       const refresh_token = await issueRefreshToken(user.id)

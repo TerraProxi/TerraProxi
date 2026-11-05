@@ -15,3 +15,6 @@ coverage/
 apps/api/.env
 # Clé du compte de service Google Play (eas submit) : secret, jamais versionné
 apps/mobile/google-play-service-account.json
+
+# Photos envoyées en développement (UPLOAD_DIR)
+apps/api/uploads/

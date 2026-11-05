@@ -1,7 +1,7 @@
 # language: fr
 # Contrat : specs/api/orders-api.yaml, specs/api/stripe-api.yaml,
 #           specs/schemas/cart.schema.json, specs/schemas/order.schema.json
-# Vérifié par : apps/api/tests/integration/orders.test.ts, stripe-ai.test.ts,
+# Vérifié par : apps/api/tests/integration/orders.test.ts, stripe-ai.test.ts, payments.test.ts,
 #               apps/api/tests/unit/order-status.test.ts
 # Le panier est tenu par le client (web, mobile) ; il est envoyé à la validation, une commande par producteur.
 
@@ -84,3 +84,41 @@ Fonctionnalité: Suivi et annulation
   Scénario: Commande d'un tiers
     Quand un autre consommateur consulte ou modifie la commande
     Alors la réponse est 403
+
+Fonctionnalité: Annulation, remboursement et expiration
+  Un client n'est jamais débité pour une commande annulée.
+
+  Scénario: Double clic sur Payer
+    Quand le client demande deux fois en même temps un paiement pour la même commande
+    Alors un seul PaymentIntent est créé
+
+  Scénario: Annulation pendant le paiement
+    Étant donné une commande en attente avec un paiement commencé
+    Quand le client l'annule
+    Alors le PaymentIntent est annulé chez Stripe et le stock est remis
+
+  Scénario: Paiement validé juste avant l'annulation
+    Étant donné un paiement déjà validé chez Stripe
+    Quand le client tente d'annuler la commande
+    Alors la réponse est 409 et la commande reste en attente de confirmation
+
+  Scénario: Paiement reçu pour une commande annulée
+    Étant donné une commande annulée pendant que le client payait
+    Quand Stripe confirme le paiement
+    Alors le paiement est remboursé aussitôt, une seule fois même si Stripe renvoie l'événement
+
+  Scénario: Le producteur annule une commande payée
+    Quand le producteur annule une commande payée de 2 articles
+    Alors le client est remboursé intégralement et le stock est remis
+    Et le client reçoit la notification "Commande annulée"
+
+  Scénario: Stripe ne répond pas
+    Quand le remboursement échoue
+    Alors la réponse est 502 et la commande reste payée, stock inchangé
+
+  Scénario: Commande jamais payée
+    Étant donné une commande en attente depuis plus d'une heure
+    Quand la tâche de maintenance passe
+    Alors la commande est annulée, son paiement bloqué, son stock libéré
+    Et le client reçoit "Commande expirée"
+    Et une commande récente n'est pas touchée

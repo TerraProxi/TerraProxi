@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Messagerie
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Messagerie entre utilisateurs (consommateurs et producteurs).
     Implémentation : apps/api/src/routes/messages.routes.ts — scénarios : specs/features/messaging.feature.
@@ -27,6 +27,18 @@ paths:
       description: Un élément par interlocuteur (dernier message, non-lus), du plus récent au plus ancien.
       operationId: listConversations
       tags: [Messages]
+      parameters:
+        - name: limit
+          in: query
+          description: Nombre de conversations (défaut 50, plafonné à 200)
+          schema:
+            type: integer
+            minimum: 1
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
       responses:
         '200':
           description: Conversations
@@ -36,11 +48,17 @@ paths:
                 type: array
                 items:
                   $ref: '../schemas/message.schema.json#/$defs/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
       summary: Envoyer un message
-      description: Le contenu est nettoyé des espaces en bord ; vide après nettoyage → 400. On ne peut pas s'écrire à soi-même.
+      description: |
+        Le contenu est nettoyé des espaces en bord ; vide après nettoyage → 400. On ne peut pas s'écrire
+        à soi-même. La messagerie relie un client et un producteur (deux clients ou deux producteurs → 403) ;
+        un administrateur peut écrire à tous. Le destinataire reçoit une notification NEW_MESSAGE, une seule
+        tant qu'il n'a pas lu la précédente de cet interlocuteur.
       operationId: sendMessage
       tags: [Messages]
       requestBody:
@@ -70,6 +88,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Deux clients ou deux producteurs ne peuvent pas s'écrire
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
         '404':
           description: Destinataire inconnu ou désactivé
           content:

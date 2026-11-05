@@ -1,4 +1,5 @@
 import { AppError } from '../utils/errors'
+import { log } from '../utils/logger'
 import type { CatalogProducer } from './ai-catalog.service'
 import { buildSystemInstruction } from './ai-system-prompt'
 import type { CartContext } from './ai-cart.service'
@@ -162,60 +163,89 @@ function sanitizeProducerLinks(
     })
 }
 
+const GEMINI_TIMEOUT_MS = 25_000
+
+type GeminiContent = { role: string; parts: Array<{ text: string }> }
+
+interface GeminiJsonRequest {
+  systemInstruction: string
+  contents: GeminiContent[]
+  responseSchema: object
+  temperature?: number
+  maxOutputTokens?: number
+}
+
+type GeminiFetch = (url: string, init: RequestInit) => Promise<Response>
+
+let geminiFetch: GeminiFetch = (url, init) => fetch(url, init)
+
+/** Permet aux tests de simuler Gemini (frontière du contrat, aucun appel réseau). */
+export function setGeminiFetch(fn: GeminiFetch | null): void {
+  geminiFetch = fn ?? ((url, init) => fetch(url, init))
+}
+
+/**
+ * Appel Gemini à sortie JSON imposée (`responseSchema`). La clé part dans l'en-tête
+ * x-goog-api-key (jamais dans l'URL, qui finit dans les journaux) ; l'appel est borné
+ * à 25 s. Toute réponse inexploitable devient un 503 explicite.
+ */
+export async function generateGeminiJson<T>(request: GeminiJsonRequest): Promise<T> {
+  const { apiKey, model } = getGeminiConfig()
+
+  let response: Response
+  try {
+    response = await geminiFetch(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: request.systemInstruction }] },
+        contents: request.contents,
+        generationConfig: {
+          temperature: request.temperature ?? 0.4,
+          maxOutputTokens: request.maxOutputTokens ?? 2048,
+          responseMimeType: 'application/json',
+          responseSchema: request.responseSchema,
+        },
+      }),
+    })
+  } catch (err) {
+    log.error('gemini unreachable', { err })
+    throw new AppError(503, 'Le service IA est temporairement indisponible')
+  }
+
+  if (!response.ok) {
+    log.error('gemini error', { status: response.status, body: (await response.text()).slice(0, 500) })
+    throw new AppError(503, 'Le service IA est temporairement indisponible')
+  }
+
+  const payload = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+  }
+  const rawText = payload.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!rawText) throw new AppError(503, 'Réponse IA vide ou invalide')
+
+  try {
+    return JSON.parse(rawText) as T
+  } catch {
+    throw new AppError(503, 'Réponse IA mal formée')
+  }
+}
+
 export async function chatWithGemini(
   message: string,
   history: ChatHistoryItem[],
   catalog: CatalogProducer[],
   options?: GeminiChatOptions,
 ): Promise<AiChatResult> {
-  const { apiKey, model } = getGeminiConfig()
-  const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${apiKey}`
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{
-          text: buildSystemInstruction(catalog, {
-            isExpandedRadius: options?.isExpandedRadius,
-            cart: options?.cart,
-          }),
-        }],
-      },
-      contents: buildContents(message, history),
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-        responseSchema: buildResponseSchema(),
-      },
+  const parsed = await generateGeminiJson<RawAiChatResult>({
+    systemInstruction: buildSystemInstruction(catalog, {
+      isExpandedRadius: options?.isExpandedRadius,
+      cart: options?.cart,
     }),
+    contents: buildContents(message, history),
+    responseSchema: buildResponseSchema(),
   })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    console.error('[Gemini]', response.status, errorBody)
-    throw new AppError(503, 'Le service IA est temporairement indisponible')
-  }
-
-  const payload = await response.json() as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> }
-    }>
-  }
-
-  const rawText = payload.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!rawText) {
-    throw new AppError(503, 'Réponse IA vide ou invalide')
-  }
-
-  let parsed: RawAiChatResult
-  try {
-    parsed = JSON.parse(rawText) as RawAiChatResult
-  } catch {
-    throw new AppError(503, 'Réponse IA mal formée')
-  }
 
   return {
     reply: parsed.reply?.trim() || 'Je n\'ai pas pu formuler une réponse.',
