@@ -16,6 +16,10 @@ echo "=== TerraProxi — Déploiement $(date) ==="
 git pull --ff-only origin main
 echo "--- Version : $(git rev-parse --short HEAD)"
 
+# Sauvegarde avant toute modification : retour arrière possible si une migration échoue
+echo "--- Sauvegarde préalable..."
+"$APP_DIR/infrastructure/docker/backup.sh"
+
 # 2. Build des images (contexte = racine du dépôt, cf. docker-compose.yml)
 if [[ "${1:-}" != "--skip-build" ]]; then
   echo "--- Build des images API et front..."
