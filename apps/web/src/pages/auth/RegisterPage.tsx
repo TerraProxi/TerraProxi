@@ -1,11 +1,21 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { useAuth } from '../../contexts/AuthContext'
+import { apiErrorMessage } from '../../services/api'
+import { homeFor, readRedirectTarget } from '../../utils/redirect'
+
+type Role = 'CONSUMER' | 'PRODUCER'
+
+const ROLE_LABELS: Record<Role, string> = { CONSUMER: '🛒 Consommateur', PRODUCER: '🌾 Producteur' }
+const PASSWORD_MIN_LENGTH = 8
 
 export function RegisterPage() {
   const [params] = useSearchParams()
-  const defaultRole = (params.get('role') as 'CONSUMER' | 'PRODUCER') ?? 'CONSUMER'
+  const location = useLocation()
+  const defaultRole: Role = params.get('role') === 'PRODUCER' ? 'PRODUCER' : 'CONSUMER'
 
   const [form, setForm] = useState({
     email: '',
@@ -14,13 +24,14 @@ export function RegisterPage() {
     last_name: '',
     role: defaultRole,
     gdpr_consent: false,
+    newsletter_opt_in: false,
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
 
-  const set = (field: string, value: string | boolean) =>
+  const set = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [field]: value }))
 
   const handleSubmit = async (e: FormEvent) => {
@@ -29,149 +40,85 @@ export function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      await register(form)
-      navigate(form.role === 'PRODUCER' ? '/producer/dashboard' : '/')
+      const user = await register(form)
+      const target = user.role === 'PRODUCER' ? homeFor(user) : readRedirectTarget(location.state) ?? homeFor(user)
+      navigate(target, { replace: true })
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })
-        ?.response?.data?.error ?? 'Erreur lors de l\'inscription'
-      setError(msg)
-    } finally {
+      setError(apiErrorMessage(err, 'Erreur lors de l\'inscription'))
       setLoading(false)
     }
   }
 
-  const fieldStyle = {
-    width: '100%',
-    padding: '0.625rem 0.875rem',
-    border: '1.5px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    fontFamily: 'var(--font-body)',
-    fontSize: 'var(--text-base)',
-  }
-
   return (
-    <MainLayout>
-      <div style={{ maxWidth: 500, margin: '0 auto', padding: 'var(--space-8) 0' }}>
-        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', textAlign: 'center', marginBottom: 'var(--space-8)', color: 'var(--color-secondary)' }}>
+    <MainLayout title="Créer un compte">
+      <div style={{ maxWidth: 520, margin: '0 auto' }}>
+        <h1 className="tp-page-title" style={{ textAlign: 'center', color: 'var(--color-secondary-strong)' }}>
           Créer un compte
         </h1>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            background: 'var(--color-white)',
-            borderRadius: 'var(--radius-xl)',
-            padding: 'var(--space-8)',
-            boxShadow: 'var(--shadow-md)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          {error && (
-            <div style={{ background: '#FEE2E2', color: 'var(--color-danger)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-5)', fontSize: 'var(--text-sm)' }}>
-              {error}
-            </div>
-          )}
+        <form className="tp-card" onSubmit={handleSubmit} style={{ boxShadow: 'var(--shadow-md)' }}>
+          {error && <div className="tp-alert tp-alert--error" role="alert">{error}</div>}
 
-          {/* Type de compte */}
-          <div style={{ marginBottom: 'var(--space-5)' }}>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
-              Je suis…
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <fieldset className="tp-field" style={{ border: 'none' }}>
+            <legend className="tp-label" style={{ marginBottom: 'var(--space-2)' }}>Je suis…</legend>
+            <div className="tp-choices">
               {(['CONSUMER', 'PRODUCER'] as const).map((role) => (
-                <label
-                  key={role}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    padding: '0.75rem',
-                    border: `2px solid ${form.role === role ? 'var(--color-secondary)' : 'var(--color-border)'}`,
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    fontWeight: form.role === role ? 700 : 400,
-                    color: form.role === role ? 'var(--color-secondary)' : 'var(--color-dark)',
-                    background: form.role === role ? '#EBFAEF' : 'transparent',
-                  }}
-                >
-                  <input type="radio" name="role" value={role} checked={form.role === role} onChange={() => set('role', role)} style={{ display: 'none' }} />
-                  {role === 'CONSUMER' ? '🛒 Consommateur' : '🌾 Producteur'}
+                <label key={role} className="tp-choice">
+                  <input type="radio" name="role" value={role} checked={form.role === role} onChange={() => set('role', role)} />
+                  <span>{ROLE_LABELS[role]}</span>
                 </label>
               ))}
             </div>
+          </fieldset>
+
+          <div className="tp-grid-2">
+            <Input label="Prénom" id="first_name" required autoComplete="given-name"
+              value={form.first_name} onChange={(e) => set('first_name', e.target.value)} />
+            <Input label="Nom" id="last_name" required autoComplete="family-name"
+              value={form.last_name} onChange={(e) => set('last_name', e.target.value)} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 'var(--space-4)' }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Prénom</label>
-              <input type="text" required value={form.first_name} onChange={(e) => set('first_name', e.target.value)} style={fieldStyle} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Nom</label>
-              <input type="text" required value={form.last_name} onChange={(e) => set('last_name', e.target.value)} style={fieldStyle} />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 'var(--space-4)' }}>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Adresse email</label>
-            <input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} autoComplete="email" style={fieldStyle} />
-          </div>
-
-          <div style={{ marginBottom: 'var(--space-5)' }}>
-            <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Mot de passe (8 caractères minimum)</label>
-            <input type="password" required minLength={8} value={form.password} onChange={(e) => set('password', e.target.value)} autoComplete="new-password" style={fieldStyle} />
-          </div>
+          <Input label="Adresse email" id="email" type="email" required autoComplete="email"
+            value={form.email} onChange={(e) => set('email', e.target.value)} />
+          <Input label={`Mot de passe (${PASSWORD_MIN_LENGTH} caractères minimum)`} id="password" type="password"
+            required minLength={PASSWORD_MIN_LENGTH} autoComplete="new-password"
+            value={form.password} onChange={(e) => set('password', e.target.value)} />
 
           {/* RGPD — consentement explicite */}
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 10,
-              marginBottom: 'var(--space-6)',
-              fontSize: 'var(--text-sm)',
-              cursor: 'pointer',
-            }}
-          >
+          <div className="tp-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-4)' }}>
             <input
+              id="gdpr_consent"
               type="checkbox"
+              required
               checked={form.gdpr_consent}
               onChange={(e) => set('gdpr_consent', e.target.checked)}
-              style={{ marginTop: 3, flexShrink: 0 }}
+              style={{ marginTop: 3, flexShrink: 0, width: 20, height: 20 }}
             />
-            <span>
-              J'accepte la{' '}
-              <Link to="/privacy" style={{ color: 'var(--color-primary)' }}>politique de confidentialité</Link>
-              {' '}et le traitement de mes données personnelles conformément au RGPD.
-            </span>
-          </label>
+            <label htmlFor="gdpr_consent">
+              J'accepte la <Link to="/privacy">politique de confidentialité</Link> et le traitement de mes
+              données personnelles conformément au RGPD.
+            </label>
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              background: 'var(--color-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.75rem',
-              fontFamily: 'var(--font-heading)',
-              fontWeight: 700,
-              fontSize: 'var(--text-base)',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? 'Création…' : 'Créer mon compte'}
-          </button>
+          <div className="tp-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-6)' }}>
+            <input
+              id="newsletter_opt_in"
+              type="checkbox"
+              checked={form.newsletter_opt_in}
+              onChange={(e) => set('newsletter_opt_in', e.target.checked)}
+              style={{ marginTop: 3, flexShrink: 0, width: 20, height: 20 }}
+            />
+            <label htmlFor="newsletter_opt_in">
+              (Facultatif) Recevoir les newsletters des producteurs chez qui je commande.
+            </label>
+          </div>
 
-          <p style={{ textAlign: 'center', marginTop: 'var(--space-5)', fontSize: 'var(--text-sm)' }}>
-            Déjà un compte ?{' '}
-            <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-              Se connecter
-            </Link>
+          <Button type="submit" variant="secondary" size="lg" className="tp-btn--block" loading={loading}>
+            Créer mon compte
+          </Button>
+
+          <p className="tp-small" style={{ textAlign: 'center', marginTop: 'var(--space-5)' }}>
+            Déjà un compte ? <Link to="/login" state={location.state}>Se connecter</Link>
           </p>
         </form>
       </div>

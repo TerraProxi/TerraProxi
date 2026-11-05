@@ -1,25 +1,59 @@
 import api from './api'
+import type { CartProduct } from '../contexts/CartContext'
 
 export interface Product {
   id: string
   producer_id: string
   name: string
-  description?: string
+  description?: string | null
   price: number
   stock: number
   unit: string
   category: string
-  image_url?: string
+  image_url?: string | null
   is_available: boolean
   producer_name?: string
+  /** Présent dans GET /products/{id} uniquement. */
+  producer_city?: string | null
+  /** Présent quand le catalogue est filtré par position (lat/lon). */
+  distance_km?: number
   created_at: string
 }
+
+/** Ce qu'une vignette produit affiche : produit du catalogue ou recommandation (AI-2). */
+export type ProductSummary =
+  Pick<Product, 'id' | 'producer_id' | 'name' | 'price' | 'unit' | 'category' | 'description' | 'image_url' | 'producer_name'>
+  & Partial<Pick<Product, 'stock' | 'is_available' | 'distance_km'>>
+
+export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  FRUITS_VEGETABLES: '🥦 Fruits & Légumes',
+  DAIRY:             '🧀 Produits laitiers',
+  MEAT:              '🥩 Viandes',
+  BEVERAGES:         '🍷 Boissons',
+  FINE_GROCERY:      '🍯 Épicerie fine',
+  CRAFTS:            '🎨 Artisanat',
+  FLOWERS_PLANTS:    '🌸 Fleurs & Plantes',
+  OTHER:             '📦 Autre',
+}
+
+export const toCartProduct = (p: ProductSummary): CartProduct => ({
+  id: p.id,
+  producer_id: p.producer_id,
+  producer_name: p.producer_name,
+  name: p.name,
+  price: Number(p.price),
+  unit: p.unit,
+  image_url: p.image_url,
+})
 
 export interface ProductsQuery {
   producer_id?: string
   category?: string
   available?: string
   search?: string
+  lat?: number
+  lon?: number
+  radius?: number
   limit?: number
   offset?: number
 }

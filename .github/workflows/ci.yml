@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   quality:
-    name: Specs, typage, tests API
+    name: Specs, typage, tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -55,9 +55,12 @@ jobs:
         run: pnpm typecheck
 
       - name: Tests API (unitaires + intégration PostGIS)
-        run: pnpm test
+        run: pnpm --filter @terraproxi/api test
 
-      - name: Tests mobile
+      - name: Tests web (Vitest)
+        run: pnpm test:web
+
+      - name: Tests mobile (Jest)
         run: pnpm test:mobile
 
       - name: Build web

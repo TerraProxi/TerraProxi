@@ -1,83 +1,77 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { ProducerMap } from '../../components/map/ProducerMap'
+import { Button } from '../../components/ui/Button'
 import { producersService, type Producer } from '../../services/producers.service'
-import { useGeolocation } from '../../hooks/useGeolocation'
-import { Link } from 'react-router-dom'
+import { apiErrorMessage } from '../../services/api'
+import { useGeolocation, type MapNavigationState } from '../../hooks/useGeolocation'
+
+const DEFAULT_RADIUS_KM = 30
+const LOCATED_ZOOM = 11
 
 export function MapPage() {
+  const navigationState = useLocation().state as MapNavigationState | null
   const [producers, setProducers] = useState<Producer[]>([])
   const [loading, setLoading] = useState(false)
-  const [radius, setRadius] = useState(30)
+  const [error, setError] = useState<string | null>(null)
+  const [radius, setRadius] = useState(DEFAULT_RADIUS_KM)
   const [search, setSearch] = useState('')
-  const { lat, lon, loading: geoLoading, error: geoError, request } = useGeolocation()
+  const [submittedSearch, setSubmittedSearch] = useState('')
+  const { lat, lon, loading: geoLoading, error: geoError, request } = useGeolocation(navigationState?.position)
 
-  const load = async () => {
+  // Arrivée depuis l'accueil avec « Découvrir sur la carte » : on localise directement
+  const shouldLocateOnArrival = navigationState?.shouldLocate === true
+  useEffect(() => { if (shouldLocateOnArrival) request() }, [shouldLocateOnArrival, request])
+
+  const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const { data } = await producersService.list({ lat: lat ?? undefined, lon: lon ?? undefined, radius, search: search || undefined })
+      const { data } = await producersService.list({
+        lat: lat ?? undefined,
+        lon: lon ?? undefined,
+        radius: lat != null ? radius : undefined,
+        search: submittedSearch || undefined,
+      })
       setProducers(data)
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Impossible de charger les producteurs'))
     } finally {
       setLoading(false)
     }
+  }, [lat, lon, radius, submittedSearch])
+
+  useEffect(() => { load() }, [load])
+
+  const handleSearch = (e: FormEvent) => {
+    e.preventDefault()
+    if (search.trim() === submittedSearch) load()
+    else setSubmittedSearch(search.trim())
   }
 
-  useEffect(() => { load() }, [lat, lon, radius])
-
-  const center: [number, number] | undefined =
-    lat && lon ? [lat, lon] : undefined
+  const center: [number, number] | undefined = lat != null && lon != null ? [lat, lon] : undefined
 
   return (
-    <MainLayout fullWidth>
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', height: 'calc(100vh - 65px)' }}>
-        {/* Panneau latéral */}
-        <aside
-          style={{
-            background: 'var(--color-white)',
-            borderRight: '1px solid var(--color-border)',
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+    <MainLayout title="Carte des producteurs" fullWidth>
+      <div className="tp-map-layout">
+        <section className="tp-map-layout__panel" aria-labelledby="titre-carte">
           <div style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)', marginBottom: 'var(--space-4)' }}>
-              🗺️ Producteurs près de vous
-            </h2>
+            <h1 id="titre-carte" style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-4)' }}>
+              Producteurs près de vous
+            </h1>
 
-            {/* Géolocalisation */}
-            <button
-              onClick={request}
-              disabled={geoLoading}
-              style={{
-                width: '100%',
-                background: 'var(--color-primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.5rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'var(--font-body)',
-                marginBottom: 'var(--space-3)',
-              }}
-            >
-              {geoLoading ? 'Localisation…' : '📍 Me localiser'}
-            </button>
+            <Button variant="primary" className="tp-btn--block" onClick={request} loading={geoLoading}>
+              📍 Me localiser
+            </Button>
 
-            {geoError && (
-              <p style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)', marginBottom: 8 }}>
-                {geoError}
-              </p>
-            )}
+            {geoError && <p className="tp-field-error" role="alert" style={{ marginTop: 'var(--space-2)' }}>{geoError}</p>}
 
-            {/* Rayon */}
-            {lat && lon && (
-              <div style={{ marginBottom: 'var(--space-3)' }}>
-                <label style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                  Rayon : {radius} km
-                </label>
+            {center && (
+              <div className="tp-field" style={{ marginTop: 'var(--space-3)' }}>
+                <label htmlFor="rayon" className="tp-label">Rayon : {radius} km</label>
                 <input
+                  id="rayon"
                   type="range"
                   min={5} max={100} step={5}
                   value={radius}
@@ -87,70 +81,58 @@ export function MapPage() {
               </div>
             )}
 
-            {/* Recherche */}
-            <input
-              placeholder="Rechercher un producteur…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && load()}
-              style={{
-                width: '100%',
-                padding: '0.5rem 0.75rem',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                fontFamily: 'var(--font-body)',
-              }}
-            />
+            <form role="search" onSubmit={handleSearch} style={{ marginTop: 'var(--space-3)' }}>
+              <label htmlFor="recherche-producteur" className="tp-label">Rechercher un producteur</label>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+                <input
+                  id="recherche-producteur"
+                  type="search"
+                  className="tp-input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  maxLength={100}
+                />
+                <Button type="submit" variant="outline">Chercher</Button>
+              </div>
+            </form>
           </div>
 
-          {/* Liste */}
-          <div style={{ flex: 1, padding: 'var(--space-4)' }}>
-            {loading ? (
-              <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 32 }}>Chargement…</p>
+          <div style={{ flex: 1, padding: 'var(--space-4)' }} aria-live="polite" aria-busy={loading}>
+            {error ? (
+              <div className="tp-alert tp-alert--error" role="alert">
+                {error}{' '}
+                <Button variant="ghost" size="sm" onClick={load}>Réessayer</Button>
+              </div>
+            ) : loading ? (
+              <p className="tp-muted" style={{ textAlign: 'center', marginTop: 32 }}>Chargement…</p>
             ) : producers.length === 0 ? (
-              <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 32 }}>
-                Aucun producteur trouvé.
-              </p>
+              <p className="tp-muted" style={{ textAlign: 'center', marginTop: 32 }}>Aucun producteur trouvé.</p>
             ) : (
-              producers.map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/producers/${p.id}`}
-                  style={{
-                    display: 'block',
-                    padding: 'var(--space-4)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    marginBottom: 'var(--space-3)',
-                    background: 'var(--color-white)',
-                    transition: 'box-shadow var(--transition)',
-                  }}
-                >
-                  <strong style={{ fontFamily: 'var(--font-heading)', display: 'block' }}>
-                    {p.company_name}
-                  </strong>
-                  {p.city && (
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                      📍 {p.city}
-                    </span>
-                  )}
-                  {p.distance_km != null && (
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', display: 'block', marginTop: 2 }}>
-                      {p.distance_km.toFixed(1)} km
-                    </span>
-                  )}
-                </Link>
-              ))
+              <>
+                <p className="tp-small tp-muted" style={{ marginBottom: 'var(--space-3)' }}>
+                  {producers.length} producteur{producers.length > 1 ? 's' : ''}
+                </p>
+                {producers.map((p) => (
+                  <Link key={p.id} to={`/producers/${p.id}`} className="tp-producer-item">
+                    <strong>{p.company_name}</strong>
+                    {p.city && <span className="tp-small tp-muted">📍 {p.city}</span>}
+                    {p.distance_km != null && (
+                      <span className="tp-small" style={{ color: 'var(--color-primary-strong)', display: 'block', marginTop: 2 }}>
+                        à {p.distance_km.toFixed(1)} km
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </>
             )}
           </div>
-        </aside>
+        </section>
 
-        {/* Carte */}
-        <div>
+        <div className="tp-map-layout__map">
           <ProducerMap
             producers={producers}
             center={center}
-            zoom={center ? 11 : 6}
+            zoom={center ? LOCATED_ZOOM : undefined}
             height="100%"
           />
         </div>

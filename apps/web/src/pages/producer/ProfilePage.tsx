@@ -4,6 +4,7 @@ import { AxiosError } from 'axios'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { ImageUpload } from '../../components/ui/ImageUpload'
 import { producersService, type ProducerInput } from '../../services/producers.service'
 import { apiErrorMessage } from '../../services/api'
 import { geocodeAddress } from '../../services/geocoding.service'
@@ -94,16 +95,16 @@ export function ProducerProfilePage() {
     }
   }
 
-  if (loading) return <MainLayout><p>Chargement…</p></MainLayout>
+  if (loading) return <MainLayout title="Ma fiche producteur"><p>Chargement…</p></MainLayout>
 
-  const hasPosition = form.latitude !== undefined && form.longitude !== undefined
+  const { latitude, longitude } = form
 
   return (
-    <MainLayout>
-      <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-2)' }}>
+    <MainLayout title="Ma fiche producteur">
+      <h1 className="tp-page-title" style={{ marginBottom: 'var(--space-2)' }}>
         {isNew ? 'Créer ma fiche producteur' : 'Ma fiche producteur'}
       </h1>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)' }}>
+      <p className="tp-muted" style={{ marginBottom: 'var(--space-6)' }}>
         Ces informations apparaissent sur la carte et sur votre page publique.
       </p>
 
@@ -133,11 +134,14 @@ export function ProducerProfilePage() {
             onChange={(e) => set('banner_url')(e.target.value)} />
         </div>
 
+        <ImageUpload id="banniere" label="Envoyer une photo de couverture" value={form.banner_url ?? ''}
+          onUploaded={(url) => setForm((f) => ({ ...f, banner_url: url }))} />
+
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
           <Button variant="outline" onClick={locate} loading={locating}>📍 Localiser l'adresse</Button>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-            {hasPosition
-              ? `Position : ${form.latitude!.toFixed(4)}, ${form.longitude!.toFixed(4)}`
+          <span className="tp-small tp-muted" role="status">
+            {latitude !== undefined && longitude !== undefined
+              ? `Position : ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
               : 'Sans position, vous n\'apparaissez pas sur la carte.'}
           </span>
         </div>

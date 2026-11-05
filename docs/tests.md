@@ -11,6 +11,7 @@
 | Typage | TypeScript strict | API, web, mobile | `pnpm typecheck`, CI |
 | Unitaires | `bun test` | `apps/api/tests/unit` | `pnpm test`, CI |
 | Intégration | `bun test` + PostgreSQL/PostGIS réel | `apps/api/tests/integration` | `pnpm test`, CI (service PostGIS) |
+| Web (logique et composants) | Vitest + Testing Library + jsdom | `apps/web/src/**/*.test.ts(x)` | `pnpm test:web` (enchaîné par `pnpm test`), CI |
 | Déploiement | build des images + démarrage du conteneur API | `.github/workflows/ci.yml` | CI |
 | Recette | parcours manuels ci-dessous | web, mobile | avant chaque soutenance / mise en production |
 
@@ -70,6 +71,25 @@ Dernière exécution : 05/11/2026 — **184 tests API, 184 réussis, 0 échec** 
 
 Commande : `pnpm test` (avec `TEST_DATABASE_URL`). Détail : `apps/api/tests/`.
 
+### Tests web
+
+Dernière exécution : 05/11/2026 — **41 cas web (8 fichiers), 41 réussis, 0 échec**.
+Vitest 2.1 + Testing Library dans jsdom, sans réseau : les services ou l'authentification sont
+simulés (`vi.mock`), aucun snapshot. Configuration : `apps/web/vitest.config.ts` (heure de Paris).
+
+| Domaine | Cas couverts | Fichier |
+|---------|--------------|---------|
+| Panier | quantités cumulées et bornées 1–999 ; regroupement multi-producteurs, sous-totaux et total ; retrait d'un producteur ; persistance `localStorage` et restauration ; contenu stocké corrompu ignoré ; `localStorage` qui lève une exception → panier en mémoire | `contexts/CartContext.test.tsx` |
+| Notifications | cible ouverte au clic selon le type et le rôle (commande client / producteur, conversation, fiche producteur) ; aucune cible | `services/notifications.service.test.ts` |
+| Erreurs d'API | message de l'API + délai `Retry-After` d'un 429 (minutes, secondes, valeur invalide) ; serveur injoignable, délai dépassé, repli | `services/api.test.ts` |
+| Formatage et agenda | prix en euros ; `datetime-local` ↔ ISO UTC (été, hiver, aller-retour) ; période d'un rendez-vous sur un ou plusieurs jours | `utils/format.test.ts` |
+| Envoi de photo | formats et taille 5 Mo ; envoi réussi → URL transmise ; fichier trop lourd non envoyé et annoncé ; refus 413 du serveur traduit | `components/ui/ImageUpload.test.tsx` |
+| Gardes de route | visiteur → connexion avec la page demandée ; page ouverte aux anonymes ; producteur, admin et consommateur renvoyés vers leur espace ; rôle correct accepté | `components/layout/RequireAuth.test.tsx` |
+| Connexion | champs reliés à leurs labels ; erreur 429 annoncée en `role="alert"` avec le délai ; retour à la page demandée ou au tableau de bord producteur | `pages/auth/LoginPage.test.tsx` |
+| Accessibilité des couleurs | contraste ≥ 4,5:1 des jetons de texte (`*-strong`, texte atténué, gris foncé) sur blanc et fond clair, calculé depuis `variables.css` ; teintes de la charte réservées au décor | `styles/contrast.test.ts` |
+
+Commande : `pnpm test:web` (ou `npx -y pnpm@9.15.9 --filter @terraproxi/web test`).
+
 ### Tests mobile
 
 Dernière exécution : 05/11/2026 — **20 tests, 20 réussis, 0 échec** (7 fichiers, ~35 s sous Windows).
@@ -93,7 +113,8 @@ Commande : `pnpm test:mobile` (aucune base ni serveur nécessaires). Détail : `
 
 ### Non couvert automatiquement
 
-- Interfaces web et mobile (pas de tests de composants ni E2E ; la logique mobile est testée, voir « Tests mobile ») : couvertes par la recette manuelle.
+- Parcours complets dans un vrai navigateur ou sur un téléphone (E2E) : couverts par la recette manuelle ;
+  la logique web et mobile est testée (voir « Tests web » et « Tests mobile »).
 - Assistant IA Gemini : dépend d'un service externe, vérifié manuellement avec une clé de test
   (la newsletter IA est testée avec un faux transport Gemini).
 - Push mobile réel (Expo) : nécessite un téléphone et un build EAS ; l'envoi est testé avec un faux émetteur.

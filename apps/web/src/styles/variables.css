@@ -11,9 +11,19 @@
   --color-danger:     #DC2626;
   --color-warning:    #F59E0B;
   --color-success:    #5BAE6A;
-  /* Variantes foncées : texte blanc lisible (contraste WCAG AA ≥ 4,5:1) */
+  /* Variantes foncées pour tout texte sur fond clair et tout fond sous texte blanc.
+     Contrastes calculés (WCAG 2.1) : sur #FFFFFF / sur --color-light-bg
+     #1F6670 → 6,6:1 / 6,2:1 · #3B7A48 → 5,2:1 / 4,9:1 · #B91C1C → 6,5:1 · #92400E → 7,1:1.
+     Les teintes de la charte (#76CCD6 = 1,9:1, #5BAE6A = 2,7:1) restent réservées aux surfaces décoratives. */
   --color-secondary-strong: #3B7A48;
   --color-primary-strong:   #1F6670;
+  --color-danger-strong:    #B91C1C;
+  --color-warning-strong:   #92400E;
+  --color-link:             var(--color-primary-strong);
+  --color-focus:            var(--color-primary-strong);
+
+  /* Hauteur de l'en-tête (barre collante) */
+  --header-height: 64px;
 
   /* Typographie — CDC §4 */
   --font-heading: 'Montserrat', sans-serif;
