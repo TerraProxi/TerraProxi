@@ -29,10 +29,15 @@ export function apiErrorMessage(err: unknown, fallback = 'Une erreur est survenu
   if (err instanceof AxiosError) {
     const data = err.response?.data as { error?: string } | undefined
     if (data?.error) return data.error
+    if (err.code === AxiosError.ECONNABORTED) return 'Le serveur met trop de temps à répondre, réessayez'
     if (!err.response) return 'Serveur injoignable, vérifiez votre connexion'
   }
   return fallback
 }
+
+/** Code HTTP d'une erreur d'API (undefined si la requête n'a pas abouti). */
+export const apiErrorStatus = (err: unknown): number | undefined =>
+  err instanceof AxiosError ? err.response?.status : undefined
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(ACCESS_TOKEN_KEY)
