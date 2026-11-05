@@ -7,26 +7,12 @@ import { useNotifications } from '../../contexts/NotificationsContext'
 import {
   NOTIFICATION_ICONS,
   NOTIFICATIONS_PAGE_SIZE,
+  notificationTargetPath,
   notificationsService,
   type AppNotification,
 } from '../../services/notifications.service'
-import type { UserRole } from '../../services/auth.service'
 import { apiErrorMessage } from '../../services/api'
 import { formatDateTime } from '../../utils/format'
-
-/** Écran ouvert au clic (target_type / target_id de specs/schemas/notification.schema.json). */
-function targetPath(notification: AppNotification, role: UserRole | undefined): string | null {
-  const { target_type: type, target_id: id } = notification
-  if (!type || !id) return null
-  switch (type) {
-    case 'ORDER':
-      return role === 'PRODUCER' ? `/producer/orders/${id}` : `/orders/${id}`
-    case 'CONVERSATION':
-      return `/messages/${id}`
-    case 'PRODUCER':
-      return `/producers/${id}`
-  }
-}
 
 export function NotificationsPage() {
   const { user } = useAuth()
@@ -74,7 +60,7 @@ export function NotificationsPage() {
         setError(apiErrorMessage(err, 'Impossible de marquer la notification comme lue'))
       }
     }
-    const path = targetPath(notification, user?.role)
+    const path = notificationTargetPath(notification, user?.role)
     if (path) navigate(path)
   }
 

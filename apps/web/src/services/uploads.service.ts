@@ -4,6 +4,17 @@ import api from './api'
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+export const MAX_IMAGE_SIZE_LABEL = `${MAX_IMAGE_BYTES / 1024 / 1024} Mo`
+
+/** Contrôle avant envoi (évite un aller-retour voué à l'échec) ; null si le fichier est acceptable. */
+export function validateImageFile(file: Pick<File, 'type' | 'size'>): string | null {
+  if (!ACCEPTED_IMAGE_TYPES.some((type) => type === file.type)) {
+    return 'Format non pris en charge : JPEG, PNG ou WebP uniquement.'
+  }
+  if (file.size > MAX_IMAGE_BYTES) return `Photo trop lourde : ${MAX_IMAGE_SIZE_LABEL} au maximum.`
+  return null
+}
+
 export interface UploadedImage {
   url: string
   content_type: (typeof ACCEPTED_IMAGE_TYPES)[number]

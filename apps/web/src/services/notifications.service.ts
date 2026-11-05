@@ -1,4 +1,5 @@
 import api from './api'
+import type { UserRole } from './auth.service'
 
 /** specs/schemas/notification.schema.json */
 export type NotificationType = 'NEW_ORDER' | 'ORDER_STATUS' | 'PAYMENT' | 'NEW_MESSAGE' | 'NEWSLETTER' | 'ACCOUNT'
@@ -26,6 +27,23 @@ export const NOTIFICATION_ICONS: Readonly<Record<NotificationType, string>> = {
 }
 
 export const NOTIFICATIONS_PAGE_SIZE = 30
+
+/** Écran ouvert au clic (target_type / target_id de specs/schemas/notification.schema.json). */
+export function notificationTargetPath(
+  notification: Pick<AppNotification, 'target_type' | 'target_id'>,
+  role: UserRole | undefined,
+): string | null {
+  const { target_type: type, target_id: id } = notification
+  if (!type || !id) return null
+  switch (type) {
+    case 'ORDER':
+      return role === 'PRODUCER' ? `/producer/orders/${id}` : `/orders/${id}`
+    case 'CONVERSATION':
+      return `/messages/${id}`
+    case 'PRODUCER':
+      return `/producers/${id}`
+  }
+}
 
 export const notificationsService = {
   list: (params?: { unread_only?: boolean; limit?: number; offset?: number }) =>

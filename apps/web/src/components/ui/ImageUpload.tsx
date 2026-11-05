@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, uploadsService } from '../../services/uploads.service'
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_LABEL, uploadsService, validateImageFile } from '../../services/uploads.service'
 import { apiErrorMessage, apiErrorStatus } from '../../services/api'
 
 interface Props {
@@ -12,11 +12,10 @@ interface Props {
 }
 
 const ACCEPT = ACCEPTED_IMAGE_TYPES.join(',')
-const MAX_SIZE_LABEL = `${MAX_IMAGE_BYTES / 1024 / 1024} Mo`
 
 function uploadErrorMessage(err: unknown): string {
   switch (apiErrorStatus(err)) {
-    case 413: return `Photo trop lourde : ${MAX_SIZE_LABEL} au maximum.`
+    case 413: return `Photo trop lourde : ${MAX_IMAGE_SIZE_LABEL} au maximum.`
     case 400: return apiErrorMessage(err, 'Format non pris en charge : JPEG, PNG ou WebP uniquement.')
     default: return apiErrorMessage(err, 'Envoi de la photo impossible')
   }
@@ -34,13 +33,10 @@ export function ImageUpload({ id, label, value, onUploaded }: Props) {
     if (!file) return
     setError(null)
     setStatus('')
-    // Contrôle immédiat pour éviter un envoi voué à l'échec ; le serveur revérifie le contenu
-    if (!ACCEPTED_IMAGE_TYPES.some((type) => type === file.type)) {
-      setError('Format non pris en charge : JPEG, PNG ou WebP uniquement.')
-      return
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      setError(`Photo trop lourde : ${MAX_SIZE_LABEL} au maximum.`)
+    // Le serveur revérifie le contenu réel du fichier
+    const invalidReason = validateImageFile(file)
+    if (invalidReason) {
+      setError(invalidReason)
       return
     }
     setIsUploading(true)
@@ -80,7 +76,7 @@ export function ImageUpload({ id, label, value, onUploaded }: Props) {
             aria-invalid={error ? true : undefined}
             onChange={handleFile}
           />
-          <span id={hintId} className="tp-hint">JPEG, PNG ou WebP, {MAX_SIZE_LABEL} maximum.</span>
+          <span id={hintId} className="tp-hint">JPEG, PNG ou WebP, {MAX_IMAGE_SIZE_LABEL} maximum.</span>
           <span role="status" className="tp-small">{isUploading ? 'Envoi en cours…' : status}</span>
           {error && <span id={errorId} className="tp-field-error" role="alert">{error}</span>}
         </div>
