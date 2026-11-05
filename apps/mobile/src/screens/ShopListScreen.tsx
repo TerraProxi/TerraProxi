@@ -10,15 +10,17 @@ import * as Location from 'expo-location'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Fonts, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
 import { api, apiErrorMessage } from '../services/api'
-import type { Producer } from '../types/catalog'
+import type { Producer, ProducerEvent } from '../types/catalog'
+import { EventCard } from '../components/EventCard'
+import { NotificationBell } from '../components/NotificationBell'
 import type { IconName } from '../components/IconButton'
 import { ProductImage } from '../components/ProductImage'
 import { MessageState } from '../components/ScreenState'
 import { RecommendationsCarousel } from '../components/RecommendationsCarousel'
+import type { Coordinates } from '../services/location'
 
 type Nav = StackNavigationProp<RootStackParamList>
 type Filter = 'closest' | 'verified' | 'name'
-type Coordinates = { lat: number; lon: number }
 
 const FILTERS: { key: Filter; label: string; icon: IconName }[] = [
   { key: 'closest', label: 'Plus proche', icon: 'map-marker' },
@@ -28,6 +30,8 @@ const FILTERS: { key: Filter; label: string; icon: IconName }[] = [
 
 const SEARCH_RADIUS_KM = 100
 const PAGE_SIZE = 20
+const NEARBY_EVENTS_RADIUS_KM = 50
+const NEARBY_EVENTS_LIMIT = 10
 
 const isInCoveredArea = ({ lat, lon }: Coordinates) => lat > 40 && lat < 52 && lon > -6 && lon < 10
 
@@ -54,6 +58,7 @@ export function ShopListScreen() {
   const [isRefreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null)
+  const [nearbyEvents, setNearbyEvents] = useState<ProducerEvent[]>([])
 
   const fetchProducers = useCallback(async (location: Coordinates | null, searchQuery: string) => {
     try {
@@ -70,6 +75,16 @@ export function ShopListScreen() {
       setError(apiErrorMessage(err, 'Impossible de charger les producteurs'))
     }
   }, [])
+
+  // Agenda de proximité (PROD-6) : seulement si la position est connue ; bloc masqué sinon
+  useEffect(() => {
+    if (!userLocation) return
+    api.get<ProducerEvent[]>('/events', {
+      params: { lat: userLocation.lat, lon: userLocation.lon, radius: NEARBY_EVENTS_RADIUS_KM, limit: NEARBY_EVENTS_LIMIT },
+    })
+      .then(({ data }) => setNearbyEvents(data))
+      .catch(() => setNearbyEvents([]))
+  }, [userLocation])
 
   useEffect(() => {
     void (async () => {
@@ -106,10 +121,29 @@ export function ShopListScreen() {
   const header = (
     <>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={styles.headerTitle} accessibilityRole="header">Producteurs locaux</Text>
-        <Text style={styles.headerSubtitle}>En direct du terroir héraultais</Text>
+        <View style={styles.headerTexts}>
+          <Text style={styles.headerTitle} accessibilityRole="header">Producteurs locaux</Text>
+          <Text style={styles.headerSubtitle}>En direct du terroir héraultais</Text>
+        </View>
+        <NotificationBell />
       </View>
       <RecommendationsCarousel onOpenProduct={(productId) => nav.navigate('ProductDetail', { productId })} />
+      {nearbyEvents.length > 0 && (
+        <View style={styles.eventsSection}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Marchés et événements près de vous</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventsList}>
+            {nearbyEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                showProducer
+                style={styles.eventCard}
+                onPress={() => nav.navigate('ProducerProfile', { producerId: event.producer_id })}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
       <View style={styles.searchWrapper}>
         <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray600} />
         <TextInput
@@ -211,11 +245,33 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray50,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: Colors.white,
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray100,
+  },
+  headerTexts: {
+    flex: 1,
+  },
+  eventsSection: {
+    paddingTop: Spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontFamily: Fonts.title,
+    color: Colors.dark,
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.sm,
+  },
+  eventsList: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.md,
+  },
+  eventCard: {
+    width: 260,
   },
   headerTitle: {
     fontSize: 26,

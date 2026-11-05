@@ -29,6 +29,8 @@ export interface Product {
   is_available: boolean
   producer_name?: string
   producer_city?: string | null
+  /** Présent quand /products est appelé avec lat, lon et radius. */
+  distance_km?: number | null
 }
 
 /** specs/schemas/producer.schema.json */
@@ -51,6 +53,19 @@ export interface Producer {
   distance_km?: number | null
   /** Libellés français des catégories de ses produits disponibles. */
   categories?: string[]
+}
+
+/** specs/schemas/event.schema.json : agenda d'un producteur (marché, portes ouvertes…) */
+export interface ProducerEvent {
+  id: string
+  producer_id: string
+  producer_name: string
+  producer_city: string | null
+  title: string
+  description: string | null
+  location: string | null
+  starts_at: string
+  ends_at: string | null
 }
 
 /** specs/api/ai-chat-api.yaml#/components/schemas/Recommendation */

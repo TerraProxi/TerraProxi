@@ -8,11 +8,14 @@ import api from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useAuthStore } from '../store/auth.store'
 import { WEB_URL } from '../config'
-import type { Producer } from '../types/catalog'
+import type { Producer, ProducerEvent } from '../types/catalog'
+import { EventCard } from '../components/EventCard'
 import { IconButton } from '../components/IconButton'
 import { ProductImage } from '../components/ProductImage'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
+
+const UPCOMING_EVENTS_LIMIT = 5
 
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
@@ -22,12 +25,20 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
   const [producer, setProducer] = useState<Producer | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [events, setEvents] = useState<ProducerEvent[]>([])
 
   useEffect(() => {
     api.get<Producer>(`/producers/${producerId}`)
       .then(({ data }) => setProducer(data))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
+  }, [producerId])
+
+  // Agenda (PROD-6) : section facultative, masquée si vide ou indisponible
+  useEffect(() => {
+    api.get<ProducerEvent[]>('/events', { params: { producer_id: producerId, limit: UPCOMING_EVENTS_LIMIT } })
+      .then(({ data }) => setEvents(data))
+      .catch(() => setEvents([]))
   }, [producerId])
 
   if (loading) {
@@ -144,14 +155,15 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
       <View style={styles.contentCard}>
         <View style={styles.avatarContainer}>
           <ProductImage uri={producer.banner_url} style={styles.avatar} />
-          {producer.is_verified && (
-            <View style={styles.verifiedBadge}>
-              <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
-            </View>
-          )}
         </View>
 
-        <Text style={styles.producerName}>{producer.company_name}</Text>
+        <Text style={styles.producerName} accessibilityRole="header">{producer.company_name}</Text>
+        {producer.is_verified && (
+          <View style={styles.verifiedBadge}>
+            <MaterialCommunityIcons name="check-decagram" size={16} color={Colors.primaryDark} />
+            <Text style={styles.verifiedText}>Producteur vérifié</Text>
+          </View>
+        )}
         <Text style={styles.producerMeta}>{producer.city}</Text>
 
         {producer.opening_hours ? (
@@ -189,6 +201,18 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           </View>
         </View>
       </View>
+
+      {events.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="calendar-month-outline" size={22} color={Colors.primary} />
+            <Text style={styles.sectionTitle} accessibilityRole="header">Prochains rendez-vous</Text>
+          </View>
+          <View style={styles.eventList}>
+            {events.map((event) => <EventCard key={event.id} event={event} />)}
+          </View>
+        </View>
+      )}
 
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
@@ -295,11 +319,22 @@ const styles = StyleSheet.create({
     borderColor: Colors.white,
   },
   verifiedBadge: {
-    position: 'absolute',
-    right: -4,
-    bottom: -2,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    backgroundColor: Colors.green50,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 3,
+  },
+  verifiedText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
+  },
+  eventList: {
+    gap: Spacing.sm,
   },
   producerName: {
     fontSize: 24,
