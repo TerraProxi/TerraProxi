@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors } from '../theme'
+import { Colors, Fonts } from '../theme'
 import { useAuthStore } from '../store/auth.store'
 import { hasSeenOnboarding } from '../services/onboarding'
 
@@ -94,14 +94,14 @@ const styles = StyleSheet.create({
   },
   titleLine1: {
     fontSize: 26,
-    fontWeight: '700',
+    fontFamily: Fonts.title,
     color: Colors.dark,
     marginBottom: 4,
   },
   titleLine2: {
     fontSize: 32,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontFamily: Fonts.titleHeavy,
+    color: Colors.primaryDark,
     marginBottom: 40,
   },
   dotsRow: {
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   bioText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
 })

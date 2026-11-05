@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Spacing, Radius, Fonts } from '../theme'
 import {
   useCartStore,
   type CartProducerGroup,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.title,
     color: Colors.dark,
   },
   emptyContainer: {
@@ -492,13 +492,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Fonts.title,
     color: Colors.gray600,
   },
   emptyLink: {
     fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
     textDecorationLine: 'underline',
   },
   scroll: {
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   introText: {
     fontSize: 13,
     color: Colors.gray600,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
   },
   producerSection: {
     backgroundColor: Colors.white,
@@ -540,12 +540,13 @@ const styles = StyleSheet.create({
   },
   producerName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   producerMeta: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   itemCard: {
     flexDirection: 'row',
@@ -567,12 +568,13 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   itemMeta: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   qtyContainer: {
     flexDirection: 'row',
@@ -585,14 +587,14 @@ const styles = StyleSheet.create({
   },
   qtyText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     minWidth: 20,
     textAlign: 'center',
   },
   deliverySectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     marginTop: Spacing.xs,
   },
@@ -617,7 +619,7 @@ const styles = StyleSheet.create({
   },
   deliveryLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.gray700,
   },
   deliveryLabelSelected: {
@@ -656,16 +658,18 @@ const styles = StyleSheet.create({
   },
   addressTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   addressText: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   addressField: {
     minHeight: 38,
     fontSize: 12,
+    fontFamily: Fonts.regular,
     color: Colors.dark,
     borderWidth: 1,
     borderColor: Colors.gray200,
@@ -686,13 +690,13 @@ const styles = StyleSheet.create({
   },
   modifyLink: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
   },
   cancelLink: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.gray500,
+    fontFamily: Fonts.semibold,
+    color: Colors.gray600,
   },
   sectionSummary: {
     backgroundColor: Colors.gray50,
@@ -710,7 +714,7 @@ const styles = StyleSheet.create({
   },
   globalSummaryTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     marginBottom: Spacing.xs,
   },
@@ -720,6 +724,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
   },
   summaryDivider: {
@@ -730,31 +735,32 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 14,
     color: Colors.dark,
-    fontWeight: '500',
+    fontFamily: Fonts.medium,
   },
   sectionTotalLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   sectionTotalValue: {
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
   summaryTotalLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   summaryTotalValue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
   multiOrderHint: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
     marginTop: Spacing.xs,
     lineHeight: 18,
   },
@@ -773,7 +779,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.md,
     paddingVertical: Spacing.lg,
     width: '100%',
@@ -784,10 +790,11 @@ const styles = StyleSheet.create({
   payBtnText: {
     color: Colors.white,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   sslText: {
     fontSize: 12,
-    color: Colors.gray400,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
 })

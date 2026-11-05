@@ -9,7 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Spacing, Radius, Fonts } from '../theme'
 import { api } from '../services/api'
 import { CATEGORY_LABELS, type Producer } from '../types/catalog'
 import { IconButton } from '../components/IconButton'
@@ -162,11 +162,11 @@ export function MapScreen() {
       </MapView>
 
       <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={22} color={Colors.gray500} />
+        <MaterialCommunityIcons name="magnify" size={22} color={Colors.gray600} />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un producteur…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={Colors.gray600}
           value={search}
           onChangeText={setSearch}
           onFocus={() => setSearchFocused(true)}
@@ -294,6 +294,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
+    fontFamily: Fonts.regular,
     color: Colors.dark,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
   },
   searchResults: {
     position: 'absolute',
@@ -337,9 +338,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   searchResultInfo: { flex: 1 },
-  searchResultName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
-  searchResultTagline: { fontSize: 12, color: Colors.gray600, marginTop: 1 },
-  searchResultDistance: { fontSize: 13, fontWeight: '600', color: Colors.primary, marginLeft: Spacing.sm },
+  searchResultName: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.dark },
+  searchResultTagline: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 1 },
+  searchResultDistance: { fontSize: 13, fontFamily: Fonts.semibold, color: Colors.primaryDark, marginLeft: Spacing.sm },
   filterPanel: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 106 : 74,
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.gray700,
   },
   filterChipTextActive: {
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
   markerDistanceText: {
     color: Colors.white,
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   callout: {
     backgroundColor: Colors.white,
@@ -417,9 +418,9 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 6,
   },
-  calloutName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
-  calloutTagline: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
-  calloutCta: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: Spacing.sm },
+  calloutName: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.dark },
+  calloutTagline: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 2 },
+  calloutCta: { fontSize: 13, fontFamily: Fonts.bold, color: Colors.primaryDark, marginTop: Spacing.sm },
   locationBtn: {
     position: 'absolute',
     bottom: 180,
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -469,12 +470,13 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   cardName: {
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 14,
     color: Colors.dark,
   },
   cardTagline: {
     fontSize: 12,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: 2,
   },
@@ -491,12 +493,12 @@ const styles = StyleSheet.create({
   },
   cardRatingText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   cardDistance: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
   },
 })

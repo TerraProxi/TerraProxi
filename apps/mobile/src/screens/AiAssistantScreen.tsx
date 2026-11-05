@@ -17,7 +17,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import * as Location from 'expo-location'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, Spacing, Radius, Fonts } from '../theme'
 import { AssistantReplyBubble } from '../components/AssistantReplyBubble'
 import type { ProductPick } from '../components/ProductPickList'
 import { ChatMessageText } from '../components/ChatMessageText'
@@ -435,12 +435,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   clearHistoryBtn: {
     width: 40,
@@ -492,7 +493,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   userBubble: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
@@ -508,6 +509,7 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     fontSize: 15,
+    fontFamily: Fonts.regular,
     lineHeight: 21,
     color: Colors.gray800,
   },
@@ -516,20 +518,22 @@ const styles = StyleSheet.create({
   },
   userBubbleTextCombined: {
     fontSize: 15,
+    fontFamily: Fonts.regular,
     lineHeight: 21,
     color: Colors.white,
   },
   userBubbleBold: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   assistantBubbleBold: {
     color: Colors.gray900,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
     fontStyle: 'italic',
   },
   quickPromptsSection: {
@@ -541,7 +545,7 @@ const styles = StyleSheet.create({
   },
   quickPromptsLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.gray600,
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
@@ -571,7 +575,7 @@ const styles = StyleSheet.create({
   quickPillText: {
     fontSize: 14,
     color: Colors.primaryDark,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -586,6 +590,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
+    fontFamily: Fonts.regular,
     maxHeight: 100,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
@@ -597,7 +602,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },

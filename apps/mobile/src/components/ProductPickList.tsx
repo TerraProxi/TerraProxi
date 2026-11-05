@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import { Colors, Radius, Spacing } from '../theme'
+import { Colors, Radius, Spacing, Fonts } from '../theme'
 
 export interface ProductPick {
   product_id: string
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.gray600,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -104,12 +104,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   meta: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   qtyRow: {
     flexDirection: 'row',
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qtyBtnPressed: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
   },
   qtyBtnAdded: {
     backgroundColor: Colors.green50,
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.primaryDark,
   },
 })

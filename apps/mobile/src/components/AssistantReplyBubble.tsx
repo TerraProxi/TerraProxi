@@ -10,7 +10,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { ChatMessageText } from './ChatMessageText'
 import { ProductPickList, type ProductPick } from './ProductPickList'
 import { useTypewriter } from '../hooks/useTypewriter'
-import { Colors, Radius, Spacing } from '../theme'
+import { Colors, Radius, Spacing, Fonts } from '../theme'
 
 interface ProducerLink {
   producer_id: string
@@ -271,25 +271,27 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     fontSize: 15,
+    fontFamily: Fonts.regular,
     lineHeight: 21,
     color: Colors.gray800,
   },
   assistantBubbleBold: {
     color: Colors.gray900,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   cursor: {
     fontSize: 15,
     lineHeight: 21,
-    fontWeight: '300',
-    color: Colors.primary,
+    fontFamily: Fonts.regular,
+    color: Colors.primaryDark,
     marginLeft: 1,
     marginBottom: 1,
   },
   skipHint: {
     marginTop: Spacing.sm,
     fontSize: 11,
-    color: Colors.gray400,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
     fontStyle: 'italic',
   },
   cartFeedbackContainer: {
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
   cartFeedbackText: {
     flex: 1,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.green700,
   },
   quickRepliesWrap: {
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
   },
   quickReplyText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.primaryDark,
   },
   linksContainer: {
@@ -371,15 +373,17 @@ const styles = StyleSheet.create({
   },
   producerCardName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   producerCardCity: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   producerCardReason: {
     fontSize: 12,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: 2,
   },

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, Spacing, Radius, Fonts } from '../theme'
 import api from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useAuthStore } from '../store/auth.store'
@@ -303,12 +303,13 @@ const styles = StyleSheet.create({
   },
   producerName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
     textAlign: 'center',
   },
   producerMeta: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: Spacing.xs,
     textAlign: 'center',
@@ -325,11 +326,12 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: Fonts.heavy,
     color: Colors.dark,
   },
   reviewCount: {
     fontSize: 13,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
   },
   actionRow: {
@@ -343,14 +345,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.lg,
     paddingVertical: Spacing.md,
     gap: Spacing.sm,
   },
   shopBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   messageBtn: {
@@ -366,8 +368,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   messageBtnText: {
-    color: Colors.primary,
-    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   sectionContainer: {
@@ -382,7 +384,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
   },
   aboutCard: {
@@ -397,6 +399,7 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     lineHeight: 22,
     color: Colors.gray700,
   },
@@ -414,7 +417,7 @@ const styles = StyleSheet.create({
   },
   categoryPillText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.green700,
   },
   locationCard: {
@@ -438,11 +441,12 @@ const styles = StyleSheet.create({
   },
   addressText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   distanceText: {
     fontSize: 13,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: Spacing.xs,
   },
@@ -450,7 +454,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
     borderRadius: Radius.lg,
@@ -459,7 +463,7 @@ const styles = StyleSheet.create({
   },
   directionsBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   errorContainer: {
@@ -471,18 +475,19 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
     marginTop: Spacing.lg,
   },
   errorSub: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     textAlign: 'center',
     marginTop: Spacing.sm,
   },
   errorBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.xxxl,
     paddingVertical: Spacing.md,
@@ -490,7 +495,7 @@ const styles = StyleSheet.create({
   },
   errorBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
 })

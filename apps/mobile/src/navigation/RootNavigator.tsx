@@ -18,7 +18,7 @@ import { EditProfileScreen } from '../screens/EditProfileScreen'
 import { ChangeEmailScreen } from '../screens/ChangeEmailScreen'
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen'
 import { useUiStore } from '../store/ui.store'
-import { Fonts } from '../theme'
+import { Colors, Fonts } from '../theme'
 
 export type RootStackParamList = {
   Splash: undefined
@@ -54,7 +54,7 @@ export function RootNavigator() {
         card: '#111827',
         border: '#1F2937',
         text: '#F3F4F6',
-        primary: '#5BAE6A',
+        primary: Colors.primary,
       },
     }
     : {
@@ -65,7 +65,8 @@ export function RootNavigator() {
         card: '#FFFFFF',
         border: '#E5E7EB',
         text: '#1F2937',
-        primary: '#5BAE6A',
+        // Teinte des boutons d'en-tête : variante foncée pour le contraste sur fond blanc
+        primary: Colors.primaryDark,
       },
     }
 

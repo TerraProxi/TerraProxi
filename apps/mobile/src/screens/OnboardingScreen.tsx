@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, MIN_TOUCH_TARGET } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Fonts } from '../theme'
 import { markOnboardingSeen } from '../services/onboarding'
 
 type Nav = StackNavigationProp<RootStackParamList>
@@ -98,8 +98,8 @@ const styles = StyleSheet.create({
   },
   skipText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: Colors.gray500,
+    fontFamily: Fonts.semibold,
+    color: Colors.gray600,
   },
   illustration: {
     alignItems: 'center',
@@ -137,19 +137,20 @@ const styles = StyleSheet.create({
   },
   title1: {
     fontSize: 30,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontFamily: Fonts.titleHeavy,
+    color: Colors.primaryDark,
     lineHeight: 36,
   },
   title2: {
     fontSize: 30,
-    fontWeight: '800',
-    color: Colors.primary,
+    fontFamily: Fonts.titleHeavy,
+    color: Colors.primaryDark,
     marginBottom: 14,
     lineHeight: 36,
   },
   subtitle: {
     fontSize: 15,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     textAlign: 'center',
     lineHeight: 23,
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   },
   ctaBtn: {
     flexDirection: 'row',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     paddingVertical: 18,
     paddingHorizontal: 48,
     borderRadius: 16,
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.white,
   },
   loginRow: {
@@ -185,10 +186,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
   },
   loginLink: {
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
 })
