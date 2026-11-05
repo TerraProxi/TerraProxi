@@ -57,6 +57,9 @@ jobs:
       - name: Tests API (unitaires + intégration PostGIS)
         run: pnpm test
 
+      - name: Tests mobile
+        run: pnpm test:mobile
+
       - name: Build web
         run: pnpm build:web
 

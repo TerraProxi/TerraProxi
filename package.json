@@ -15,6 +15,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm spec:lint && pnpm -r lint",
     "test": "pnpm --filter @terraproxi/api test",
+    "test:mobile": "pnpm --filter @terraproxi/mobile test",
     "db:migrate": "pnpm --filter @terraproxi/api db:migrate",
     "db:seed": "pnpm --filter @terraproxi/api db:seed",
     "spec:lint": "spectral lint \"specs/api/*.yaml\" --ruleset spectral.json --fail-severity error",
