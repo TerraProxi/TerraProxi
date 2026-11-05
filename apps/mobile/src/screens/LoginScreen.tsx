@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { useAuthStore } from '../store/auth.store'
-import { apiErrorMessage } from '../services/api'
+import { apiErrorMessage, authErrorTitle } from '../services/api'
 import { FormField } from '../components/FormField'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { Colors, Fonts, MIN_TOUCH_TARGET } from '../theme'
@@ -27,7 +27,7 @@ export function LoginScreen() {
       // Repart des onglets : un retour arrière ne doit pas ramener à l'onboarding ou au formulaire
       nav.reset({ index: 0, routes: [{ name: 'Tabs' }] })
     } catch (err) {
-      Alert.alert('Connexion impossible', apiErrorMessage(err, 'Email ou mot de passe incorrect'))
+      Alert.alert(authErrorTitle(err, 'Connexion impossible'), apiErrorMessage(err, 'Email ou mot de passe incorrect'))
     } finally {
       setLoading(false)
     }
