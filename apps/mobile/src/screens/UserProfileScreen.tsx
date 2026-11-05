@@ -1,111 +1,101 @@
-import { useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, ActivityIndicator, Alert, Linking } from 'react-native'
+import { useCallback, useState } from 'react'
+import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, Alert, Linking } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Radius, Spacing } from '../theme'
+import { Colors, Fonts, MIN_TOUCH_TARGET, Radius, Spacing } from '../theme'
 import { useAuthStore } from '../store/auth.store'
 import { useFavoritesStore } from '../store/favorites.store'
-import { useCartStore } from '../store/cart.store'
 import { useUiStore } from '../store/ui.store'
+import { useUnreadStore } from '../store/unread.store'
 import api, { apiErrorMessage } from '../services/api'
-
-const WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? 'https://app.terraproxi.fr'
+import { shareMyDataExport } from '../services/dataExport'
+import { WEB_URL } from '../config'
+import { IconButton, type IconName } from '../components/IconButton'
+import { PrimaryButton } from '../components/PrimaryButton'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
+type MenuId =
+  | 'orders' | 'messages' | 'favorites' | 'cart'
+  | 'editProfile' | 'email' | 'password' | 'darkMode'
+  | 'export' | 'privacy' | 'deleteAccount'
+
 interface MenuItem {
-  id: string
+  id: MenuId
   label: string
-  icon: string
+  icon: IconName
   iconColor: string
   iconBg: string
   section: string
-  badge?: string
-  hasToggle?: boolean
-}
-
-interface ProfileData {
-  id: string
-  email: string
-  first_name: string
-  last_name: string
-  role: 'CONSUMER' | 'PRODUCER' | 'ADMIN'
-  order_count?: number
-  favorite_count?: number
-  review_count?: number
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Mon Compte' },
-  { id: 'messages', label: 'Messages', icon: 'chat-outline', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
-  { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.red500, iconBg: Colors.red50, section: 'Mon Compte' },
-  { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primary, iconBg: Colors.green50, section: 'Mon Compte' },
-  { id: 'notifications', label: 'Notifications', icon: 'bell', iconColor: Colors.warning, iconBg: Colors.yellow50, section: 'Préférences' },
-  { id: 'location', label: 'Localisation', icon: 'map-marker', iconColor: Colors.blue500, iconBg: Colors.blue50, section: 'Préférences' },
-  { id: 'darkMode', label: 'Mode sombre', icon: 'weather-night', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Préférences', hasToggle: true },
-  { id: 'help', label: 'Aide', icon: 'help-circle', iconColor: Colors.accent, iconBg: '#E0F7FA', section: 'Support' },
-  { id: 'report', label: 'Signaler', icon: 'flag', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
-  { id: 'terms', label: 'Confidentialité', icon: 'file-document', iconColor: Colors.gray600, iconBg: Colors.gray100, section: 'Support' },
-  { id: 'deleteAccount', label: 'Supprimer mon compte', icon: 'account-remove', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Support' },
+  { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue600, iconBg: Colors.blue50, section: 'Mon activité' },
+  { id: 'messages', label: 'Messages', icon: 'chat-outline', iconColor: Colors.primaryDark, iconBg: Colors.green50, section: 'Mon activité' },
+  { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Mon activité' },
+  { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primaryDark, iconBg: Colors.green50, section: 'Mon activité' },
+  { id: 'editProfile', label: 'Modifier mon profil', icon: 'account-edit', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
+  { id: 'email', label: 'Adresse email', icon: 'email-outline', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
+  { id: 'password', label: 'Mot de passe', icon: 'lock-outline', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
+  { id: 'darkMode', label: 'Mode sombre', icon: 'weather-night', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
+  { id: 'export', label: 'Exporter mes données', icon: 'download', iconColor: Colors.accentDark, iconBg: '#E0F7FA', section: 'Confidentialité' },
+  { id: 'privacy', label: 'Politique de confidentialité', icon: 'file-document', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Confidentialité' },
+  { id: 'deleteAccount', label: 'Supprimer mon compte', icon: 'account-remove', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Confidentialité' },
 ]
 
-const SECTION_ORDER = ['Mon Compte', 'Préférences', 'Support']
-const SECTION_ICONS: Record<string, string> = { 'Mon Compte': 'account', 'Préférences': 'tune', 'Support': 'lifebuoy' }
+const SECTION_ORDER = ['Mon activité', 'Mon compte', 'Confidentialité']
+const ORDER_COUNT_LIMIT = 100
+
+type Row = { key: string; section: string; item?: MenuItem }
+
+const ROWS: Row[] = SECTION_ORDER.flatMap((section) => [
+  { key: `h-${section}`, section },
+  ...MENU_ITEMS.filter((i) => i.section === section).map((item) => ({ key: item.id, section, item })),
+])
 
 export function UserProfileScreen() {
   const insets = useSafeAreaInsets()
-  const { user, isAuthenticated, logout, deleteAccount } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const logout = useAuthStore((s) => s.logout)
+  const deleteAccount = useAuthStore((s) => s.deleteAccount)
   const nav = useNavigation<Nav>()
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [profileLoading, setProfileLoading] = useState(false)
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const darkModeEnabled = useUiStore((s) => s.darkMode)
-  const setDarkModeEnabled = useUiStore((s) => s.setDarkMode)
-  const isDark = darkModeEnabled
+  const isDark = useUiStore((s) => s.darkMode)
+  const setDarkMode = useUiStore((s) => s.setDarkMode)
   const favoriteCount = useFavoritesStore((s) => s.producerIds.length + s.productIds.length)
-  const cartCount = useCartStore((s) => s.count)
+  const unreadCount = useUnreadStore((s) => s.count)
+  const refreshUnread = useUnreadStore((s) => s.refresh)
+  const [orderCount, setOrderCount] = useState<number | null>(null)
+  const [isExporting, setExporting] = useState(false)
 
-  useEffect(() => {
+  // Statistiques et badge à jour à chaque retour sur l'onglet
+  useFocusEffect(useCallback(() => {
     if (!isAuthenticated) return
-    setProfileLoading(true)
-    api.get<ProfileData>('/users/profile')
-      .then(({ data }) => setProfile(data))
-      .catch(() => {})
-      .finally(() => setProfileLoading(false))
-  }, [isAuthenticated])
+    void refreshUnread()
+    api.get<unknown[]>('/orders', { params: { limit: ORDER_COUNT_LIMIT } })
+      .then(({ data }) => setOrderCount(data.length))
+      .catch(() => setOrderCount(null))
+  }, [isAuthenticated, refreshUnread]))
 
   if (!isAuthenticated) {
     return (
       <View style={[styles.loginContainer, isDark && styles.loginContainerDark]}>
-        <View style={styles.loginIconWrap}>
-          <MaterialCommunityIcons name="account-circle" size={64} color={Colors.gray300} />
-        </View>
-        <Text style={[styles.loginTitle, isDark && styles.textPrimaryDark]}>Mon compte</Text>
+        <MaterialCommunityIcons name="account-circle" size={64} color={Colors.gray400} />
+        <Text style={[styles.loginTitle, isDark && styles.textPrimaryDark]} accessibilityRole="header">Mon compte</Text>
         <Text style={[styles.loginSub, isDark && styles.textSecondaryDark]}>Connectez-vous pour accéder à votre profil</Text>
-        <TouchableOpacity onPress={() => nav.navigate('Login')} style={styles.loginBtn}>
-          <Text style={styles.loginBtnText}>Se connecter</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => nav.navigate('Register')} style={styles.registerBtn}>
-          <Text style={styles.registerBtnText}>Créer un compte</Text>
-        </TouchableOpacity>
+        <PrimaryButton label="Se connecter" onPress={() => nav.navigate('Login')} style={styles.loginBtn} />
+        <PrimaryButton label="Créer un compte" variant="outline" onPress={() => nav.navigate('Register')} style={styles.loginBtn} />
       </View>
     )
   }
 
-  const role = profile?.role ?? user?.role ?? 'CONSUMER'
-
-  const groupedItems = SECTION_ORDER.map((section) => ({
-    section,
-    data: MENU_ITEMS.filter((i) => i.section === section),
-  }))
-
   const confirmDeleteAccount = () => {
     Alert.alert(
       'Supprimer mon compte',
-      'Vos messages et votre fiche producteur seront effacés. Vos commandes passées sont conservées de façon anonyme pour la comptabilité.',
+      'Vos messages seront effacés. Vos commandes passées sont conservées de façon anonyme pour la comptabilité.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -119,92 +109,89 @@ export function UserProfileScreen() {
     )
   }
 
-  const handleMenuPress = (item: MenuItem) => {
-    switch (item.id) {
-      case 'orders':
-        nav.navigate('Orders')
-        return
-      case 'favorites':
-        nav.navigate('Favorites')
-        return
-      case 'messages':
-        nav.navigate('Messages')
-        return
-      case 'terms':
-        void Linking.openURL(`${WEB_URL}/privacy`)
-        return
-      case 'deleteAccount':
-        confirmDeleteAccount()
-        return
-      case 'cart':
-        nav.navigate('Cart')
-        return
-      case 'notifications':
-      case 'location':
-      case 'help':
-      case 'report':
-        Alert.alert('Bientot disponible', `${item.label} sera disponible dans une prochaine version.`)
-        return
-      default:
-        return
+  const exportData = async () => {
+    setExporting(true)
+    try {
+      await shareMyDataExport()
+    } catch (err) {
+      Alert.alert('Export impossible', apiErrorMessage(err, 'Vos données n\'ont pas pu être exportées'))
+    } finally {
+      setExporting(false)
     }
   }
 
-  const sections: Array<{ key: string; type: 'header' | 'item'; section?: string; item?: MenuItem }> = []
-  for (const group of groupedItems) {
-    sections.push({ key: `h-${group.section}`, type: 'header', section: group.section })
-    for (const item of group.data) {
-      sections.push({ key: item.id, type: 'item', item })
-    }
+  const MENU_ACTIONS: Record<Exclude<MenuId, 'darkMode'>, () => void> = {
+    orders: () => nav.navigate('Orders'),
+    messages: () => nav.navigate('Messages'),
+    favorites: () => nav.navigate('Favorites'),
+    cart: () => nav.navigate('Cart'),
+    editProfile: () => nav.navigate('EditProfile'),
+    email: () => nav.navigate('ChangeEmail'),
+    password: () => nav.navigate('ChangePassword'),
+    export: () => { if (!isExporting) void exportData() },
+    privacy: () => {
+      Linking.openURL(`${WEB_URL}/privacy`).catch(() => Alert.alert('Navigateur indisponible', `${WEB_URL}/privacy`))
+    },
+    deleteAccount: confirmDeleteAccount,
   }
 
-  const renderHeader = (section: string) => (
-    <View style={styles.sectionHeader}>
-      <MaterialCommunityIcons name={(SECTION_ICONS[section] || 'circle') as any} size={18} color={Colors.gray600} />
-      <Text style={styles.sectionTitle}>{section}</Text>
-    </View>
-  )
-
-  const renderItem = (item: MenuItem) => (
-    <TouchableOpacity
-      style={[styles.menuRow, isDark && styles.menuRowDark]}
-      activeOpacity={0.6}
-      onPress={() => !item.hasToggle && handleMenuPress(item)}
-      disabled={item.hasToggle}
-    >
-      <View style={[styles.menuIcon, { backgroundColor: item.iconBg }]}>
-        <MaterialCommunityIcons name={item.icon as any} size={20} color={item.iconColor} />
-      </View>
-      <Text style={[styles.menuLabel, isDark && styles.textPrimaryDark]}>{item.label}</Text>
-      {item.badge && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.badge}</Text>
+  const renderItem = (item: MenuItem) => {
+    const badge = item.id === 'messages' && unreadCount > 0 ? unreadCount : null
+    const isToggle = item.id === 'darkMode'
+    const content = (
+      <>
+        <View style={[styles.menuIcon, { backgroundColor: item.iconBg }]}>
+          <MaterialCommunityIcons name={item.icon} size={20} color={item.iconColor} />
         </View>
-      )}
-      {item.hasToggle ? (
-        <Switch
-          value={item.id === 'darkMode' ? darkModeEnabled : notificationsEnabled}
-          onValueChange={item.id === 'darkMode' ? setDarkModeEnabled : setNotificationsEnabled}
-          trackColor={{ false: Colors.gray300, true: Colors.primary }}
-          thumbColor={Colors.white}
-        />
-      ) : (
-        <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.gray400} />
-      )}
-    </TouchableOpacity>
-  )
+        <Text style={[styles.menuLabel, isDark && styles.textPrimaryDark]}>
+          {item.id === 'export' && isExporting ? 'Préparation de l\'export…' : item.label}
+        </Text>
+        {badge !== null && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        )}
+      </>
+    )
 
-  const safeFirstName = profile?.first_name ?? user?.first_name ?? ''
-  const safeLastName = profile?.last_name ?? user?.last_name ?? ''
-  const displayName = `${safeFirstName} ${safeLastName}`.trim() || 'Mon compte'
-  const initials = `${safeFirstName.charAt(0)}${safeLastName.charAt(0)}`.toUpperCase() || 'MC'
-  const orderCount = profile?.order_count
-  const reviewCount = profile?.review_count
+    if (isToggle) {
+      return (
+        <View style={[styles.menuRow, isDark && styles.menuRowDark]}>
+          {content}
+          <Switch
+            value={isDark}
+            onValueChange={setDarkMode}
+            trackColor={{ false: Colors.gray300, true: Colors.primaryDark }}
+            thumbColor={Colors.white}
+            accessibilityLabel={item.label}
+          />
+        </View>
+      )
+    }
+    return (
+      <TouchableOpacity
+        style={[styles.menuRow, isDark && styles.menuRowDark]}
+        activeOpacity={0.6}
+        onPress={MENU_ACTIONS[item.id as Exclude<MenuId, 'darkMode'>]}
+        accessibilityRole="button"
+        accessibilityLabel={badge !== null ? `${item.label}, ${badge} non lu${badge > 1 ? 's' : ''}` : item.label}
+      >
+        {content}
+        <MaterialCommunityIcons name="chevron-right" size={20} color={Colors.gray600} />
+      </TouchableOpacity>
+    )
+  }
+
+  const firstName = user?.first_name ?? ''
+  const lastName = user?.last_name ?? ''
+  const displayName = `${firstName} ${lastName}`.trim() || 'Mon compte'
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+  const orderCountLabel = orderCount === null ? '–' : orderCount >= ORDER_COUNT_LIMIT ? `${ORDER_COUNT_LIMIT}+` : String(orderCount)
 
   return (
     <FlatList
-      data={sections}
-      keyExtractor={(s) => s.key}
+      data={ROWS}
+      keyExtractor={(row) => row.key}
       style={styles.container}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
@@ -213,41 +200,35 @@ export function UserProfileScreen() {
             <View style={[styles.avatar, isDark && styles.avatarDark]}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <TouchableOpacity style={styles.avatarEdit}>
-              <MaterialCommunityIcons name="pencil" size={14} color={Colors.white} />
-            </TouchableOpacity>
+            <IconButton
+              icon="pencil"
+              label="Modifier mon profil"
+              onPress={() => nav.navigate('EditProfile')}
+              color={Colors.white}
+              size={16}
+              style={styles.avatarEdit}
+            />
           </View>
-          <Text style={[styles.userName, isDark && styles.textPrimaryDark]}>{displayName}</Text>
-          <View style={[styles.roleBadge, isDark && styles.roleBadgeDark]}>
-            <Text style={styles.roleText}>
-              {role === 'PRODUCER' ? 'Producteur' : 'Consommateur'}
-            </Text>
-          </View>
+          <Text style={[styles.userName, isDark && styles.textPrimaryDark]} accessibilityRole="header">{displayName}</Text>
+          <Text style={[styles.userEmail, isDark && styles.textSecondaryDark]}>{user?.email}</Text>
           <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{profileLoading ? '–' : (orderCount ?? '–')}</Text>
+            <View style={styles.stat} accessible accessibilityLabel={`${orderCountLabel} commandes`}>
+              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{orderCountLabel}</Text>
               <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Commandes</Text>
             </View>
             <View style={[styles.statDivider, isDark && styles.statDividerDark]} />
-            <View style={styles.stat}>
+            <View style={styles.stat} accessible accessibilityLabel={`${favoriteCount} favoris`}>
               <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{favoriteCount}</Text>
               <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Favoris</Text>
-            </View>
-            <View style={[styles.statDivider, isDark && styles.statDividerDark]} />
-            <View style={styles.stat}>
-              <Text style={[styles.statValue, isDark && styles.textPrimaryDark]}>{profileLoading ? '–' : (reviewCount ?? cartCount)}</Text>
-              <Text style={[styles.statLabel, isDark && styles.textSecondaryDark]}>Avis</Text>
             </View>
           </View>
         </View>
       }
-      renderItem={({ item }) =>
-        item.type === 'header'
-          ? renderHeader(item.section!)
-          : renderItem(item.item!)
-      }
+      renderItem={({ item: row }) => (row.item ? renderItem(row.item) : (
+        <Text style={styles.sectionTitle} accessibilityRole="header">{row.section}</Text>
+      ))}
       ListFooterComponent={
-        <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+        <TouchableOpacity onPress={() => void logout()} style={styles.logoutBtn} accessibilityRole="button">
           <MaterialCommunityIcons name="logout" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
@@ -257,76 +238,61 @@ export function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.gray50,
-  },
+  container: { flex: 1, backgroundColor: Colors.gray50 },
   loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.gray50, padding: 32 },
-  loginIconWrap: { marginBottom: 16 },
-  loginTitle: { fontSize: 24, fontWeight: '700', color: Colors.dark, marginBottom: 8 },
-  loginSub: { fontSize: 14, color: Colors.gray600, marginBottom: 24, textAlign: 'center' },
-  loginBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 14, paddingHorizontal: 48, marginBottom: 12, width: '100%', alignItems: 'center' },
-  loginBtnText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
-  registerBtn: { borderWidth: 2, borderColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12, paddingHorizontal: 48, width: '100%', alignItems: 'center' },
-  registerBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 16 },
+  loginTitle: { fontSize: 24, fontFamily: Fonts.title, color: Colors.dark, marginTop: 16, marginBottom: 8 },
+  loginSub: { fontSize: 14, fontFamily: Fonts.regular, color: Colors.gray700, marginBottom: 24, textAlign: 'center' },
+  loginBtn: { alignSelf: 'stretch', marginBottom: 12 },
   profileHeader: {
     backgroundColor: Colors.white, borderBottomLeftRadius: Radius.xxl, borderBottomRightRadius: Radius.xxl,
-    paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center', elevation: 3,
   },
   avatarWrap: { position: 'relative', marginBottom: 12 },
   avatar: {
     width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { fontSize: 28, fontWeight: '700', color: Colors.primary },
+  avatarText: { fontSize: 28, fontFamily: Fonts.title, color: Colors.primaryDark },
   avatarEdit: {
-    position: 'absolute', bottom: 0, right: -4,
-    width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary,
-    justifyContent: 'center', alignItems: 'center',
+    position: 'absolute', bottom: -8, right: -14,
+    borderRadius: 22, backgroundColor: Colors.primaryDark,
     borderWidth: 3, borderColor: Colors.white,
   },
-  userName: { fontSize: 22, fontWeight: '700', color: Colors.dark, marginBottom: 6 },
-  roleBadge: {
-    backgroundColor: Colors.green100, borderRadius: Radius.full,
-    paddingHorizontal: 14, paddingVertical: 4, marginBottom: 20,
-  },
-  roleText: { fontSize: 12, fontWeight: '700', color: Colors.green700 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  userName: { fontSize: 22, fontFamily: Fonts.title, color: Colors.dark, marginBottom: 2 },
+  userEmail: { fontSize: 14, fontFamily: Fonts.regular, color: Colors.gray700, marginBottom: 20 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
   stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '800', color: Colors.dark },
-  statLabel: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
+  statValue: { fontSize: 20, fontFamily: Fonts.title, color: Colors.dark },
+  statLabel: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray700, marginTop: 2 },
   statDivider: { width: 1, height: 32, backgroundColor: Colors.gray200 },
   listContent: { paddingBottom: 40 },
-  sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+  sectionTitle: {
+    fontSize: 14, fontFamily: Fonts.bold, color: Colors.gray700, textTransform: 'uppercase', letterSpacing: 0.5,
     marginTop: 20, marginHorizontal: 20, marginBottom: 8,
   },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.gray600, textTransform: 'uppercase', letterSpacing: 0.5 },
   menuRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: Colors.white, paddingHorizontal: 20, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: MIN_TOUCH_TARGET + 12,
+    backgroundColor: Colors.white, paddingHorizontal: 20, paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: Colors.gray100,
   },
   menuIcon: { width: 40, height: 40, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center' },
-  menuLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: Colors.dark },
+  menuLabel: { flex: 1, fontSize: 15, fontFamily: Fonts.medium, color: Colors.dark },
   badge: {
-    backgroundColor: Colors.primary, borderRadius: Radius.full,
+    backgroundColor: Colors.primaryDark, borderRadius: Radius.full,
     paddingHorizontal: 8, paddingVertical: 2, marginRight: 4,
   },
-  badgeText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
+  badgeText: { color: Colors.white, fontSize: 12, fontFamily: Fonts.bold },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginHorizontal: 20, marginTop: 24, backgroundColor: Colors.red50,
-    borderRadius: Radius.md, paddingVertical: 16,
+    borderRadius: Radius.md, minHeight: MIN_TOUCH_TARGET + 8,
   },
-  logoutText: { fontSize: 16, fontWeight: '700', color: Colors.danger },
+  logoutText: { fontSize: 16, fontFamily: Fonts.bold, color: Colors.danger },
   loginContainerDark: { backgroundColor: '#0B1220' },
   profileHeaderDark: { backgroundColor: '#111827' },
-  avatarDark: { backgroundColor: '#1F2937' },
-  roleBadgeDark: { backgroundColor: '#1B3A2C' },
-  menuRowDark: { backgroundColor: '#111827', borderBottomColor: '#1F2937' },
-  statDividerDark: { backgroundColor: '#1F2937' },
-  textPrimaryDark: { color: '#F3F4F6' },
-  textSecondaryDark: { color: '#9CA3AF' },
+  avatarDark: { backgroundColor: Colors.gray900 },
+  menuRowDark: { backgroundColor: '#111827', borderBottomColor: Colors.gray900 },
+  statDividerDark: { backgroundColor: Colors.gray900 },
+  textPrimaryDark: { color: Colors.gray100 },
+  textSecondaryDark: { color: Colors.gray500 },
 })
