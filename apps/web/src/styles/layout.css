@@ -117,6 +117,18 @@
 
 .tp-nav-badge--alert { background: var(--color-danger-strong); }
 
+/* Libellé de la cloche : visible dans le menu mobile, réservé aux lecteurs d'écran sur grand écran */
+@media (min-width: 1081px) {
+  .tp-nav-link__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 1080px) {
   .tp-header__toggle { display: inline-flex; }
 
@@ -567,4 +579,32 @@
 
 @media (max-width: 640px) {
   .tp-chat__msg { max-width: 100%; }
+}
+
+/* ── Notifications ───────────────────────────────────────────────────────── */
+
+.tp-notification {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  text-align: left;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-dark);
+  font-size: var(--text-base);
+}
+
+.tp-notification:hover { box-shadow: var(--shadow-md); }
+.tp-notification[data-unread="true"] { background: #F0F8F9; border-color: var(--color-primary-strong); }
+
+.tp-unread-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--color-primary-strong);
 }

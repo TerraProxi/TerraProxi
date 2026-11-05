@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
 import { useUnreadMessages } from '../../hooks/useUnreadMessages'
+import { NotificationBell } from './NotificationBell'
 
 const NAV_ID = 'navigation-principale'
 
@@ -96,6 +97,7 @@ export function Header() {
                   </span>
                 )}
               </NavLink>
+              <NotificationBell />
               <NavLink to="/account" className="tp-nav-link">Mon compte</NavLink>
               <button type="button" className="tp-btn tp-btn--ghost tp-btn--sm" onClick={handleLogout}>
                 Déconnexion
