@@ -1,261 +1,226 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
-  View, Text, FlatList, ScrollView, TextInput, Image,
-  TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
+  View, Text, FlatList, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, Fonts, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
 import { api } from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
+import { useFocusLoader } from '../hooks/useFocusLoader'
+import { getKnownPosition } from '../services/location'
+import { CATEGORY_LABELS, type Product, type ProductCategory, type Producer } from '../types/catalog'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
+import { LoadingState, MessageState } from '../components/ScreenState'
 
-type Props = StackScreenProps<RootStackParamList, 'Catalog'> & {
-  route: { params: { producerId: string } }
-}
+type Props = StackScreenProps<RootStackParamList, 'Catalog'>
 
-interface ApiProducer {
-  id: string
-  company_name: string
-  tagline?: string
-  banner_url?: string
-  avatar_url?: string
-}
+type CategoryFilter = ProductCategory | 'ALL'
 
-interface ApiProduct {
-  id: string
-  name: string
-  price: number
-  unit: string
-  category: string
-  banner_url?: string
-  image_url?: string
-  producer_id?: string
-  is_bestseller?: boolean
-  is_seasonal?: boolean
-}
+const NOTICE_DURATION_MS = 1800
+/** Rayon maximal de /products : au-delà, le producteur sort des résultats géolocalisés. */
+const PRODUCTS_MAX_RADIUS_KM = 500
 
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { add, count, total } = useCartStore()
+  const insets = useSafeAreaInsets()
+  const add = useCartStore((s) => s.add)
+  const count = useCartStore((s) => s.count)
+  const total = useCartStore((s) => s.total)
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
-  const isProductFavorite = useFavoritesStore((s) => s.isProductFavorite)
+  const favoriteProductIds = useFavoritesStore((s) => s.productIds)
 
-  const [producer, setProducer] = useState<ApiProducer | null>(null)
-  const [products, setProducts] = useState<ApiProduct[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
+  const [producer, setProducer] = useState<Producer | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState('Tous')
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('ALL')
   const [recentlyAddedProductId, setRecentlyAddedProductId] = useState<string | null>(null)
   const [cartNotice, setCartNotice] = useState<string | null>(null)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [prodRes, pRes] = await Promise.all([
-          api.get<ApiProducer>(`/producers/${producerId}`),
-          api.get<ApiProduct[]>('/products', { params: { producer_id: producerId, available: 'true' } }),
-        ])
-        setProducer(prodRes.data)
-        setProducts(pRes.data)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+  const load = useCallback(async () => {
+    const baseParams = { producer_id: producerId, available: true, limit: 100 }
+    const position = await getKnownPosition()
+    const [producerRes, productsRes] = await Promise.all([
+      api.get<Producer>(`/producers/${producerId}`),
+      // Position connue : chaque produit porte distance_km (specs/api/products-api.yaml)
+      api.get<Product[]>('/products', {
+        params: position
+          ? { ...baseParams, lat: position.lat, lon: position.lon, radius: PRODUCTS_MAX_RADIUS_KM }
+          : baseParams,
+      }),
+    ])
+    setProducer(producerRes.data)
+    // Producteur hors du rayon géolocalisé : catalogue complet, sans distance
+    const isOutOfRange = position !== null && productsRes.data.length === 0
+    setProducts(isOutOfRange ? (await api.get<Product[]>('/products', { params: baseParams })).data : productsRes.data)
   }, [producerId])
+  const { isLoading, isRefreshing, error, refresh, reload } = useFocusLoader(load, 'Producteur introuvable')
 
-  const categories = useMemo(() => {
-    const unique = Array.from(new Set(products.map((p) => p.category).filter(Boolean)))
-    return ['Tous', ...unique]
-  }, [products])
+  const categories = useMemo<CategoryFilter[]>(
+    () => ['ALL', ...Array.from(new Set(products.map((p) => p.category)))],
+    [products],
+  )
 
   const filteredProducts = useMemo(() => {
-    let result = products
-    if (activeCategory !== 'Tous') {
-      result = result.filter((p) => p.category === activeCategory)
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter((p) => p.name.toLowerCase().includes(q))
-    }
-    return result
+    const query = search.trim().toLowerCase()
+    return products.filter((p) =>
+      (activeCategory === 'ALL' || p.category === activeCategory)
+      && (!query || p.name.toLowerCase().includes(query)))
   }, [products, activeCategory, search])
 
-  useEffect(() => {
-    return () => {
-      if (noticeTimerRef.current) {
-        clearTimeout(noticeTimerRef.current)
-      }
-    }
+  useEffect(() => () => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
   }, [])
 
   const showCartNotice = (message: string) => {
     setCartNotice(message)
-    if (noticeTimerRef.current) {
-      clearTimeout(noticeTimerRef.current)
-    }
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
     noticeTimerRef.current = setTimeout(() => {
       setCartNotice(null)
       setRecentlyAddedProductId(null)
-    }, 1800)
+    }, NOTICE_DURATION_MS)
   }
 
-  const handleAdd = (product: ApiProduct) => {
-    const cartProduct = {
+  const handleAdd = (product: Product) => {
+    const result = add({
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
-      producer_id: product.producer_id ?? producerId,
+      producer_id: product.producer_id,
       producer_name: producer?.company_name,
-      image_url: product.image_url ?? product.banner_url,
-    }
-
-    const result = add(cartProduct)
+      image_url: product.image_url ?? undefined,
+    })
     setRecentlyAddedProductId(product.id)
-    showCartNotice(
-      result === 'updated'
-        ? `Quantité mise à jour : ${product.name}`
-        : `${product.name} ajouté au panier`,
-    )
+    showCartNotice(result === 'updated' ? `Quantité mise à jour : ${product.name}` : `${product.name} ajouté au panier`)
   }
 
-  const handleCartPress = () => {
-    navigation.navigate('Cart')
-  }
-
-  if (loading) {
+  if (isLoading) return <LoadingState />
+  if (!producer) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <MessageState
+        icon="alert-circle-outline"
+        title="Producteur introuvable"
+        message={error ?? undefined}
+        actionLabel="Réessayer"
+        onAction={reload}
+      />
     )
   }
 
-  if (error || !producer) {
+  const distanceKm = products.find((p) => p.distance_km != null)?.distance_km
+
+  const renderItem = ({ item }: { item: Product }) => {
+    const isFavorite = favoriteProductIds.includes(item.id)
+    const isJustAdded = recentlyAddedProductId === item.id
     return (
-      <View style={styles.errorContainer}>
-        <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
-        <Text style={styles.errorTitle}>Producteur introuvable</Text>
-        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.errorBtnText}>Retour</Text>
-        </TouchableOpacity>
-      </View>
-    )
-  }
-
-  const renderItem = ({ item }: { item: ApiProduct }) => (
-    <View style={styles.productCard}>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: item.banner_url || item.image_url }} style={styles.productImage} />
-        {item.is_bestseller && (
-          <View style={styles.bestsellerBadge}>
-            <Text style={styles.bestsellerText}>Top Vente</Text>
-          </View>
-        )}
-        {item.is_seasonal && !item.is_bestseller && (
-          <View style={styles.seasonalBadge}>
-            <Text style={styles.seasonalText}>De Saison</Text>
-          </View>
-        )}
+      <View style={styles.productCard}>
         <TouchableOpacity
-          style={styles.heartBtn}
-          onPress={() => toggleProduct(item.id)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.name}, ${item.price.toFixed(2)} euros par ${item.unit}`}
+          accessibilityHint="Ouvre la fiche du produit"
         >
-          <MaterialCommunityIcons
-            name={isProductFavorite(item.id) ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isProductFavorite(item.id) ? Colors.danger : Colors.gray600}
-          />
+          <ProductImage uri={item.image_url} style={styles.productImage} />
+          <View style={styles.productInfo}>
+            <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.productUnit}>{item.unit}</Text>
+          </View>
         </TouchableOpacity>
-      </View>
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.productUnit}>{item.unit}</Text>
+        <IconButton
+          icon={isFavorite ? 'heart' : 'heart-outline'}
+          label={isFavorite ? `Retirer ${item.name} des favoris` : `Ajouter ${item.name} aux favoris`}
+          selected={isFavorite}
+          onPress={() => toggleProduct(item.id)}
+          color={isFavorite ? Colors.danger : Colors.gray700}
+          size={20}
+          style={styles.heartBtn}
+        />
         <View style={styles.productBottom}>
           <Text style={styles.productPrice}>{item.price.toFixed(2)} €</Text>
-          <TouchableOpacity
-            style={[styles.addBtn, recentlyAddedProductId === item.id && styles.addBtnAdded]}
+          <IconButton
+            icon={isJustAdded ? 'check' : 'plus'}
+            label={`Ajouter ${item.name} au panier`}
             onPress={() => handleAdd(item)}
-          >
-            <MaterialCommunityIcons
-              name={recentlyAddedProductId === item.id ? 'check' : 'plus'}
-              size={18}
-              color={Colors.white}
-            />
-          </TouchableOpacity>
+            color={Colors.white}
+            size={20}
+            style={[styles.addBtn, isJustAdded && styles.addBtnAdded]}
+          />
         </View>
       </View>
-    </View>
-  )
+    )
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.dark} />
-        </TouchableOpacity>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
+        <IconButton icon="arrow-left" label="Retour" onPress={() => navigation.goBack()} size={24} />
         <View style={styles.headerCenter}>
-          <Text style={styles.headerLabel}>Producteur</Text>
-          <Text style={styles.headerName} numberOfLines={1}>{producer.company_name}</Text>
+          <Text style={styles.headerLabel}>Boutique</Text>
+          <Text style={styles.headerName} numberOfLines={1} accessibilityRole="header">{producer.company_name}</Text>
         </View>
-        <View style={styles.headerBtn} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.producerCard}>
-        <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
+        <ProductImage uri={producer.banner_url} style={styles.producerAvatar} iconSize={22} />
         <View style={styles.producerInfo}>
-          <View style={styles.bioBadge}>
-            <MaterialCommunityIcons name="leaf" size={14} color={Colors.primary} />
-            <Text style={styles.bioText}>Bio & Local</Text>
-          </View>
-          <Text style={styles.producerTagline} numberOfLines={1}>{producer.tagline}</Text>
+          {producer.is_verified && (
+            <View style={styles.verifiedBadge}>
+              <MaterialCommunityIcons name="check-decagram" size={14} color={Colors.primaryDark} />
+              <Text style={styles.verifiedText}>Producteur vérifié</Text>
+            </View>
+          )}
+          <Text style={styles.producerDescription} numberOfLines={2}>
+            {producer.description ?? producer.city ?? ''}
+          </Text>
+          {distanceKm != null && (
+            <Text style={styles.distance}>À {distanceKm.toFixed(1)} km de vous</Text>
+          )}
         </View>
       </View>
 
       <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray500} />
+        <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray600} />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un produit…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={Colors.gray600}
           value={search}
           onChangeText={setSearch}
+          accessibilityLabel="Rechercher un produit"
         />
       </View>
 
       {cartNotice && (
-        <View style={styles.noticeBanner}>
+        <View style={styles.noticeBanner} accessibilityLiveRegion="polite">
           <MaterialCommunityIcons name="check-circle" size={16} color={Colors.green700} />
           <Text style={styles.noticeText} numberOfLines={1}>{cartNotice}</Text>
         </View>
       )}
 
-      <ScrollView
-        horizontal
-        style={styles.pillsScroll}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pillsContainer}
-      >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.pill, activeCategory === cat && styles.pillActive]}
-            onPress={() => setActiveCategory(cat)}
-          >
-            <Text style={[styles.pillText, activeCategory === cat && styles.pillTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView horizontal style={styles.pillsScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsContainer}>
+        {categories.map((cat) => {
+          const isActive = activeCategory === cat
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.pill, isActive && styles.pillActive]}
+              onPress={() => setActiveCategory(cat)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+                {cat === 'ALL' ? 'Tous' : CATEGORY_LABELS[cat]}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </ScrollView>
 
       <FlatList
@@ -265,26 +230,30 @@ export function CatalogScreen({ route, navigation }: Props) {
         contentContainerStyle={styles.gridContent}
         columnWrapperStyle={styles.gridRow}
         renderItem={renderItem}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[Colors.primaryDark]} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="basket-outline" size={48} color={Colors.gray300} />
+            <MaterialCommunityIcons name="basket-outline" size={48} color={Colors.gray400} />
             <Text style={styles.emptyText}>Aucun produit trouvé</Text>
           </View>
         }
       />
 
       {count > 0 && (
-        <TouchableOpacity style={styles.cartBar} onPress={handleCartPress} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.cartBar, { paddingBottom: insets.bottom + Spacing.md }]}
+          onPress={() => navigation.navigate('Cart')}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Voir le panier : ${count} article${count > 1 ? 's' : ''}, ${total.toFixed(2)} euros`}
+        >
           <View style={styles.cartBarLeft}>
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{count}</Text>
             </View>
-            <Text style={styles.cartBarLabel}>Voir Panier</Text>
+            <Text style={styles.cartBarLabel}>Voir le panier</Text>
           </View>
-          <View style={styles.cartBarRight}>
-            <Text style={styles.cartBarTotal}>{total.toFixed(2)} €</Text>
-            <Text style={styles.cartBarPay}>Payer →</Text>
-          </View>
+          <Text style={styles.cartBarTotal}>{total.toFixed(2)} €</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -292,50 +261,27 @@ export function CatalogScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.gray50,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.gray50,
-  },
+  container: { flex: 1, backgroundColor: Colors.gray50 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 56,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.sm,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
   },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerCenter: {
-    alignItems: 'center',
-    flex: 1,
-  },
+  headerSpacer: { width: MIN_TOUCH_TARGET },
+  headerCenter: { alignItems: 'center', flex: 1 },
   headerLabel: {
     fontSize: 11,
-    fontWeight: '500',
-    color: Colors.gray500,
+    fontFamily: Fonts.semibold,
+    color: Colors.gray600,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  headerName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.dark,
-    marginTop: 1,
-  },
+  headerName: { fontSize: 16, fontFamily: Fonts.title, color: Colors.dark, marginTop: 1 },
   producerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -345,17 +291,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
   },
-  producerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gray100,
-  },
-  producerInfo: {
-    marginLeft: Spacing.md,
-    flex: 1,
-  },
-  bioBadge: {
+  producerAvatar: { width: 48, height: 48, borderRadius: 24 },
+  producerInfo: { marginLeft: Spacing.md, flex: 1 },
+  verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -364,17 +302,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     alignSelf: 'flex-start',
+    marginBottom: 4,
   },
-  bioText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  producerTagline: {
-    fontSize: 13,
-    color: Colors.gray600,
-    marginTop: 4,
-  },
+  verifiedText: { fontSize: 11, fontFamily: Fonts.bold, color: Colors.primaryDark },
+  distance: { fontSize: 12, fontFamily: Fonts.semibold, color: Colors.primaryDark, marginTop: 2 },
+  producerDescription: { fontSize: 13, fontFamily: Fonts.regular, color: Colors.gray700 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,14 +317,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.gray200,
-    height: 44,
+    minHeight: MIN_TOUCH_TARGET,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.dark,
     marginLeft: Spacing.sm,
-    paddingVertical: 0,
+    paddingVertical: Spacing.sm,
   },
   noticeBanner: {
     flexDirection: 'row',
@@ -407,149 +340,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  noticeText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.green700,
-  },
-  pillsContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  pillsScroll: {
-    flexGrow: 0,
-  },
+  noticeText: { flex: 1, fontSize: 12, fontFamily: Fonts.semibold, color: Colors.green700 },
+  pillsScroll: { flexGrow: 0 },
+  pillsContainer: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, alignItems: 'center', gap: Spacing.sm },
   pill: {
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    minHeight: 40,
+    minHeight: MIN_TOUCH_TARGET,
     justifyContent: 'center',
     borderRadius: Radius.full,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.gray200,
-    marginRight: Spacing.sm,
   },
-  pillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.gray700,
-  },
-  pillTextActive: {
-    color: Colors.white,
-  },
-  gridContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: 100,
-  },
-  gridRow: {
-    gap: Spacing.md,
-  },
+  pillActive: { backgroundColor: Colors.primaryDark, borderColor: Colors.primaryDark },
+  pillText: { fontSize: 13, fontFamily: Fonts.semibold, color: Colors.gray700 },
+  pillTextActive: { color: Colors.white },
+  gridContent: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 100, flexGrow: 1 },
+  gridRow: { gap: Spacing.md },
   productCard: {
     flex: 1,
+    maxWidth: '50%',
     backgroundColor: Colors.white,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.gray200,
     overflow: 'hidden',
     marginBottom: Spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  imageContainer: {
-    height: 128,
-    position: 'relative',
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  bestsellerBadge: {
-    position: 'absolute',
-    top: Spacing.sm,
-    left: Spacing.sm,
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-  },
-  bestsellerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  seasonalBadge: {
-    position: 'absolute',
-    top: Spacing.sm,
-    left: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-  },
-  seasonalText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
+  productImage: { width: '100%', height: 128, resizeMode: 'cover' },
   heartBtn: {
     position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    top: 4,
+    right: 4,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  productInfo: {
-    padding: Spacing.md,
-  },
-  productName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.dark,
-  },
-  productUnit: {
-    fontSize: 12,
-    color: Colors.gray500,
-    marginTop: 2,
-  },
+  productInfo: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  productName: { fontSize: 14, fontFamily: Fonts.bold, color: Colors.dark },
+  productUnit: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 2 },
   productBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
-  productPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnAdded: {
-    backgroundColor: Colors.success,
-  },
+  productPrice: { fontSize: 15, fontFamily: Fonts.bold, color: Colors.primaryDark },
+  addBtn: { borderRadius: 22, backgroundColor: Colors.primaryDark },
+  addBtnAdded: { backgroundColor: Colors.green700 },
   cartBar: {
     position: 'absolute',
     bottom: 0,
@@ -560,16 +398,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: Colors.gray900,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingBottom: 28,
+    paddingTop: Spacing.md,
   },
-  cartBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
+  cartBarLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   cartBadge: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.full,
     minWidth: 22,
     height: 22,
@@ -577,64 +410,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  cartBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  cartBarLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.white,
-  },
-  cartBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  cartBarTotal: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  cartBarPay: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.accent,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.gray50,
-    padding: Spacing.xxxl,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.dark,
-    marginTop: Spacing.lg,
-  },
-  errorBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.xxxl,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.xl,
-  },
-  errorBtnText: {
-    color: Colors.white,
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 48,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.gray500,
-    marginTop: Spacing.sm,
-  },
+  cartBadgeText: { fontSize: 12, fontFamily: Fonts.bold, color: Colors.white },
+  cartBarLabel: { fontSize: 15, fontFamily: Fonts.semibold, color: Colors.white },
+  cartBarTotal: { fontSize: 15, fontFamily: Fonts.bold, color: Colors.accent },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingTop: 48 },
+  emptyText: { fontSize: 14, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: Spacing.sm },
 })

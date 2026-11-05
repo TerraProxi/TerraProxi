@@ -9,8 +9,9 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<void>
-  register: (data: RegisterPayload) => Promise<void>
+  /** Renvoie l'utilisateur connecté (pour choisir la page d'arrivée selon son rôle). */
+  login: (email: string, password: string) => Promise<User>
+  register: (data: RegisterPayload) => Promise<User>
   logout: () => Promise<void>
   /** Met à jour l'utilisateur affiché après une modification de profil. */
   setUser: (user: User) => void
@@ -60,11 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const { data } = await authService.login({ email, password })
     openSession(data)
+    return data.user
   }
 
   const register = async (payload: RegisterPayload) => {
     const { data } = await authService.register(payload)
     openSession(data)
+    return data.user
   }
 
   const forgetSession = () => {

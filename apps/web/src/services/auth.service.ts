@@ -7,6 +7,8 @@ export interface RegisterPayload {
   last_name: string
   role?: 'CONSUMER' | 'PRODUCER'
   gdpr_consent: boolean
+  /** Newsletters des producteurs : opt-in explicite, faux par défaut (RGPD). */
+  newsletter_opt_in?: boolean
 }
 
 export interface LoginPayload {
@@ -20,10 +22,13 @@ export interface User {
   first_name: string
   last_name: string
   role: 'CONSUMER' | 'PRODUCER' | 'ADMIN'
-  phone?: string
-  avatar_url?: string
+  phone?: string | null
+  avatar_url?: string | null
+  newsletter_opt_in: boolean
   created_at: string
 }
+
+export type UserRole = User['role']
 
 interface SessionResponse {
   user: User
@@ -35,6 +40,7 @@ export interface ProfileUpdate {
   first_name?: string
   last_name?: string
   phone?: string
+  newsletter_opt_in?: boolean
 }
 
 export const authService = {

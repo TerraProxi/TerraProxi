@@ -1,73 +1,96 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { MainLayout } from '../../components/layout/MainLayout'
-import { productsService, type Product } from '../../services/products.service'
 import { ProductCard } from '../../components/producer/ProductCard'
+import { Button } from '../../components/ui/Button'
+import { CATEGORY_LABELS, productsService, type Product } from '../../services/products.service'
+import { apiErrorMessage } from '../../services/api'
+import { useGeolocation } from '../../hooks/useGeolocation'
 
-const CATEGORIES = [
-  { value: '', label: 'Tous' },
-  { value: 'FRUITS_VEGETABLES', label: '🥦 Fruits & Légumes' },
-  { value: 'DAIRY',             label: '🧀 Laitiers' },
-  { value: 'MEAT',              label: '🥩 Viandes' },
-  { value: 'BEVERAGES',         label: '🍷 Boissons' },
-  { value: 'FINE_GROCERY',      label: '🍯 Épicerie' },
-  { value: 'CRAFTS',            label: '🎨 Artisanat' },
-  { value: 'FLOWERS_PLANTS',    label: '🌸 Fleurs' },
-]
+const NEARBY_RADIUS_KM = 30
+
+const CATEGORY_FILTERS = [{ value: '', label: 'Tous' }].concat(
+  Object.entries(CATEGORY_LABELS)
+    .filter(([value]) => value !== 'OTHER')
+    .map(([value, label]) => ({ value, label })),
+)
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
+  const [submittedSearch, setSubmittedSearch] = useState('')
+  const { lat, lon, loading: isLocating, error: geoError, request: locate } = useGeolocation()
+  const [isNearbyOnly, setIsNearbyOnly] = useState(false)
+  // Position connue et filtre actif : catalogue trié par distance (GET /products?lat&lon&radius)
+  const isNearbyActive = isNearbyOnly && lat != null && lon != null
+  const nearLat = isNearbyActive ? lat : undefined
+  const nearLon = isNearbyActive ? lon : undefined
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true)
+    setError(null)
     productsService
-      .list({ category: category || undefined, available: 'true', search: search || undefined })
+      .list({ category: category || undefined, available: 'true', search: submittedSearch || undefined,
+        ...(nearLat !== undefined && nearLon !== undefined && { lat: nearLat, lon: nearLon, radius: NEARBY_RADIUS_KM }),
+      })
       .then(({ data }) => setProducts(data))
+      .catch((err) => setError(apiErrorMessage(err, 'Impossible de charger les produits')))
       .finally(() => setLoading(false))
+  }, [category, submittedSearch, nearLat, nearLon])
+
+  const toggleNearby = () => {
+    if (isNearbyOnly) {
+      setIsNearbyOnly(false)
+      return
+    }
+    setIsNearbyOnly(true)
+    if (lat == null || lon == null) locate()
   }
 
-  useEffect(() => { load() }, [category])
+  useEffect(() => { load() }, [load])
+
+  const handleSearch = (e: FormEvent) => {
+    e.preventDefault()
+    if (search.trim() === submittedSearch) load()
+    else setSubmittedSearch(search.trim())
+  }
 
   return (
-    <MainLayout>
-      <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-6)' }}>
-        Produits locaux
-      </h1>
+    <MainLayout title="Produits locaux">
+      <h1 className="tp-page-title">Produits locaux</h1>
 
-      {/* Filtres */}
-      <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--space-6)' }}>
-        <input
-          placeholder="Rechercher…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && load()}
-          style={{
-            padding: '0.5rem 0.875rem',
-            border: '1.5px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            fontFamily: 'var(--font-body)',
-            width: 220,
-          }}
-        />
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {CATEGORIES.map((cat) => (
+      <div className="tp-stack" style={{ marginBottom: 'var(--space-6)' }}>
+        <form role="search" onSubmit={handleSearch} style={{ maxWidth: 420 }}>
+          <label htmlFor="recherche-produit" className="tp-label">Rechercher un produit</label>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>
+            <input
+              id="recherche-produit"
+              type="search"
+              className="tp-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <Button type="submit" variant="outline">Chercher</Button>
+          </div>
+        </form>
+
+        <div className="tp-cluster">
+          <button type="button" className="tp-chip" aria-pressed={isNearbyOnly} onClick={toggleNearby} disabled={isLocating}>
+            📍 {isLocating ? 'Localisation…' : `Près de moi (${NEARBY_RADIUS_KM} km)`}
+          </button>
+          {geoError && isNearbyOnly && <span className="tp-field-error" role="alert">{geoError}</span>}
+        </div>
+
+        <div className="tp-cluster" role="group" aria-label="Filtrer par catégorie">
+          {CATEGORY_FILTERS.map((cat) => (
             <button
               key={cat.value}
+              type="button"
+              className="tp-chip"
+              aria-pressed={category === cat.value}
               onClick={() => setCategory(cat.value)}
-              style={{
-                padding: '0.375rem 0.875rem',
-                borderRadius: 'var(--radius-full)',
-                border: '1.5px solid',
-                borderColor: category === cat.value ? 'var(--color-primary)' : 'var(--color-border)',
-                background: category === cat.value ? 'var(--color-primary)' : 'transparent',
-                color: category === cat.value ? '#fff' : 'var(--color-dark)',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-body)',
-                fontWeight: category === cat.value ? 700 : 400,
-                fontSize: 'var(--text-sm)',
-              }}
             >
               {cat.label}
             </button>
@@ -75,15 +98,21 @@ export function ProductsPage() {
         </div>
       </div>
 
-      {loading ? (
-        <p style={{ color: 'var(--color-text-muted)' }}>Chargement…</p>
-      ) : products.length === 0 ? (
-        <p style={{ color: 'var(--color-text-muted)' }}>Aucun produit trouvé.</p>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--space-5)' }}>
-          {products.map((p) => <ProductCard key={p.id} product={p} />)}
-        </div>
-      )}
+      <div aria-live="polite" aria-busy={loading}>
+        {error ? (
+          <div className="tp-alert tp-alert--error" role="alert">
+            {error} <Button variant="ghost" size="sm" onClick={load}>Réessayer</Button>
+          </div>
+        ) : loading ? (
+          <p className="tp-muted">Chargement…</p>
+        ) : products.length === 0 ? (
+          <p className="tp-muted">Aucun produit trouvé.</p>
+        ) : (
+          <div className="tp-product-grid">
+            {products.map((p) => <ProductCard key={p.id} product={p} />)}
+          </div>
+        )}
+      </div>
     </MainLayout>
   )
 }

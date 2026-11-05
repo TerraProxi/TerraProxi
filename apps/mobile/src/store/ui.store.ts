@@ -1,12 +1,6 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import * as SecureStore from 'expo-secure-store'
-
-const secureStorage = {
-  getItem: (name: string) => SecureStore.getItemAsync(name) ?? null,
-  setItem: (name: string, value: string) => SecureStore.setItemAsync(name, value),
-  removeItem: (name: string) => SecureStore.deleteItemAsync(name),
-}
+import { persist } from 'zustand/middleware'
+import { persistentStorage } from '../services/storage'
 
 interface UiStore {
   darkMode: boolean
@@ -23,7 +17,7 @@ export const useUiStore = create<UiStore>()(
     }),
     {
       name: 'ui-store',
-      storage: createJSONStorage(() => secureStorage),
+      storage: persistentStorage,
     },
   ),
 )

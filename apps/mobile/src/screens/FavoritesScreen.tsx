@@ -1,45 +1,30 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, Image, ScrollView,
-  StyleSheet, Dimensions, ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, Alert, RefreshControl,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-
-import { Colors, Spacing, Radius } from '../theme'
-import { api } from '../services/api'
+import type { StackScreenProps } from '@react-navigation/stack'
+import type { RootStackParamList } from '../navigation/RootNavigator'
+import { Colors, Fonts, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
+import { fetchFavoritesByIds } from '../services/favorites'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
+import { useFocusLoader } from '../hooks/useFocusLoader'
+import type { Product, Producer } from '../types/catalog'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
+import { LoadingState } from '../components/ScreenState'
+
+type Props = StackScreenProps<RootStackParamList, 'Favorites'>
+type Tab = 'producers' | 'products'
 
 const { width } = Dimensions.get('window')
 const CARD_WIDTH = (width - Spacing.xl * 3) / 2
 
-interface ApiProducer {
-  id: string
-  company_name: string
-  tagline?: string
-  banner_url?: string
-  avatar_url?: string
-}
-
-interface ApiProduct {
-  id: string
-  name: string
-  price: number
-  unit: string
-  banner_url?: string
-  image_url?: string
-  producer_id?: string
-}
-
-type Tab = 'producers' | 'products'
-
-export function FavoritesScreen({ navigation }: any) {
-  const insets = useSafeAreaInsets()
+export function FavoritesScreen({ navigation }: Props) {
   const [tab, setTab] = useState<Tab>('producers')
-  const [allProducers, setAllProducers] = useState<ApiProducer[]>([])
-  const [allProducts, setAllProducts] = useState<ApiProduct[]>([])
-  const [loading, setLoading] = useState(true)
+  const [producers, setProducers] = useState<Producer[]>([])
+  const [products, setProducts] = useState<Product[]>([])
 
   const producerIds = useFavoritesStore((s) => s.producerIds)
   const productIds = useFavoritesStore((s) => s.productIds)
@@ -47,427 +32,222 @@ export function FavoritesScreen({ navigation }: any) {
   const toggleProduct = useFavoritesStore((s) => s.toggleProduct)
   const addToCart = useCartStore((s) => s.add)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [prodRes, pRes] = await Promise.all([
-          api.get<ApiProducer[]>('/producers', { params: { limit: 50 } }),
-          api.get<ApiProduct[]>('/products', { params: { limit: 50 } }),
-        ])
-        setAllProducers(prodRes.data)
-        setAllProducts(pRes.data)
-      } catch {
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+  const load = useCallback(async () => {
+    const [producerList, productList] = await Promise.all([
+      fetchFavoritesByIds<Producer>(producerIds, '/producers', toggleProducer),
+      fetchFavoritesByIds<Product>(productIds, '/products', toggleProduct),
+    ])
+    setProducers(producerList)
+    setProducts(productList)
+  }, [producerIds, productIds, toggleProducer, toggleProduct])
+  const { isLoading, isRefreshing, error, refresh } = useFocusLoader(load, 'Impossible de charger vos favoris')
 
-  const favoriteProducers = allProducers.filter((p) => producerIds.includes(p.id))
-  const favoriteProducts = allProducts.filter((p) => productIds.includes(p.id))
+  // Affiche immédiatement le retrait d'un favori, sans attendre le prochain chargement
+  const favoriteProducers = producers.filter((p) => producerIds.includes(p.id))
+  const favoriteProducts = products.filter((p) => productIds.includes(p.id))
 
-  const handleAddToCart = (product: ApiProduct) => {
-    const producer = allProducers.find((p) => p.id === product.producer_id)
+  const handleAddToCart = (product: Product) => {
     const result = addToCart({
       id: product.id,
       name: product.name,
       price: product.price,
       unit: product.unit,
-      producer_id: product.producer_id ?? '',
-      producer_name: producer?.company_name ?? 'Producteur local',
-      image_url: product.image_url ?? product.banner_url,
+      producer_id: product.producer_id,
+      producer_name: product.producer_name,
+      image_url: product.image_url ?? undefined,
     })
-
-    Alert.alert(
-      '✓ Ajouté',
-      result === 'updated'
-        ? `${product.name} — quantité mise à jour`
-        : `${product.name} ajouté au panier`,
-    )
+    Alert.alert('Panier', result === 'updated' ? `${product.name} : quantité mise à jour` : `${product.name} ajouté au panier`)
   }
 
-  if (loading) {
+  if (isLoading) return <LoadingState />
+
+  const renderTab = (key: Tab, label: string) => {
+    const isActive = tab === key
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <TouchableOpacity
+        style={[styles.tab, isActive && styles.tabActive]}
+        onPress={() => setTab(key)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive }}
+      >
+        <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
+      </TouchableOpacity>
     )
   }
+
+  const renderEmpty = (label: string) => (
+    <View style={styles.empty}>
+      <MaterialCommunityIcons name="heart-outline" size={48} color={Colors.gray400} />
+      <Text style={styles.emptyText}>{label}</Text>
+    </View>
+  )
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={styles.headerTitle}>Mes Coups de Cœur</Text>
-        <Text style={styles.headerSubtitle}>
-          Retrouvez vos produits et artisans préférés
-        </Text>
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[Colors.primaryDark]} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} accessibilityRole="header">Mes coups de cœur</Text>
+        <Text style={styles.headerSubtitle}>Retrouvez vos produits et producteurs préférés</Text>
       </View>
 
-      <View style={styles.tabContainer}>
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'producers' && styles.tabActive]}
-            onPress={() => setTab('producers')}
-          >
-            <Text style={[styles.tabText, tab === 'producers' && styles.tabTextActive]}>
-              Producteurs
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'products' && styles.tabActive]}
-            onPress={() => setTab('products')}
-          >
-            <Text style={[styles.tabText, tab === 'products' && styles.tabTextActive]}>
-              Produits
-            </Text>
-          </TouchableOpacity>
-        </View>
+      {error && <Text style={styles.error} accessibilityLiveRegion="polite">{error} — tirez vers le bas pour réessayer.</Text>}
+
+      <View style={styles.tabBar} accessibilityRole="tablist">
+        {renderTab('producers', 'Producteurs')}
+        {renderTab('products', 'Produits')}
       </View>
 
-      {tab === 'producers' ? (
-        favoriteProducers.length === 0 ? (
-          <View style={styles.empty}>
-            <MaterialCommunityIcons name="heart-outline" size={48} color={Colors.gray300} />
-            <Text style={styles.emptyText}>Aucun producteur favori</Text>
-          </View>
-        ) : (
-          <View style={styles.producerList}>
-            {favoriteProducers.map((producer) => (
+      {tab === 'producers' && (favoriteProducers.length === 0 ? renderEmpty('Aucun producteur favori') : (
+        <View style={styles.producerList}>
+          {favoriteProducers.map((producer) => (
+            <View key={producer.id} style={styles.producerCard}>
               <TouchableOpacity
-                key={producer.id}
-                style={styles.producerCard}
+                style={styles.producerMain}
                 onPress={() => navigation.navigate('ProducerProfile', { producerId: producer.id })}
-                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${producer.company_name}${producer.city ? `, ${producer.city}` : ''}`}
               >
-                <Image source={{ uri: producer.avatar_url || producer.banner_url }} style={styles.producerAvatar} />
+                <ProductImage uri={producer.banner_url} style={styles.producerAvatar} iconSize={24} />
                 <View style={styles.producerInfo}>
                   <Text style={styles.producerName} numberOfLines={1}>{producer.company_name}</Text>
-                  <Text style={styles.producerTagline} numberOfLines={1}>{producer.tagline}</Text>
-                  <View style={styles.producerBadges}>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>Bio</Text>
-                    </View>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>Local</Text>
-                    </View>
-                  </View>
+                  {producer.city ? <Text style={styles.producerMeta} numberOfLines={1}>{producer.city}</Text> : null}
+                  {producer.categories && producer.categories.length > 0 && (
+                    <Text style={styles.producerMeta} numberOfLines={1}>{producer.categories.join(' · ')}</Text>
+                  )}
                 </View>
-                <TouchableOpacity
-                  onPress={() => toggleProducer(producer.id)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <MaterialCommunityIcons
-                    name="heart"
-                    size={24}
-                    color={Colors.danger}
-                  />
-                </TouchableOpacity>
               </TouchableOpacity>
-            ))}
-          </View>
-        )
-      ) : favoriteProducts.length === 0 ? (
-        <View style={styles.empty}>
-          <MaterialCommunityIcons name="heart-outline" size={48} color={Colors.gray300} />
-          <Text style={styles.emptyText}>Aucun produit favori</Text>
+              <IconButton
+                icon="heart"
+                label={`Retirer ${producer.company_name} des favoris`}
+                selected
+                onPress={() => toggleProducer(producer.id)}
+                color={Colors.danger}
+                size={24}
+              />
+            </View>
+          ))}
         </View>
-      ) : (
+      ))}
+
+      {tab === 'products' && (favoriteProducts.length === 0 ? renderEmpty('Aucun produit favori') : (
         <View style={styles.productGrid}>
           {favoriteProducts.map((product) => (
             <View key={product.id} style={styles.productCard}>
-              <View style={styles.productImageWrapper}>
-                <Image source={{ uri: product.banner_url || product.image_url }} style={styles.productImage} />
-                <TouchableOpacity
-                  style={styles.productHeartBtn}
-                  onPress={() => toggleProduct(product.id)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons name="heart" size={20} color={Colors.danger} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                <Text style={styles.productUnit}>{product.unit}</Text>
-                <View style={styles.productBottom}>
-                  <Text style={styles.productPrice}>
-                    {product.price.toFixed(2)} €
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.addBtn}
-                    onPress={() => handleAddToCart(product)}
-                  >
-                    <MaterialCommunityIcons name="plus" size={18} color={Colors.white} />
-                  </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ProductDetail', { productId: product.id })}
+                accessibilityRole="button"
+                accessibilityLabel={`${product.name}, ${product.price.toFixed(2)} euros par ${product.unit}`}
+              >
+                <ProductImage uri={product.image_url} style={styles.productImage} />
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+                  <Text style={styles.productUnit}>{product.unit}</Text>
                 </View>
+              </TouchableOpacity>
+              <IconButton
+                icon="heart"
+                label={`Retirer ${product.name} des favoris`}
+                selected
+                onPress={() => toggleProduct(product.id)}
+                color={Colors.danger}
+                size={20}
+                style={styles.productHeartBtn}
+              />
+              <View style={styles.productBottom}>
+                <Text style={styles.productPrice}>{product.price.toFixed(2)} €</Text>
+                {product.is_available && product.stock > 0 ? (
+                  <IconButton
+                    icon="plus"
+                    label={`Ajouter ${product.name} au panier`}
+                    onPress={() => handleAddToCart(product)}
+                    color={Colors.white}
+                    size={20}
+                    style={styles.addBtn}
+                  />
+                ) : (
+                  <Text style={styles.unavailable}>Indisponible</Text>
+                )}
               </View>
             </View>
           ))}
         </View>
-      )}
-
-      <View style={styles.inspirationSection}>
-        <View style={styles.inspirationCard}>
-          <View style={styles.inspirationCardGradient} />
-          <Text style={styles.inspirationEmoji}>🍅</Text>
-          <View style={styles.inspirationContent}>
-            <Text style={styles.inspirationTitle}>Inspiration de saison</Text>
-            <Text style={styles.inspirationText}>
-              Découvrez les produits de printemps sélectionnés pour vous
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.inspirationBtn}>
-            <Text style={styles.inspirationBtnText}>Voir</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      ))}
     </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.gray50,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.gray50,
-  },
+  container: { flex: 1, backgroundColor: Colors.gray50 },
   header: {
     backgroundColor: Colors.primaryLight,
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xxl,
+    paddingVertical: Spacing.xl,
     borderBottomLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.gray900,
-    marginBottom: Spacing.xs,
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    color: Colors.gray600,
-  },
-  tabContainer: {
-    paddingHorizontal: Spacing.xl,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
+  headerTitle: { fontSize: 24, fontFamily: Fonts.titleHeavy, color: Colors.gray900, marginBottom: Spacing.xs },
+  headerSubtitle: { fontSize: 15, fontFamily: Fonts.regular, color: Colors.gray700 },
+  error: { marginHorizontal: Spacing.xl, marginTop: Spacing.md, fontSize: 13, fontFamily: Fonts.semibold, color: Colors.danger },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: Colors.gray100,
     borderRadius: Radius.lg,
     padding: 3,
+    marginHorizontal: Spacing.xl,
+    marginVertical: Spacing.lg,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: Colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.gray600,
-  },
-  tabTextActive: {
-    color: Colors.gray900,
-    fontWeight: '700',
-  },
-  producerList: {
-    paddingHorizontal: Spacing.xl,
-  },
+  tab: { flex: 1, minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', borderRadius: Radius.md, alignItems: 'center' },
+  tabActive: { backgroundColor: Colors.white, elevation: 2 },
+  tabText: { fontSize: 14, fontFamily: Fonts.semibold, color: Colors.gray700 },
+  tabTextActive: { color: Colors.gray900, fontFamily: Fonts.bold },
+  producerList: { paddingHorizontal: Spacing.xl },
   producerCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
-    padding: Spacing.lg,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
     elevation: 2,
   },
-  producerAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-  },
-  producerInfo: {
-    flex: 1,
-    marginLeft: Spacing.lg,
-  },
-  producerName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.gray900,
-    marginBottom: 2,
-  },
-  producerTagline: {
-    fontSize: 13,
-    color: Colors.gray600,
-    marginBottom: Spacing.sm,
-  },
-  producerBadges: {
-    flexDirection: 'row',
-  },
-  badge: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    marginRight: Spacing.xs,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  productGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing.xl,
-    justifyContent: 'space-between',
-  },
+  producerMain: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  producerAvatar: { width: 56, height: 56, borderRadius: Radius.full },
+  producerInfo: { flex: 1, marginLeft: Spacing.md },
+  producerName: { fontSize: 16, fontFamily: Fonts.bold, color: Colors.gray900, marginBottom: 2 },
+  producerMeta: { fontSize: 13, fontFamily: Fonts.regular, color: Colors.gray600 },
+  productGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.xl, justifyContent: 'space-between' },
   productCard: {
     width: CARD_WIDTH,
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
     marginBottom: Spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
     elevation: 2,
     overflow: 'hidden',
   },
-  productImageWrapper: {
-    position: 'relative',
-    height: 112,
-  },
-  productImage: {
-    width: '100%',
-    height: 112,
-    resizeMode: 'cover',
-  },
+  productImage: { width: '100%', height: 112, resizeMode: 'cover' },
   productHeartBtn: {
     position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    width: 32,
-    height: 32,
+    top: 4,
+    right: 4,
     borderRadius: Radius.full,
     backgroundColor: 'rgba(255,255,255,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  productInfo: {
-    padding: Spacing.md,
-  },
-  productName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.gray900,
-    marginBottom: 2,
-  },
-  productUnit: {
-    fontSize: 12,
-    color: Colors.gray500,
-    marginBottom: Spacing.sm,
-  },
+  productInfo: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  productName: { fontSize: 14, fontFamily: Fonts.bold, color: Colors.gray900, marginBottom: 2 },
+  productUnit: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600 },
   productBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+    minHeight: MIN_TOUCH_TARGET + Spacing.sm,
   },
-  productPrice: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xxxl * 2,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: Colors.gray400,
-    marginTop: Spacing.lg,
-  },
-  inspirationSection: {
-    paddingHorizontal: Spacing.xl,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xxxl,
-  },
-  inspirationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.lg,
-    padding: Spacing.xl,
-    overflow: 'hidden',
-    backgroundColor: '#FFF7ED',
-  },
-  inspirationCardGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FEF2F2',
-    opacity: 0.5,
-  },
-  inspirationEmoji: {
-    fontSize: 36,
-    marginRight: Spacing.lg,
-  },
-  inspirationContent: {
-    flex: 1,
-  },
-  inspirationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.gray900,
-    marginBottom: 4,
-  },
-  inspirationText: {
-    fontSize: 13,
-    color: Colors.gray600,
-    lineHeight: 18,
-  },
-  inspirationBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    marginLeft: Spacing.sm,
-  },
-  inspirationBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.white,
-  },
+  productPrice: { fontSize: 16, fontFamily: Fonts.heavy, color: Colors.primaryDark },
+  addBtn: { borderRadius: Radius.full, backgroundColor: Colors.primaryDark },
+  unavailable: { fontSize: 12, fontFamily: Fonts.semibold, color: Colors.danger },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xxxl * 2 },
+  emptyText: { fontSize: 15, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: Spacing.lg },
 })

@@ -77,6 +77,21 @@ pnpm dev:mobile
   (ex. `http://192.168.1.20:3002/api`), téléphone et PC sur le même Wi-Fi.
 - Le paiement Stripe natif nécessite un *development build* (`eas build --profile development`),
   il ne fonctionne pas dans Expo Go. Le reste de l'application fonctionne dans Expo Go.
+- Builds Android/iOS, variables (`GOOGLE_MAPS_ANDROID_API_KEY`, `EAS_PROJECT_ID`…) et publication :
+  voir [mobile-release.md](mobile-release.md).
+
+**Monorepo et `node-linker=hoisted`.** Le fichier `.npmrc` à la racine demande à pnpm une
+arborescence `node_modules` « à plat » (comme npm), pour tout le monorepo. C'est la recommandation
+du guide Expo *Work with monorepos* pour le SDK 51 : avec les `node_modules` isolés de pnpm
+(liens symboliques), Metro ne résout pas les dépendances transitives d'`expo`
+(`expo-modules-core` introuvable à l'export) et l'autolinking natif n'est pas garanti.
+`apps/mobile/metro.config.js` repart de `getDefaultConfig` d'`expo/metro-config` : depuis le
+SDK 51, celui-ci détecte le monorepo (dossiers surveillés = paquets du workspace et
+`node_modules` racine ; résolution dans `apps/mobile/node_modules` puis `node_modules`).
+Ne pas y ajouter `disableHierarchicalLookup: true` ni restreindre `watchFolders` :
+`npx expo-doctor` signale ces écarts aux valeurs par défaut. L'API et le web fonctionnent
+à l'identique avec l'arborescence à plat. Après avoir changé ce réglage, supprimer tous les
+dossiers `node_modules` puis relancer `pnpm install`.
 
 ### Tout en conteneurs (sans Node local)
 

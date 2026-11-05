@@ -1,164 +1,147 @@
-import { useNavigate } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
-import { useCart } from '../../contexts/CartContext'
+import { Button } from '../../components/ui/Button'
+import { ErrorList } from '../../components/ui/ErrorList'
+import { CartLine } from '../../components/cart/CartLine'
+import { DeliveryOptionsFields, type CheckoutOptions } from '../../components/cart/DeliveryOptionsFields'
+import { useCart, type CartGroup } from '../../contexts/CartContext'
 import { useAuth } from '../../contexts/AuthContext'
-import { ordersService } from '../../services/orders.service'
-import { useState } from 'react'
+import { ordersService, type CreateOrderPayload } from '../../services/orders.service'
+import { apiErrorMessage } from '../../services/api'
+import { formatPrice } from '../../utils/format'
 
+const DEFAULT_OPTIONS: CheckoutOptions = { deliveryMode: 'pickup', deliveryAddress: '', notes: '' }
+
+function toOrderPayload(group: CartGroup, options: CheckoutOptions): CreateOrderPayload {
+  const notes = options.notes.trim()
+  return {
+    producer_id: group.producerId,
+    items: group.items.map((i) => ({ product_id: i.product.id, quantity: i.quantity })),
+    delivery_mode: options.deliveryMode,
+    ...(options.deliveryMode === 'delivery' && { delivery_address: options.deliveryAddress.trim() }),
+    ...(notes && { notes }),
+  }
+}
+
+/** ORDER-1 — un panier multi-producteurs devient une commande par producteur (specs/schemas/cart.schema.json). */
 export function CartPage() {
-  const { items, total, producerId, remove, updateQty, clear } = useCart()
+  const { groups, total, count, updateQty, remove, removeProducer } = useCart()
   const { isAuthenticated } = useAuth()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [options, setOptions] = useState<Record<string, CheckoutOptions>>({})
+  const [isOrdering, setIsOrdering] = useState(false)
+  const [errors, setErrors] = useState<string[]>([])
   const navigate = useNavigate()
 
-  const handleOrder = async () => {
-    if (!isAuthenticated) { navigate('/login'); return }
-    if (!producerId || !items.length) return
+  const optionsFor = (producerId: string) => options[producerId] ?? DEFAULT_OPTIONS
+  const changeOptions = (producerId: string, patch: Partial<CheckoutOptions>) =>
+    setOptions((all) => ({ ...all, [producerId]: { ...(all[producerId] ?? DEFAULT_OPTIONS), ...patch } }))
 
-    setLoading(true)
-    setError('')
-    try {
-      const { data: order } = await ordersService.create({
-        producer_id: producerId,
-        items: items.map((i) => ({ product_id: i.product.id, quantity: i.quantity })),
-      })
-      clear()
-      navigate(`/checkout/${order.id}`)
-    } catch (err: unknown) {
-      setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Erreur lors de la commande')
-    } finally {
-      setLoading(false)
+  const handleOrder = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: '/cart' } })
+      return
     }
+    setIsOrdering(true)
+    setErrors([])
+    const createdIds: string[] = []
+    const failures: string[] = []
+    for (const group of groups) {
+      try {
+        const { data } = await ordersService.create(toOrderPayload(group, optionsFor(group.producerId)))
+        createdIds.push(data.id)
+        removeProducer(group.producerId)
+      } catch (err) {
+        failures.push(`${group.producerName} : ${apiErrorMessage(err, 'commande refusée')}`)
+      }
+    }
+    setIsOrdering(false)
+
+    if (failures.length > 0) {
+      const createdNotice = createdIds.length > 0
+        ? [`${createdIds.length} commande(s) créée(s) : retrouvez-les dans « Mes commandes » pour les payer.`]
+        : []
+      setErrors([...failures, ...createdNotice])
+      return
+    }
+    if (createdIds.length === 1) navigate(`/checkout/${createdIds[0]}`)
+    else navigate('/orders', { state: { createdOrderCount: createdIds.length } })
   }
 
-  if (items.length === 0) {
+  if (groups.length === 0) {
     return (
-      <MainLayout>
-        <div style={{ textAlign: 'center', padding: 'var(--space-16) 0' }}>
-          <div style={{ fontSize: 64, marginBottom: 'var(--space-4)' }}>🛒</div>
-          <h2 style={{ fontFamily: 'var(--font-heading)', marginBottom: 'var(--space-4)' }}>Votre panier est vide</h2>
-          <a href="/products" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-            Découvrir les produits →
-          </a>
+      <MainLayout title="Panier">
+        <div style={{ textAlign: 'center', padding: 'var(--space-12) 0' }}>
+          <div aria-hidden="true" style={{ fontSize: 64, marginBottom: 'var(--space-4)' }}>🛒</div>
+          <h1 className="tp-page-title">Votre panier est vide</h1>
+          {errors.length > 0 && <ErrorList errors={errors} />}
+          <Link to="/products">Découvrir les produits →</Link>
         </div>
       </MainLayout>
     )
   }
 
   return (
-    <MainLayout>
-      <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-8)' }}>
-        Mon panier
-      </h1>
+    <MainLayout title="Panier">
+      <h1 className="tp-page-title">Mon panier</h1>
+      {groups.length > 1 && (
+        <p className="tp-alert tp-alert--info">
+          Votre panier contient des produits de {groups.length} producteurs : une commande sera créée par producteur.
+        </p>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 'var(--space-8)', alignItems: 'start' }}>
-        {/* Articles */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {items.map(({ product, quantity }) => (
-            <div
-              key={product.id}
-              style={{
-                background: 'var(--color-white)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-5)',
-                display: 'flex',
-                gap: 'var(--space-4)',
-                alignItems: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 'var(--radius-md)',
-                  background: product.image_url
-                    ? `url(${product.image_url}) center/cover`
-                    : 'linear-gradient(135deg, var(--color-light-bg), var(--color-border))',
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 32,
-                }}
-              >
-                {!product.image_url && '🌿'}
+      <form className="tp-split" onSubmit={handleOrder}>
+        <div className="tp-stack">
+          {groups.map((group) => (
+            <section key={group.producerId} className="tp-card" aria-labelledby={`producteur-${group.producerId}`}>
+              <div className="tp-page-header" style={{ marginBottom: 'var(--space-2)' }}>
+                <h2 id={`producteur-${group.producerId}`} style={{ fontSize: 'var(--text-xl)' }}>
+                  <Link to={`/producers/${group.producerId}`}>{group.producerName}</Link>
+                </h2>
+                <Button variant="ghost" size="sm" onClick={() => removeProducer(group.producerId)}>
+                  Retirer ces produits
+                </Button>
               </div>
 
-              <div style={{ flex: 1 }}>
-                <strong style={{ fontFamily: 'var(--font-heading)' }}>{product.name}</strong>
-                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  {Number(product.price).toFixed(2)} € / {product.unit}
-                </div>
-              </div>
+              {group.items.map((item) => (
+                <CartLine key={item.product.id} item={item} onQuantityChange={updateQty} onRemove={remove} />
+              ))}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button onClick={() => updateQty(product.id, quantity - 1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>−</button>
-                <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 600 }}>{quantity}</span>
-                <button onClick={() => updateQty(product.id, quantity + 1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>+</button>
-              </div>
+              <DeliveryOptionsFields
+                idPrefix={group.producerId}
+                options={optionsFor(group.producerId)}
+                onChange={(patch) => changeOptions(group.producerId, patch)}
+              />
 
-              <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, minWidth: 64, textAlign: 'right' }}>
-                {(Number(product.price) * quantity).toFixed(2)} €
-              </div>
-
-              <button onClick={() => remove(product.id)} style={{ color: 'var(--color-danger)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>
-                ✕
-              </button>
-            </div>
+              <p style={{ textAlign: 'right', fontWeight: 700 }}>Sous-total : {formatPrice(group.subtotal)}</p>
+            </section>
           ))}
         </div>
 
-        {/* Récapitulatif */}
-        <div
-          style={{
-            background: 'var(--color-white)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-xl)',
-            padding: 'var(--space-6)',
-            boxShadow: 'var(--shadow-md)',
-          }}
-        >
-          <h2 style={{ fontFamily: 'var(--font-heading)', marginBottom: 'var(--space-5)' }}>Récapitulatif</h2>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-            <span>{items.length} article{items.length > 1 ? 's' : ''}</span>
-            <span>{total.toFixed(2)} €</span>
+        <aside className="tp-card" aria-labelledby="recapitulatif" style={{ boxShadow: 'var(--shadow-md)' }}>
+          <h2 id="recapitulatif" style={{ marginBottom: 'var(--space-4)' }}>Récapitulatif</h2>
+          <div className="tp-small tp-muted" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+            <span>{count} article{count > 1 ? 's' : ''}</span>
+            <span>{groups.length} commande{groups.length > 1 ? 's' : ''}</span>
           </div>
-
           <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 'var(--text-xl)', marginBottom: 'var(--space-5)' }}>
             <span>Total</span>
-            <span>{total.toFixed(2)} €</span>
+            <span>{formatPrice(total)}</span>
           </div>
 
-          {error && (
-            <div style={{ background: '#FEE2E2', color: 'var(--color-danger)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-              {error}
-            </div>
-          )}
+          {errors.length > 0 && <ErrorList errors={errors} />}
 
-          <button
-            onClick={handleOrder}
-            disabled={loading}
-            style={{
-              width: '100%',
-              background: 'var(--color-secondary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.875rem',
-              fontFamily: 'var(--font-heading)',
-              fontWeight: 700,
-              fontSize: 'var(--text-base)',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? 'Commande en cours…' : 'Commander →'}
-          </button>
-        </div>
-      </div>
+          <Button type="submit" variant="secondary" size="lg" className="tp-btn--block" loading={isOrdering}>
+            {groups.length > 1 ? `Passer les ${groups.length} commandes` : 'Commander'}
+          </Button>
+          {!isAuthenticated && (
+            <p className="tp-small tp-muted" style={{ marginTop: 'var(--space-3)' }}>
+              Vous serez invité à vous connecter ; votre panier est conservé.
+            </p>
+          )}
+        </aside>
+      </form>
     </MainLayout>
   )
 }

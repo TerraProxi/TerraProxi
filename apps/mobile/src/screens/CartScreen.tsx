@@ -1,26 +1,26 @@
 import { useState } from 'react'
 import {
-  View, Text, ScrollView, Image, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, TextInput,
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Spacing, Radius, Fonts } from '../theme'
 import {
   useCartStore,
   type CartProducerGroup,
   type DeliveryAddress,
   type DeliveryMode,
-  DELIVERY_FEE_EUR,
-  TVA_RATE,
   getGroupSubtotal,
-  getGroupDeliveryFee,
   getCartGrandTotal,
 } from '../store/cart.store'
 import { useAuthStore } from '../store/auth.store'
 import api from '../services/api'
+import { placeOrdersByProducer } from '../services/orders'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
@@ -45,12 +45,6 @@ const formatAddressForApi = (address: DeliveryAddress) => {
   return `${line1}, ${address.postalCode.trim()} ${address.city.trim()}`
 }
 
-function getProductImage(group: CartProducerGroup, productId: string) {
-  const found = group.items.find((item) => item.product.id === productId)
-  if (found?.product.image_url) return found.product.image_url
-  return 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?q=80&w=200'
-}
-
 interface ProducerSectionProps {
   group: CartProducerGroup
   onRemoveProducer: () => void
@@ -69,12 +63,11 @@ function ProducerCartSection({
   onSetDeliveryAddress,
 }: ProducerSectionProps) {
   const [addressDraft, setAddressDraft] = useState<DeliveryAddress>(group.deliveryAddress)
-  const [isEditingAddress, setIsEditingAddress] = useState(false)
+  // Pas encore d'adresse : le formulaire s'ouvre directement
+  const [isEditingAddress, setIsEditingAddress] = useState(group.deliveryAddress.street === '')
 
+  // Prix TTC (specs/schemas/product.schema.json) : le total est celui que le serveur facturera
   const subtotal = getGroupSubtotal(group)
-  const deliveryFee = getGroupDeliveryFee(group)
-  const tva = (subtotal + deliveryFee) * TVA_RATE
-  const sectionTotal = subtotal + deliveryFee + tva
 
   const handleSaveAddress = () => {
     const validationError = getAddressValidationError(addressDraft)
@@ -103,17 +96,18 @@ function ProducerCartSection({
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={onRemoveProducer} style={styles.removeProducerBtn}>
-          <MaterialCommunityIcons name="trash-can-outline" size={20} color={Colors.gray500} />
-        </TouchableOpacity>
+        <IconButton
+          icon="trash-can-outline"
+          label={`Retirer les articles de ${group.producerName}`}
+          onPress={onRemoveProducer}
+          color={Colors.gray700}
+          size={20}
+        />
       </View>
 
       {group.items.map((item) => (
         <View key={item.product.id} style={styles.itemCard}>
-          <Image
-            source={{ uri: getProductImage(group, item.product.id) }}
-            style={styles.itemImage}
-          />
+          <ProductImage uri={item.product.image_url} style={styles.itemImage} iconSize={22} />
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{item.product.name}</Text>
             <Text style={styles.itemMeta}>
@@ -121,22 +115,24 @@ function ProducerCartSection({
             </Text>
           </View>
           <View style={styles.qtyContainer}>
-            <TouchableOpacity
+            <IconButton
+              icon={item.quantity <= 1 ? 'trash-can-outline' : 'minus'}
+              label={item.quantity <= 1 ? `Retirer ${item.product.name} du panier` : `Diminuer la quantité de ${item.product.name}`}
               onPress={() => {
                 if (item.quantity <= 1) onRemoveItem(item.product.id)
                 else onUpdateQty(item.product.id, item.quantity - 1)
               }}
-              style={styles.qtyBtn}
-            >
-              <MaterialCommunityIcons name="minus" size={16} color={Colors.gray700} />
-            </TouchableOpacity>
-            <Text style={styles.qtyText}>{item.quantity}</Text>
-            <TouchableOpacity
+              color={Colors.gray700}
+              size={18}
+            />
+            <Text style={styles.qtyText} accessibilityLabel={`Quantité : ${item.quantity}`}>{item.quantity}</Text>
+            <IconButton
+              icon="plus"
+              label={`Augmenter la quantité de ${item.product.name}`}
               onPress={() => onUpdateQty(item.product.id, item.quantity + 1)}
-              style={styles.qtyBtn}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={Colors.gray700} />
-            </TouchableOpacity>
+              color={Colors.gray700}
+              size={18}
+            />
           </View>
         </View>
       ))}
@@ -150,6 +146,8 @@ function ProducerCartSection({
           ]}
           onPress={() => onSetDeliveryMode('delivery')}
           activeOpacity={0.7}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: group.deliveryMode === 'delivery' }}
         >
           <MaterialCommunityIcons
             name="truck-delivery"
@@ -163,7 +161,6 @@ function ProducerCartSection({
           >
             Livraison
           </Text>
-          <Text style={styles.deliveryPrice}>+{DELIVERY_FEE_EUR.toFixed(2)} €</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -173,6 +170,8 @@ function ProducerCartSection({
           ]}
           onPress={() => onSetDeliveryMode('pickup')}
           activeOpacity={0.7}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: group.deliveryMode === 'pickup' }}
         >
           <MaterialCommunityIcons
             name="storefront"
@@ -186,7 +185,6 @@ function ProducerCartSection({
           >
             Retrait
           </Text>
-          <Text style={styles.deliveryPrice}>Gratuit</Text>
         </TouchableOpacity>
       </View>
 
@@ -203,7 +201,8 @@ function ProducerCartSection({
                     value={addressDraft.street}
                     onChangeText={(street) => setAddressDraft((prev) => ({ ...prev, street }))}
                     placeholder="Numéro et rue"
-                    placeholderTextColor={Colors.gray400}
+                    accessibilityLabel="Numéro et rue"
+                    placeholderTextColor={Colors.gray600}
                   />
                   <View style={styles.addressInlineRow}>
                     <TextInput
@@ -214,15 +213,17 @@ function ProducerCartSection({
                         postalCode: normalizePostalCode(postalCode),
                       }))}
                       placeholder="Code postal"
+                      accessibilityLabel="Code postal"
                       keyboardType="number-pad"
-                      placeholderTextColor={Colors.gray400}
+                      placeholderTextColor={Colors.gray600}
                     />
                     <TextInput
                       style={[styles.addressField, styles.addressCityField]}
                       value={addressDraft.city}
                       onChangeText={(city) => setAddressDraft((prev) => ({ ...prev, city }))}
                       placeholder="Ville"
-                      placeholderTextColor={Colors.gray400}
+                      accessibilityLabel="Ville"
+                      placeholderTextColor={Colors.gray600}
                     />
                   </View>
                   <TextInput
@@ -230,7 +231,8 @@ function ProducerCartSection({
                     value={addressDraft.extra}
                     onChangeText={(extra) => setAddressDraft((prev) => ({ ...prev, extra }))}
                     placeholder="Complément (bâtiment, étage…)"
-                    placeholderTextColor={Colors.gray400}
+                    accessibilityLabel="Complément (bâtiment, étage…)"
+                    placeholderTextColor={Colors.gray600}
                   />
                 </View>
               ) : (
@@ -248,22 +250,29 @@ function ProducerCartSection({
           </View>
           {isEditingAddress ? (
             <View style={styles.addressActions}>
-              <TouchableOpacity onPress={() => {
-                setAddressDraft({ ...group.deliveryAddress })
-                setIsEditingAddress(false)
-              }}
+              <TouchableOpacity
+                style={styles.textAction}
+                accessibilityRole="button"
+                onPress={() => {
+                  setAddressDraft({ ...group.deliveryAddress })
+                  setIsEditingAddress(false)
+                }}
               >
                 <Text style={styles.cancelLink}>Annuler</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSaveAddress}>
+              <TouchableOpacity style={styles.textAction} accessibilityRole="button" onPress={handleSaveAddress}>
                 <Text style={styles.modifyLink}>Enregistrer</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity onPress={() => {
-              setAddressDraft({ ...group.deliveryAddress })
-              setIsEditingAddress(true)
-            }}
+            <TouchableOpacity
+              style={styles.textAction}
+              accessibilityRole="button"
+              accessibilityLabel="Modifier l'adresse de livraison"
+              onPress={() => {
+                setAddressDraft({ ...group.deliveryAddress })
+                setIsEditingAddress(true)
+              }}
             >
               <Text style={styles.modifyLink}>Modifier</Text>
             </TouchableOpacity>
@@ -273,21 +282,8 @@ function ProducerCartSection({
 
       <View style={styles.sectionSummary}>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Sous-total producteur</Text>
-          <Text style={styles.summaryValue}>{subtotal.toFixed(2)} €</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Livraison</Text>
-          <Text style={styles.summaryValue}>{deliveryFee.toFixed(2)} €</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>TVA (5,5 %)</Text>
-          <Text style={styles.summaryValue}>{tva.toFixed(2)} €</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryRow}>
-          <Text style={styles.sectionTotalLabel}>Total producteur</Text>
-          <Text style={styles.sectionTotalValue}>{sectionTotal.toFixed(2)} €</Text>
+          <Text style={styles.sectionTotalLabel}>Total producteur (TTC)</Text>
+          <Text style={styles.sectionTotalValue}>{subtotal.toFixed(2)} €</Text>
         </View>
       </View>
     </View>
@@ -302,69 +298,57 @@ export function CartScreen() {
     updateQty,
     setDeliveryMode,
     setDeliveryAddress,
-    clear,
   } = useCartStore()
-  const { isAuthenticated } = useAuthStore()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const nav = useNavigation<Nav>()
+  const [isOrdering, setOrdering] = useState(false)
 
   const grandTotal = getCartGrandTotal(groups)
   const totalItems = groups.reduce((sum, group) => sum + group.items.length, 0)
+
+  const createOrder = async (group: CartProducerGroup): Promise<string> => {
+    const payload = {
+      producer_id: group.producerId,
+      items: group.items.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
+      delivery_mode: group.deliveryMode,
+      ...(group.deliveryMode === 'delivery' ? { delivery_address: formatAddressForApi(group.deliveryAddress) } : {}),
+    }
+    const { data: order } = await api.post<{ id: string }>('/orders', payload)
+    return order.id
+  }
 
   const handlePay = async () => {
     if (!isAuthenticated) {
       nav.navigate('Login')
       return
     }
-    if (groups.length === 0) return
+    if (groups.length === 0 || isOrdering) return
 
     for (const group of groups) {
-      if (group.deliveryMode === 'delivery') {
-        const validationError = getAddressValidationError(group.deliveryAddress)
-        if (validationError) {
-          Alert.alert(
-            'Adresse invalide',
-            `${group.producerName} : ${validationError}`,
-          )
-          return
-        }
-      }
-    }
-
-    try {
-      const orderIds: string[] = []
-
-      for (const group of groups) {
-        const payload: Record<string, unknown> = {
-          producer_id: group.producerId,
-          items: group.items.map((item) => ({
-            product_id: item.product.id,
-            quantity: item.quantity,
-          })),
-          delivery_mode: group.deliveryMode,
-        }
-
-        if (group.deliveryMode === 'delivery') {
-          payload.delivery_address = formatAddressForApi(group.deliveryAddress)
-        }
-
-        const { data: order } = await api.post<{ id: string }>('/orders', payload)
-        orderIds.push(order.id)
-      }
-
-      clear()
-
-      if (orderIds.length === 1) {
-        nav.navigate('Checkout', { orderId: orderIds[0] })
+      const validationError = group.deliveryMode === 'delivery' ? getAddressValidationError(group.deliveryAddress) : null
+      if (validationError) {
+        Alert.alert('Adresse invalide', `${group.producerName} : ${validationError}`)
         return
       }
-
-      nav.navigate('Checkout', {
-        orderId: orderIds[0],
-        pendingOrderIds: orderIds.slice(1),
-      })
-    } catch {
-      Alert.alert('Erreur', 'Impossible de créer les commandes')
     }
+
+    setOrdering(true)
+    const { orderIds, failures } = await placeOrdersByProducer(groups, createOrder, removeProducer)
+    setOrdering(false)
+
+    const goToCheckout = () => {
+      if (orderIds.length > 0) nav.navigate('Checkout', { orderId: orderIds[0], pendingOrderIds: orderIds.slice(1) })
+    }
+    if (failures.length === 0) {
+      goToCheckout()
+      return
+    }
+    const intro = orderIds.length > 0
+      ? `${orderIds.length} commande(s) créée(s). Ces articles restent dans votre panier :`
+      : 'Aucune commande n\'a pu être créée :'
+    Alert.alert('Commande incomplète', `${intro}\n${failures.join('\n')}`, [
+      { text: orderIds.length > 0 ? 'Payer les commandes créées' : 'OK', onPress: goToCheckout },
+    ])
   }
 
   const confirmRemoveProducer = (group: CartProducerGroup) => {
@@ -386,16 +370,14 @@ export function CartScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.dark} />
-          </TouchableOpacity>
+          <IconButton icon="arrow-left" label="Retour" onPress={() => nav.goBack()} size={24} />
           <Text style={styles.headerTitle}>Votre Panier</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="basket" size={80} color={Colors.gray300} />
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
-          <TouchableOpacity onPress={() => nav.navigate('Tabs')}>
+          <TouchableOpacity onPress={() => nav.navigate('Tabs')} accessibilityRole="button">
             <Text style={styles.emptyLink}>Commencer vos achats</Text>
           </TouchableOpacity>
         </View>
@@ -406,9 +388,7 @@ export function CartScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.dark} />
-        </TouchableOpacity>
+        <IconButton icon="arrow-left" label="Retour" onPress={() => nav.goBack()} size={24} />
         <Text style={styles.headerTitle}>Votre Panier</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -454,17 +434,20 @@ export function CartScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.payBtn} onPress={handlePay} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.payBtn, isOrdering && styles.payBtnBusy]}
+          onPress={handlePay}
+          disabled={isOrdering}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isOrdering, busy: isOrdering }}
+        >
           <MaterialCommunityIcons name="lock" size={18} color={Colors.white} />
           <Text style={styles.payBtnText}>
-            Payer {grandTotal.toFixed(2)} €
-            {groups.length > 1 ? ` (${groups.length} commandes)` : ''}
+            {isOrdering ? 'Création des commandes…' : `Payer ${grandTotal.toFixed(2)} €${groups.length > 1 ? ` (${groups.length} commandes)` : ''}`}
           </Text>
         </TouchableOpacity>
-        <Text style={styles.sslText}>
-          <MaterialCommunityIcons name="shield-lock" size={14} color={Colors.gray400} />
-          {'  '}Paiement sécurisé SSL 256-bit
-        </Text>
+        <Text style={styles.sslText}>Paiement sécurisé par Stripe</Text>
       </View>
     </View>
   )
@@ -486,15 +469,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.title,
     color: Colors.dark,
   },
   emptyContainer: {
@@ -506,13 +483,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Fonts.title,
     color: Colors.gray600,
   },
   emptyLink: {
     fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
     textDecorationLine: 'underline',
   },
   scroll: {
@@ -527,7 +504,7 @@ const styles = StyleSheet.create({
   introText: {
     fontSize: 13,
     color: Colors.gray600,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
   },
   producerSection: {
     backgroundColor: Colors.white,
@@ -554,15 +531,13 @@ const styles = StyleSheet.create({
   },
   producerName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   producerMeta: {
     fontSize: 12,
-    color: Colors.gray500,
-  },
-  removeProducerBtn: {
-    padding: Spacing.sm,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   itemCard: {
     flexDirection: 'row',
@@ -584,12 +559,13 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   itemMeta: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   qtyContainer: {
     flexDirection: 'row',
@@ -600,24 +576,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 4,
   },
-  qtyBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: Colors.gray50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   qtyText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     minWidth: 20,
     textAlign: 'center',
   },
   deliverySectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     marginTop: Spacing.xs,
   },
@@ -642,16 +610,11 @@ const styles = StyleSheet.create({
   },
   deliveryLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.gray700,
   },
   deliveryLabelSelected: {
     color: Colors.primary,
-  },
-  deliveryPrice: {
-    fontSize: 11,
-    color: Colors.gray500,
-    fontWeight: '500',
   },
   addressCard: {
     flexDirection: 'row',
@@ -686,16 +649,18 @@ const styles = StyleSheet.create({
   },
   addressTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   addressText: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   addressField: {
     minHeight: 38,
     fontSize: 12,
+    fontFamily: Fonts.regular,
     color: Colors.dark,
     borderWidth: 1,
     borderColor: Colors.gray200,
@@ -710,15 +675,19 @@ const styles = StyleSheet.create({
   addressCityField: {
     flex: 1.6,
   },
+  textAction: {
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
+  },
   modifyLink: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
   },
   cancelLink: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.gray500,
+    fontFamily: Fonts.semibold,
+    color: Colors.gray600,
   },
   sectionSummary: {
     backgroundColor: Colors.gray50,
@@ -736,7 +705,7 @@ const styles = StyleSheet.create({
   },
   globalSummaryTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
     marginBottom: Spacing.xs,
   },
@@ -746,41 +715,43 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
-  },
-  summaryValue: {
-    fontSize: 14,
-    color: Colors.dark,
-    fontWeight: '500',
   },
   summaryDivider: {
     height: 1,
     backgroundColor: Colors.gray200,
     marginVertical: Spacing.xs,
   },
+  summaryValue: {
+    fontSize: 14,
+    color: Colors.dark,
+    fontFamily: Fonts.medium,
+  },
   sectionTotalLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   sectionTotalValue: {
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
   summaryTotalLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   summaryTotalValue: {
     fontSize: 18,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
   },
   multiOrderHint: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
     marginTop: Spacing.xs,
     lineHeight: 18,
   },
@@ -799,18 +770,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.md,
     paddingVertical: Spacing.lg,
     width: '100%',
   },
+  payBtnBusy: {
+    opacity: 0.6,
+  },
   payBtnText: {
     color: Colors.white,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   sslText: {
     fontSize: 12,
-    color: Colors.gray400,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
 })

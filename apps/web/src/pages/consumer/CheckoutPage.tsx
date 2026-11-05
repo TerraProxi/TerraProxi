@@ -1,111 +1,59 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { MainLayout } from '../../components/layout/MainLayout'
-import { ordersService, type Order } from '../../services/orders.service'
+import { Button } from '../../components/ui/Button'
+import { OrderItemsTable } from '../../components/orders/OrderItemsTable'
+import { ORDER_STATUS_LABELS, ordersService, type Order } from '../../services/orders.service'
 import { apiErrorMessage } from '../../services/api'
+import { formatPrice } from '../../utils/format'
 
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim()
-const isStripeConfigured = Boolean(STRIPE_KEY && !STRIPE_KEY.includes('CHANGE_ME'))
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.trim() ?? ''
+const isStripeConfigured = STRIPE_KEY !== '' && !STRIPE_KEY.includes('CHANGE_ME')
 
 /** Chargé à la première ouverture de la page de paiement, jamais sans clé publique. */
 let stripePromise: Promise<Stripe | null> | null = null
-const getStripe = () => (stripePromise ??= loadStripe(STRIPE_KEY!))
+const getStripe = () => (stripePromise ??= loadStripe(STRIPE_KEY))
 
 function CheckoutForm({ order }: { order: Order }) {
   const stripe = useStripe()
   const elements = useElements()
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
-  const navigate = useNavigate()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!stripe || !elements) return
 
     setProcessing(true)
     setError('')
 
+    // En cas de succès, Stripe redirige vers le détail de la commande (?redirect_status=…)
     const { error: stripeError } = await stripe.confirmPayment({
       elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/orders`,
-      },
+      confirmParams: { return_url: `${window.location.origin}/orders/${order.id}` },
     })
 
     if (stripeError) {
       setError(stripeError.message ?? 'Erreur de paiement')
       setProcessing(false)
     }
-    // Stripe redirige vers return_url si succès
   }
 
   return (
     <form onSubmit={handleSubmit}>
-      <div
-        style={{
-          background: 'var(--color-white)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-5)',
-          marginBottom: 'var(--space-5)',
-        }}
-      >
-        <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: 'var(--space-4)' }}>
-          Récapitulatif — {order.producer_name}
-        </h3>
-        {order.items?.map((item) => (
-          <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 'var(--text-sm)' }}>
-            <span>{item.quantity}× {item.product_name}</span>
-            <span>{(Number(item.unit_price) * item.quantity).toFixed(2)} €</span>
-          </div>
-        ))}
-        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 12, marginTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-          <span>Total</span>
-          <span>{Number(order.total_price).toFixed(2)} €</span>
-        </div>
-      </div>
-
-      <div
-        style={{
-          background: 'var(--color-white)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-5)',
-          marginBottom: 'var(--space-5)',
-        }}
-      >
+      <div className="tp-card" style={{ marginBottom: 'var(--space-5)' }}>
         <PaymentElement />
       </div>
 
-      {error && (
-        <div style={{ background: '#FEE2E2', color: 'var(--color-danger)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="tp-alert tp-alert--error" role="alert">{error}</div>}
 
-      <button
-        type="submit"
-        disabled={!stripe || processing}
-        style={{
-          width: '100%',
-          background: 'var(--color-secondary)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 'var(--radius-md)',
-          padding: '0.875rem',
-          fontFamily: 'var(--font-heading)',
-          fontWeight: 700,
-          fontSize: 'var(--text-base)',
-          cursor: processing ? 'not-allowed' : 'pointer',
-          opacity: processing ? 0.7 : 1,
-        }}
-      >
-        {processing ? 'Traitement…' : `Payer ${Number(order.total_price).toFixed(2)} €`}
-      </button>
+      <Button type="submit" variant="secondary" size="lg" className="tp-btn--block" disabled={!stripe} loading={processing}>
+        Payer {formatPrice(order.total_price)}
+      </Button>
 
-      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 12 }}>
+      <p className="tp-muted" style={{ fontSize: 'var(--text-xs)', textAlign: 'center', marginTop: 12 }}>
         🔒 Paiement sécurisé via Stripe. Aucune donnée bancaire n'est stockée sur nos serveurs.
       </p>
     </form>
@@ -121,9 +69,6 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!orderId) return
-    if (!isStripeConfigured) {
-      setError('Le paiement en ligne n’est pas configuré sur cet environnement (VITE_STRIPE_PUBLISHABLE_KEY).')
-    }
     ;(async () => {
       try {
         const { data: o } = await ordersService.getById(orderId)
@@ -133,7 +78,7 @@ export function CheckoutPage() {
           setClientSecret(data.client_secret)
         }
       } catch (err) {
-        setError(apiErrorMessage(err, 'Impossible de charger la commande'))
+        setError(apiErrorMessage(err, 'Impossible de préparer le paiement'))
       } finally {
         setLoading(false)
       }
@@ -141,20 +86,39 @@ export function CheckoutPage() {
   }, [orderId])
 
   return (
-    <MainLayout>
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: 'var(--space-8) 0' }}>
-        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-8)' }}>
-          Paiement
-        </h1>
+    <MainLayout title="Paiement">
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+        <h1 className="tp-page-title">Paiement</h1>
 
         {loading && <p>Chargement…</p>}
-        {error && <p style={{ color: 'var(--color-danger)' }}>{error}</p>}
+        {error && <div className="tp-alert tp-alert--error" role="alert">{error}</div>}
+
+        {order && (
+          <section className="tp-card" aria-labelledby="titre-recap" style={{ marginBottom: 'var(--space-5)' }}>
+            <h2 id="titre-recap" style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>
+              Récapitulatif — {order.producer_name ?? 'Producteur'}
+            </h2>
+            <OrderItemsTable items={order.items ?? []} total={order.total_price} />
+          </section>
+        )}
+
         {order && order.status !== 'PENDING' && (
-          <p>Cette commande a déjà été traitée (statut : {order.status}).</p>
+          <p className="tp-alert tp-alert--info">
+            Cette commande n'est plus à payer (statut : {ORDER_STATUS_LABELS[order.status]}).{' '}
+            <Link to={`/orders/${order.id}`}>Voir la commande</Link>
+          </p>
+        )}
+
+        {order?.status === 'PENDING' && !isStripeConfigured && (
+          <div className="tp-alert tp-alert--info" role="status">
+            Le paiement en ligne n'est pas encore disponible sur ce site. Votre commande est enregistrée :
+            vous pourrez la régler depuis <Link to={`/orders/${order.id}`}>son détail</Link> dès son ouverture,
+            ou l'annuler si besoin.
+          </div>
         )}
 
         {order && clientSecret && (
-          <Elements stripe={getStripe()} options={{ clientSecret }}>
+          <Elements stripe={getStripe()} options={{ clientSecret, locale: 'fr' }}>
             <CheckoutForm order={order} />
           </Elements>
         )}

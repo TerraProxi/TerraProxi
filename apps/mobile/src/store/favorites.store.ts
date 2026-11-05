@@ -1,12 +1,6 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import * as SecureStore from 'expo-secure-store'
-
-const secureStorage = {
-  getItem: (name: string) => SecureStore.getItemAsync(name) ?? null,
-  setItem: (name: string, value: string) => SecureStore.setItemAsync(name, value),
-  removeItem: (name: string) => SecureStore.deleteItemAsync(name),
-}
+import { persist } from 'zustand/middleware'
+import { persistentStorage } from '../services/storage'
 
 interface FavoritesStore {
   producerIds: string[]
@@ -31,6 +25,6 @@ export const useFavoritesStore = create<FavoritesStore>()(
       isProducerFavorite: (id) => get().producerIds.includes(id),
       isProductFavorite: (id) => get().productIds.includes(id),
     }),
-    { name: 'favorites-store', storage: createJSONStorage(() => secureStorage) }
+    { name: 'favorites-store', storage: persistentStorage }
   )
 )

@@ -23,6 +23,7 @@ function ProfileSection() {
   const [firstName, setFirstName] = useState(user?.first_name ?? '')
   const [lastName, setLastName] = useState(user?.last_name ?? '')
   const [phone, setPhone] = useState(user?.phone ?? '')
+  const [isNewsletterOptIn, setIsNewsletterOptIn] = useState(user?.newsletter_opt_in ?? false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>(null)
 
@@ -34,6 +35,7 @@ function ProfileSection() {
         first_name: firstName.trim() || undefined,
         last_name: lastName.trim() || undefined,
         phone: phone.trim() || undefined,
+        newsletter_opt_in: isNewsletterOptIn,
       })
       setUser(data)
       setFeedback({ kind: 'success', text: 'Profil mis à jour' })
@@ -53,6 +55,14 @@ function ProfileSection() {
         <Input label="Nom" id="last_name" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
         <Input label="Téléphone" id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <Input label="Adresse email" id="email_ro" value={user?.email ?? ''} readOnly />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-4)' }}>
+        <input id="newsletter_opt_in" type="checkbox" checked={isNewsletterOptIn}
+          onChange={(e) => setIsNewsletterOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0, width: 20, height: 20 }} />
+        <label htmlFor="newsletter_opt_in">
+          Recevoir les newsletters des producteurs chez qui j'ai commandé
+          <span className="tp-hint" style={{ display: 'block' }}>Retirable à tout moment ; elles arrivent dans vos notifications.</span>
+        </label>
       </div>
       <Button type="submit" variant="secondary" loading={saving}>Enregistrer</Button>
     </form>
@@ -163,7 +173,7 @@ function PrivacySection() {
   return (
     <section className="tp-card">
       <h2 style={{ marginBottom: 'var(--space-2)' }}>Mes données personnelles</h2>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
+      <p className="tp-muted" style={{ marginBottom: 'var(--space-4)' }}>
         Vos droits RGPD, détaillés dans la <Link to="/privacy">politique de confidentialité</Link>.
       </p>
       <FeedbackLine feedback={feedback} />
@@ -177,8 +187,8 @@ function PrivacySection() {
 
 export function AccountPage() {
   return (
-    <MainLayout>
-      <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-6)' }}>Mon compte</h1>
+    <MainLayout title="Mon compte">
+      <h1 className="tp-page-title">Mon compte</h1>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 820 }}>
         <ProfileSection />
         <SecuritySection />

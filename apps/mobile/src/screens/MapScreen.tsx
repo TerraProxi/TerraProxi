@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image, Keyboard, Platform, ActivityIndicator,
+  TextInput, Keyboard, Platform, Alert,
 } from 'react-native'
 import MapView, { Marker, Callout, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
@@ -9,32 +9,21 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Spacing, Radius, Fonts } from '../theme'
 import { api } from '../services/api'
+import { mapSearchRadiusKm } from '../services/mapRadius'
+import { CATEGORY_LABELS, type Producer } from '../types/catalog'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
-interface Producer {
-  id: string
-  user_id: string
-  company_name: string
-  description: string | null
-  address: string
-  city: string
-  postal_code: string
-  latitude: number
-  longitude: number
-  website_url: string | null
-  banner_url: string | null
-  is_verified: boolean
-  first_name: string
-  last_name: string
-  distance_km: number | null
-  categories: string[]
-  opening_hours?: string | null
-}
+const ALL_CATEGORIES = 'Tous'
+/** Le filtre porte sur Producer.categories (libellés français) : /producers n'a pas de paramètre de catégorie. */
+const CATEGORIES = [ALL_CATEGORIES, ...Object.values(CATEGORY_LABELS)]
 
-const CATEGORIES = ['Tous', 'Légumes', 'Fruits', 'Vins', 'Épicerie', 'Viande', 'Fromage']
+type LocatedProducer = Producer & { latitude: number; longitude: number }
+const isLocated = (p: Producer): p is LocatedProducer => p.latitude != null && p.longitude != null
 
 const DEFAULT_REGION = {
   latitude: 43.6,
@@ -45,74 +34,61 @@ const DEFAULT_REGION = {
 
 export function MapScreen() {
   const nav = useNavigation<Nav>()
-  const [producers, setProducers] = useState<Producer[]>([])
-  const [loading, setLoading] = useState(false)
+  const [producers, setProducers] = useState<LocatedProducer[]>([])
   const [search, setSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
-  const [activeCategory, setActiveCategory] = useState('Tous')
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES)
   const [showFilters, setShowFilters] = useState(false)
   const [region, setRegion] = useState<Region>(DEFAULT_REGION)
   const mapRef = useRef<MapView>(null)
 
   const isValidLocation = (lat: number, lng: number) => lat > 40 && lat < 52 && lng > -6 && lng < 10
 
-  const fetchProducers = useCallback(async (searchQuery?: string, category?: string) => {
+  const fetchProducers = useCallback(async (searchQuery?: string) => {
+    const radius = mapSearchRadiusKm(region.latitudeDelta, region.longitudeDelta)
     try {
-      setLoading(true)
-      const params: Record<string, any> = {
-        lat: region.latitude,
-        lon: region.longitude,
-        radius: Math.max(region.latitudeDelta, region.longitudeDelta) * 111,
-        limit: 50,
-      }
-      if (searchQuery?.trim()) {
-        params.search = searchQuery.trim()
-      }
-      if (category && category !== 'Tous') {
-        params.category = category.toLowerCase()
-      }
-      const res = await api.get<Producer[]>('/producers', { params })
-      setProducers(res.data)
+      const res = await api.get<Producer[]>('/producers', {
+        params: {
+          lat: region.latitude,
+          lon: region.longitude,
+          radius,
+          limit: 50,
+          ...(searchQuery?.trim() ? { search: searchQuery.trim() } : {}),
+        },
+      })
+      setProducers(res.data.filter(isLocated))
     } catch {
-      setProducers([])
-    } finally {
-      setLoading(false)
+      // Requête refusée ou réseau coupé pendant un déplacement : on garde les producteurs déjà affichés
     }
   }, [region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta])
 
+  // Sans autorisation ou hors zone couverte, la carte reste centrée sur la région par défaut
   useEffect(() => {
-    ;(async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        fetchProducers()
-        return
-      }
+    void (async () => {
       try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') return
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
         const { latitude, longitude } = pos.coords
-        if (!isValidLocation(latitude, longitude)) {
-          fetchProducers()
-          return
-        }
+        if (!isValidLocation(latitude, longitude)) return
         const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
         setRegion(r)
         mapRef.current?.animateToRegion(r, 800)
       } catch {
-        fetchProducers()
+        // Position indisponible (GPS coupé…) : la région par défaut convient
       }
     })()
   }, [])
 
-  useEffect(() => {
-    fetchProducers(search, activeCategory)
-  }, [region, activeCategory])
+  // Recharge à chaque déplacement de la carte ; le texte recherché n'est relancé qu'à la validation
+  useEffect(() => { void fetchProducers(search) }, [fetchProducers])
 
   const handleRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion)
   }
 
   const handleSearchSubmit = () => {
-    fetchProducers(search, activeCategory)
+    void fetchProducers(search)
   }
 
   const handleCategoryChange = (cat: string) => {
@@ -120,8 +96,12 @@ export function MapScreen() {
     setShowFilters(false)
   }
 
+  const visibleProducers = activeCategory === ALL_CATEGORIES
+    ? producers
+    : producers.filter((p) => p.categories?.includes(activeCategory))
+
   const searchResults = search.trim()
-    ? producers.filter(
+    ? visibleProducers.filter(
         (p) =>
           p.company_name.toLowerCase().includes(search.toLowerCase()) ||
           (p.description && p.description.toLowerCase().includes(search.toLowerCase())),
@@ -136,12 +116,19 @@ export function MapScreen() {
 
   const centerOnUser = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync()
-    if (status !== 'granted') return
+    if (status !== 'granted') {
+      Alert.alert('Localisation refusée', 'Autorisez la localisation dans les réglages pour centrer la carte sur votre position.')
+      return
+    }
     const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      .catch(() => null)
+    if (!pos) {
+      Alert.alert('Position indisponible', 'Impossible de déterminer votre position pour le moment.')
+      return
+    }
     const { latitude, longitude } = pos.coords
     if (!isValidLocation(latitude, longitude)) {
-      const r = { ...DEFAULT_REGION }
-      mapRef.current?.animateToRegion(r, 800)
+      mapRef.current?.animateToRegion(DEFAULT_REGION, 800)
       return
     }
     const r: Region = { latitude, longitude, latitudeDelta: 0.5, longitudeDelta: 0.5 }
@@ -151,7 +138,7 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} onRegionChangeComplete={handleRegionChangeComplete}>
-        {producers.map((p) => (
+        {visibleProducers.map((p) => (
           <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}>
             <View style={styles.markerContainer}>
               <View style={styles.markerCircle}>
@@ -173,32 +160,40 @@ export function MapScreen() {
       </MapView>
 
       <View style={styles.searchBar}>
-        <MaterialCommunityIcons name="magnify" size={22} color={Colors.gray500} />
+        <MaterialCommunityIcons name="magnify" size={22} color={Colors.gray600} />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un producteur…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={Colors.gray600}
           value={search}
           onChangeText={setSearch}
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
           onSubmitEditing={handleSearchSubmit}
           returnKeyType="search"
+          accessibilityLabel="Rechercher un producteur"
         />
-        <TouchableOpacity
+        <IconButton
+          icon="tune"
+          label="Filtrer par catégorie"
+          selected={showFilters}
           onPress={() => setShowFilters(!showFilters)}
+          color={showFilters ? Colors.white : Colors.gray700}
           style={[styles.filterBtn, showFilters && styles.filterBtnActive]}
-        >
-          <MaterialCommunityIcons name="tune" size={22} color={showFilters ? Colors.white : Colors.gray700} />
-        </TouchableOpacity>
+        />
       </View>
 
       {searchFocused && searchResults.length > 0 && (
         <View style={styles.searchResults}>
           <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
             {searchResults.map((p) => (
-              <TouchableOpacity key={p.id} style={styles.searchResultItem} onPress={() => goToProducer(p.id)}>
-                <Image source={{ uri: p.banner_url || undefined }} style={styles.searchResultAvatar} />
+              <TouchableOpacity
+                key={p.id}
+                style={styles.searchResultItem}
+                onPress={() => goToProducer(p.id)}
+                accessibilityRole="button"
+              >
+                <ProductImage uri={p.banner_url} style={styles.searchResultAvatar} iconSize={18} />
                 <View style={styles.searchResultInfo}>
                   <Text style={styles.searchResultName}>{p.company_name}</Text>
                   {p.description && <Text style={styles.searchResultTagline}>{p.description}</Text>}
@@ -218,6 +213,8 @@ export function MapScreen() {
                 key={cat}
                 onPress={() => handleCategoryChange(cat)}
                 style={[styles.filterChip, activeCategory === cat && styles.filterChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeCategory === cat }}
               >
                 <Text style={[styles.filterChipText, activeCategory === cat && styles.filterChipTextActive]}>
                   {cat}
@@ -228,15 +225,26 @@ export function MapScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.locationBtn} onPress={centerOnUser}>
-        <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.white} />
-      </TouchableOpacity>
+      <IconButton
+        icon="crosshairs-gps"
+        label="Centrer la carte sur ma position"
+        onPress={() => void centerOnUser()}
+        color={Colors.white}
+        size={24}
+        style={styles.locationBtn}
+      />
 
       <View style={styles.bottomCards}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bottomCardsContent}>
-          {producers.map((p) => (
-            <TouchableOpacity key={p.id} style={styles.card} onPress={() => goToProducer(p.id)}>
-              <Image source={{ uri: p.banner_url || undefined }} style={styles.cardImage} />
+          {visibleProducers.map((p) => (
+            <TouchableOpacity
+              key={p.id}
+              style={styles.card}
+              onPress={() => goToProducer(p.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.company_name}${p.distance_km != null ? `, à ${Math.round(p.distance_km)} kilomètres` : ''}`}
+            >
+              <ProductImage uri={p.banner_url} style={styles.cardImage} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardName} numberOfLines={1}>{p.company_name}</Text>
                 {p.description && <Text style={styles.cardTagline} numberOfLines={1}>{p.description}</Text>}
@@ -284,20 +292,19 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
+    fontFamily: Fonts.regular,
     color: Colors.dark,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
   },
   filterBtn: {
-    width: 38,
-    height: 38,
     borderRadius: Radius.lg,
     backgroundColor: Colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
   },
   filterBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
   },
   searchResults: {
     position: 'absolute',
@@ -329,9 +336,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   searchResultInfo: { flex: 1 },
-  searchResultName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
-  searchResultTagline: { fontSize: 12, color: Colors.gray600, marginTop: 1 },
-  searchResultDistance: { fontSize: 13, fontWeight: '600', color: Colors.primary, marginLeft: Spacing.sm },
+  searchResultName: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.dark },
+  searchResultTagline: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 1 },
+  searchResultDistance: { fontSize: 13, fontFamily: Fonts.semibold, color: Colors.primaryDark, marginLeft: Spacing.sm },
   filterPanel: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 106 : 74,
@@ -355,15 +362,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray100,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
     marginRight: Spacing.xs,
   },
   filterChipActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
   },
   filterChipText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.gray700,
   },
   filterChipTextActive: {
@@ -395,7 +403,7 @@ const styles = StyleSheet.create({
   markerDistanceText: {
     color: Colors.white,
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   callout: {
     backgroundColor: Colors.white,
@@ -408,9 +416,9 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 6,
   },
-  calloutName: { fontWeight: '700', fontSize: 14, color: Colors.dark },
-  calloutTagline: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
-  calloutCta: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginTop: Spacing.sm },
+  calloutName: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.dark },
+  calloutTagline: { fontSize: 12, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 2 },
+  calloutCta: { fontSize: 13, fontFamily: Fonts.bold, color: Colors.primaryDark, marginTop: Spacing.sm },
   locationBtn: {
     position: 'absolute',
     bottom: 180,
@@ -418,7 +426,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -460,12 +468,13 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   cardName: {
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 14,
     color: Colors.dark,
   },
   cardTagline: {
     fontSize: 12,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: 2,
   },
@@ -482,12 +491,12 @@ const styles = StyleSheet.create({
   },
   cardRatingText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   cardDistance: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
   },
 })

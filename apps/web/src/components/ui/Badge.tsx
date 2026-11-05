@@ -1,14 +1,17 @@
+import { ORDER_STATUS_LABELS, type OrderStatus } from '../../services/orders.service'
+
 type Variant = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 
+/** Paires texte/fond toutes ≥ 4,5:1. */
 const colors: Record<Variant, { bg: string; text: string }> = {
   success: { bg: '#DCFCE7', text: '#15803D' },
-  warning: { bg: '#FEF3C7', text: '#B45309' },
+  warning: { bg: '#FEF3C7', text: '#92400E' },
   danger:  { bg: '#FEE2E2', text: '#B91C1C' },
   info:    { bg: '#DBEAFE', text: '#1D4ED8' },
   neutral: { bg: '#F3F4F6', text: '#374151' },
 }
 
-const ORDER_STATUS_VARIANT: Record<string, Variant> = {
+const ORDER_STATUS_VARIANT: Record<OrderStatus, Variant> = {
   PENDING:   'warning',
   PAID:      'info',
   PREPARING: 'info',
@@ -17,24 +20,15 @@ const ORDER_STATUS_VARIANT: Record<string, Variant> = {
   CANCELLED: 'danger',
 }
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING:   'En attente',
-  PAID:      'Payée',
-  PREPARING: 'En préparation',
-  READY:     'Prête',
-  COMPLETED: 'Terminée',
-  CANCELLED: 'Annulée',
-}
-
 interface BadgeProps {
   label?: string
-  orderStatus?: string
+  orderStatus?: OrderStatus
   variant?: Variant
 }
 
 export function Badge({ label, orderStatus, variant = 'neutral' }: BadgeProps) {
-  const v = orderStatus ? ORDER_STATUS_VARIANT[orderStatus] ?? 'neutral' : variant
-  const text = orderStatus ? ORDER_STATUS_LABEL[orderStatus] ?? orderStatus : label
+  const v = orderStatus ? ORDER_STATUS_VARIANT[orderStatus] : variant
+  const text = orderStatus ? ORDER_STATUS_LABELS[orderStatus] : label
   const { bg, text: color } = colors[v]
 
   return (

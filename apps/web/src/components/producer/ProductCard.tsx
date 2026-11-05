@@ -1,102 +1,64 @@
-import type { Product } from '../../services/products.service'
-import { useCart } from '../../contexts/CartContext'
+import { Link } from 'react-router-dom'
+import { CATEGORY_LABELS, type ProductSummary } from '../../services/products.service'
+import { formatPrice } from '../../utils/format'
+import { AddToCartButton } from './AddToCartButton'
+
+const DESCRIPTION_PREVIEW_LENGTH = 80
 
 interface Props {
-  product: Product
-  showActions?: boolean
+  product: ProductSummary
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  FRUITS_VEGETABLES: '🥦 Fruits & Légumes',
-  DAIRY:             '🧀 Produits laitiers',
-  MEAT:              '🥩 Viandes',
-  BEVERAGES:         '🍷 Boissons',
-  FINE_GROCERY:      '🍯 Épicerie fine',
-  CRAFTS:            '🎨 Artisanat',
-  FLOWERS_PLANTS:    '🌸 Fleurs & Plantes',
-  OTHER:             '📦 Autre',
-}
-
-export function ProductCard({ product, showActions = true }: Props) {
-  const { add } = useCart()
+export function ProductCard({ product }: Props) {
+  const { stock, is_available: isAvailable = true } = product
+  const isInStock = stock === undefined || stock > 0
+  const description = product.description ?? ''
 
   return (
-    <div
-      style={{
-        background: 'var(--color-white)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-sm)',
-        transition: 'transform var(--transition), box-shadow var(--transition)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <div
-        style={{
-          height: 160,
-          background: product.image_url
-            ? `url(${product.image_url}) center/cover`
-            : 'linear-gradient(135deg, var(--color-light-bg), var(--color-border))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 48,
-        }}
-      >
-        {!product.image_url && '🌿'}
-      </div>
+    <article className="tp-product-card">
+      {product.image_url ? (
+        // Le nom du produit suit immédiatement : l'image est décorative ici
+        <img className="tp-product-card__media" src={product.image_url} alt="" loading="lazy" />
+      ) : (
+        <div className="tp-product-card__placeholder" aria-hidden="true">🌿</div>
+      )}
 
-      <div style={{ padding: 'var(--space-4)', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 600, marginBottom: 4 }}>
+      <div className="tp-product-card__body">
+        <span className="tp-product-card__category">
           {CATEGORY_LABELS[product.category] ?? product.category}
         </span>
 
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-base)', marginBottom: 4 }}>
-          {product.name}
+        <h3 className="tp-product-card__title">
+          <Link to={`/products/${product.id}`}>{product.name}</Link>
         </h3>
 
-        {product.description && (
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginBottom: 8, flex: 1 }}>
-            {product.description.slice(0, 80)}{product.description.length > 80 ? '…' : ''}
+        {product.producer_name && (
+          <p className="tp-small tp-muted">
+            {product.producer_name}
+            {product.distance_km !== undefined && <> · à {product.distance_km.toFixed(1).replace('.', ',')} km</>}
           </p>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-          <div>
-            <span style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-secondary)' }}>
-              {Number(product.price).toFixed(2)} €
-            </span>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginLeft: 4 }}>
-              / {product.unit}
-            </span>
-          </div>
-          <span style={{ fontSize: 'var(--text-xs)', color: product.stock > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-            {product.stock > 0 ? `${product.stock} dispo` : 'Rupture'}
+        {description && (
+          <p className="tp-small tp-muted">
+            {description.slice(0, DESCRIPTION_PREVIEW_LENGTH)}{description.length > DESCRIPTION_PREVIEW_LENGTH ? '…' : ''}
+          </p>
+        )}
+
+        <div className="tp-product-card__footer">
+          <span>
+            <span className="tp-price">{formatPrice(product.price)}</span>
+            <span className="tp-small tp-muted"> / {product.unit}</span>
           </span>
+          {stock !== undefined && (
+            <span className={isInStock ? 'tp-stock--ok' : 'tp-stock--out'}>
+              {isInStock ? `${stock} dispo` : 'Rupture'}
+            </span>
+          )}
         </div>
 
-        {showActions && product.is_available && product.stock > 0 && (
-          <button
-            onClick={() => add(product)}
-            style={{
-              marginTop: 'var(--space-3)',
-              background: 'var(--color-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.5rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              width: '100%',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            Ajouter au panier
-          </button>
-        )}
+        {isAvailable && isInStock && <AddToCartButton product={product} />}
       </div>
-    </div>
+    </article>
   )
 }

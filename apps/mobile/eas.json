@@ -16,5 +16,12 @@
       "env": { "EXPO_PUBLIC_API_URL": "https://gateway.terraproxi.fr/api" }
     }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
 }
