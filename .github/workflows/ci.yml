@@ -54,7 +54,7 @@ jobs:
       - name: Typage (API, web, mobile)
         run: pnpm typecheck
 
-      - name: Tests API (unitaires + intégration PostGIS)
+      - name: Tests API (unitaires + intégration PostGIS) puis tests web (Vitest)
         run: pnpm test
 
       - name: Build web
