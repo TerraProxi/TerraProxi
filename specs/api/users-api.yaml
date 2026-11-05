@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Compte et RGPD
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Profil, identifiants et droits RGPD (accès, portabilité, rectification, effacement).
     Implémentation : apps/api/src/routes/users.routes.ts — documentation : docs/rgpd.md.
@@ -40,7 +40,7 @@ paths:
           $ref: '#/components/responses/NotFound'
     patch:
       summary: Modifier mon profil
-      description: Seuls les champs fournis sont modifiés.
+      description: Seuls les champs fournis sont modifiés ; avatar_url vide retire la photo.
       operationId: updateMyProfile
       tags: [Users]
       requestBody:
@@ -65,6 +65,10 @@ paths:
                 avatar_url:
                   type: string
                   maxLength: 500
+                  pattern: '^(https?://[^\s<>"]+)?$'
+                newsletter_opt_in:
+                  type: boolean
+                  description: Consentement aux newsletters des producteurs (retirable à tout moment)
               additionalProperties: false
       responses:
         '200':
@@ -158,6 +162,36 @@ paths:
               schema:
                 $ref: '../contracts/error-envelope.schema.json'
 
+  /users/me/push-token:
+    put:
+      summary: Enregistrer le jeton push de mon appareil
+      description: |
+        NOTIF-4 — Jeton Expo Push de l'application mobile. null le retire (déconnexion, permission
+        refusée). Un jeton n'appartient qu'à un compte : il est retiré de tout autre compte.
+      operationId: setPushToken
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: [string, 'null']
+                  maxLength: 255
+                  pattern: '^Expo(nent)?PushToken\[[^\]]+\]$'
+                  example: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+              additionalProperties: false
+      responses:
+        '204':
+          description: Jeton enregistré ou retiré
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /users/me/export:
     get:
       summary: Exporter mes données (RGPD)
@@ -182,9 +216,11 @@ paths:
     delete:
       summary: Supprimer mon compte (RGPD)
       description: |
-        Supprime le compte, la fiche producteur, les produits, les messages et les sessions.
-        Les commandes sont conservées (obligation comptable) mais anonymisées
-        (consumer_id / producer_id à null), et leurs lignes gardent le nom du produit.
+        Supprime le compte, la fiche producteur, les produits, l'agenda, les newsletters, les messages,
+        les notifications, les photos envoyées et les sessions. Les commandes sont conservées
+        (obligation comptable) mais anonymisées (consumer_id / producer_id à null), et leurs lignes
+        gardent le nom du produit. Les commandes non payées du compte sont annulées (stock remis,
+        paiement bloqué). Un producteur ayant des commandes payées non remises reçoit 409.
       operationId: deleteMyAccount
       tags: [Users]
       responses:
@@ -194,6 +230,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Commandes payées en cours (producteur) ou paiement en cours de validation
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
 
 security:
   - bearerAuth: []
@@ -207,7 +249,7 @@ components:
   schemas:
     DataExport:
       type: object
-      required: [exported_at, profile, producer, orders, messages]
+      required: [exported_at, profile, producer, orders, messages, notifications, events, newsletters, uploads]
       properties:
         exported_at:
           type: string
@@ -215,7 +257,7 @@ components:
         profile:
           description: Profil complet, consentement RGPD compris
           type: object
-          required: [id, email, first_name, last_name, role, created_at, gdpr_consent, gdpr_consent_at, updated_at]
+          required: [id, email, first_name, last_name, role, newsletter_opt_in, created_at, gdpr_consent, gdpr_consent_at, updated_at]
           properties:
             id:
               type: string
@@ -233,6 +275,8 @@ components:
               type: [string, 'null']
             avatar_url:
               type: [string, 'null']
+            newsletter_opt_in:
+              type: boolean
             created_at:
               type: string
               format: date-time
@@ -259,6 +303,57 @@ components:
           type: array
           items:
             $ref: '../schemas/message.schema.json'
+        notifications:
+          type: array
+          items:
+            $ref: '../schemas/notification.schema.json'
+        events:
+          type: array
+          description: Agenda du producteur
+          items:
+            type: object
+            required: [id, title, description, location, starts_at, ends_at, created_at]
+            properties:
+              id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              description:
+                type: [string, 'null']
+              location:
+                type: [string, 'null']
+              starts_at:
+                type: string
+                format: date-time
+              ends_at:
+                type: [string, 'null']
+                format: date-time
+              created_at:
+                type: string
+                format: date-time
+            additionalProperties: false
+        newsletters:
+          type: array
+          items:
+            $ref: '../schemas/newsletter.schema.json'
+        uploads:
+          type: array
+          description: Photos envoyées
+          items:
+            type: object
+            required: [filename, content_type, size_bytes, created_at]
+            properties:
+              filename:
+                type: string
+              content_type:
+                type: string
+              size_bytes:
+                type: integer
+              created_at:
+                type: string
+                format: date-time
+            additionalProperties: false
     ExportedOrder:
       type: object
       required: [id, status, total_price, delivery_mode, notes, created_at, items]

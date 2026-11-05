@@ -2,14 +2,20 @@
  * EPIC 11 — Assistant IA & extensions ML
  *
  * POST /ai/chat : assistant conversationnel Gemini avec contexte producteurs.
+ * POST /ai/newsletter : brouillon de newsletter pour un producteur (AI-4).
  * GET  /ai/recommendations, /ai/forecast : statistiques sur l'historique des commandes.
+ *
+ * Les appels Gemini sont limités par utilisateur (RATE_LIMIT_AI_PER_USER par heure) :
+ * chaque appel a un coût.
  */
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
 import { fetchProducerCatalog } from '../services/ai-catalog.service'
 import { chatWithGemini } from '../services/gemini.service'
+import { draftNewsletter } from '../services/ai-newsletter.service'
 import { forbidden, notFound } from '../utils/errors'
+import { rateLimits } from '../utils/rate-limit'
 
 const RECOMMENDATION_LIMIT = 10
 const FORECAST_WEEKS = 8
@@ -44,7 +50,8 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
    */
   .post(
     '/chat',
-    async ({ body }) => {
+    async ({ body, user }) => {
+      rateLimits.aiRequestsPerUser.hit(user.sub)
       const history = body.history ?? []
       const hasGeo = body.lat !== undefined && body.lon !== undefined
 
@@ -82,6 +89,28 @@ export const aiRoutes = new Elysia({ prefix: '/ai' })
         description:
           'Envoie un message à Gemini avec le catalogue des producteurs locaux.',
       },
+    },
+  )
+
+  /**
+   * POST /api/ai/newsletter (AI-4) — brouillon rédigé à partir du catalogue et de
+   * l'agenda du producteur connecté. Rien n'est envoyé : voir POST /producers/me/newsletters.
+   */
+  .post(
+    '/newsletter',
+    async ({ body, user }) => {
+      if (user.role !== 'PRODUCER') throw forbidden()
+      const producer = await db.query<{ id: string }>('SELECT id FROM producers WHERE user_id = $1', [user.sub])
+      if (!producer.rows[0]) throw notFound('Profil producteur')
+      rateLimits.aiRequestsPerUser.hit(user.sub)
+      return draftNewsletter(producer.rows[0].id, body.tone ?? 'chaleureux', body.topic)
+    },
+    {
+      body: t.Object({
+        topic: t.Optional(t.String({ maxLength: 500 })),
+        tone:  t.Optional(t.Union([t.Literal('chaleureux'), t.Literal('informatif'), t.Literal('festif')])),
+      }),
+      detail: { summary: 'Rédiger une newsletter avec l\'IA', tags: ['AI'] },
     },
   )
 

@@ -1,11 +1,13 @@
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
-import { forbidden, notFound } from '../utils/errors'
+import { badRequest, forbidden, notFound } from '../utils/errors'
+import { emptyToNull, httpUrl } from '../utils/validation'
 import type { Product } from '../models/types'
 
 const DEFAULT_LIMIT = 40
 const MAX_LIMIT = 100
+const DEFAULT_RADIUS_KM = 30
 
 export const PRODUCT_CATEGORIES = [
   'FRUITS_VEGETABLES', 'DAIRY', 'MEAT', 'BEVERAGES',
@@ -25,7 +27,7 @@ const productBody = t.Object({
   stock:        t.Integer({ minimum: 0 }),
   unit:         t.Optional(t.String({ minLength: 1, maxLength: 50 })),
   category:     t.Optional(categorySchema),
-  image_url:    t.Optional(t.String({ maxLength: 500 })),
+  image_url:    t.Optional(httpUrl()),
   is_available: t.Optional(t.Boolean()),
 })
 
@@ -51,7 +53,10 @@ async function assertProductOwner(productId: string, userId: string) {
 
 export const productsRoutes = new Elysia({ prefix: '/products' })
 
-  /** GET /api/products — catalogue public (CAT-4) : producteur, catégorie, disponibilité, texte. */
+  /**
+   * GET /api/products — catalogue public (CAT-4) : producteur, catégorie, disponibilité,
+   * texte et distance (lat/lon/radius, triés du plus proche au plus éloigné).
+   */
   .get(
     '/',
     async ({ query }) => {
@@ -62,6 +67,18 @@ export const productsRoutes = new Elysia({ prefix: '/products' })
         conditions.push(sql(params.length))
       }
 
+      const hasGeo = query.lat !== undefined && query.lon !== undefined
+      if ((query.lat === undefined) !== (query.lon === undefined)) {
+        throw badRequest('lat et lon doivent être fournis ensemble')
+      }
+
+      let distanceSelect = ''
+      if (hasGeo) {
+        params.push(query.lon, query.lat)
+        const point = 'ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography'
+        distanceSelect = `, ST_Distance(pr.location::geography, ${point}) / 1000 AS distance_km`
+        add((n) => `ST_DWithin(pr.location::geography, ${point}, $${n})`, (query.radius ?? DEFAULT_RADIUS_KM) * 1000)
+      }
       if (query.producer_id) add((n) => `p.producer_id = $${n}`, query.producer_id)
       if (query.category) add((n) => `p.category = $${n}`, query.category)
       if (query.available !== undefined) add((n) => `p.is_available = $${n}`, query.available)
@@ -71,11 +88,11 @@ export const productsRoutes = new Elysia({ prefix: '/products' })
 
       params.push(Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT), query.offset ?? 0)
       const result = await db.query(
-        `SELECT ${PRODUCT_COLUMNS}, pr.company_name AS producer_name
+        `SELECT ${PRODUCT_COLUMNS}, pr.company_name AS producer_name${distanceSelect}
          FROM products p
          JOIN producers pr ON pr.id = p.producer_id
          ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
-         ORDER BY p.created_at DESC
+         ORDER BY ${hasGeo ? 'distance_km ASC, p.created_at DESC' : 'p.created_at DESC'}
          LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params,
       )
@@ -86,6 +103,9 @@ export const productsRoutes = new Elysia({ prefix: '/products' })
         producer_id: t.Optional(t.String({ format: 'uuid' })),
         category:    t.Optional(categorySchema),
         available:   t.Optional(t.BooleanString()),
+        lat:         t.Optional(t.Number({ minimum: -90, maximum: 90 })),
+        lon:         t.Optional(t.Number({ minimum: -180, maximum: 180 })),
+        radius:      t.Optional(t.Number({ minimum: 0.1, maximum: 500 })),
         limit:       t.Optional(t.Integer({ minimum: 1 })),
         offset:      t.Optional(t.Integer({ minimum: 0 })),
         search:      t.Optional(t.String({ maxLength: 100 })),
@@ -141,7 +161,7 @@ export const productsRoutes = new Elysia({ prefix: '/products' })
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING ${PRODUCT_COLUMNS}`,
         [producerId, name.trim(), description ?? null, price, stock,
-          unit ?? 'unité', category ?? 'OTHER', image_url ?? null, is_available ?? true],
+          unit ?? 'unité', category ?? 'OTHER', emptyToNull(image_url), is_available ?? true],
       )
       set.status = 201
       return result.rows[0]
@@ -162,7 +182,7 @@ export const productsRoutes = new Elysia({ prefix: '/products' })
          WHERE p.id = $9
          RETURNING ${PRODUCT_COLUMNS}`,
         [name.trim(), description ?? null, price, stock, unit ?? null, category ?? null,
-          image_url ?? null, is_available ?? null, params.id],
+          emptyToNull(image_url), is_available ?? null, params.id],
       )
       return result.rows[0]
     },

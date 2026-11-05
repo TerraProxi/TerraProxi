@@ -22,3 +22,9 @@ Fonctionnalité: Messagerie
     Alors la réponse est 400
     Quand j'envoie un message à un utilisateur inexistant
     Alors la réponse est 404
+
+Fonctionnalité: Interlocuteurs autorisés
+
+  Scénario: Deux clients ne s'écrivent pas
+    Quand un client écrit à un autre client
+    Alors la réponse est 403

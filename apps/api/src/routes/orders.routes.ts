@@ -3,7 +3,15 @@ import { authGuard } from '../middlewares/auth.middleware'
 import { db, withTransaction } from '../db/client'
 import { AppError, badRequest, forbidden, notFound } from '../utils/errors'
 import { canTransition, shouldRestock, type OrderActor } from '../services/order-status'
-import type { Order, OrderStatus } from '../models/types'
+import {
+  loadOrderSummary,
+  restockOrder,
+  settlePaymentForCancellation,
+  statusNotification,
+  type OrderPaymentState,
+} from '../services/order-lifecycle.service'
+import { notify } from '../services/notifications.service'
+import type { Order } from '../models/types'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -200,9 +208,10 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
   .patch(
     '/:id/status',
     async ({ params, body, user }) => {
-      return withTransaction(async (client) => {
-        const res = await client.query<{ status: OrderStatus; consumer_id: string | null; producer_user_id: string | null }>(
-          `SELECT o.status, o.consumer_id, pr.user_id AS producer_user_id
+      const { order, actor, refundId } = await withTransaction(async (client) => {
+        const res = await client.query<OrderPaymentState & { consumer_id: string | null; producer_user_id: string | null }>(
+          `SELECT o.id, o.status, o.consumer_id, o.stripe_payment_intent, o.stripe_payment_id,
+                  pr.user_id AS producer_user_id
            FROM orders o LEFT JOIN producers pr ON pr.id = o.producer_id
            WHERE o.id = $1
            FOR UPDATE OF o`,
@@ -220,21 +229,27 @@ export const ordersRoutes = new Elysia({ prefix: '/orders' })
           throw new AppError(409, `Transition ${current.status} → ${body.status} non autorisée`)
         }
 
+        let refundId: string | null = null
         if (shouldRestock(body.status)) {
-          await client.query(
-            `UPDATE products p SET stock = p.stock + oi.quantity
-             FROM order_items oi
-             WHERE oi.order_id = $1 AND oi.product_id = p.id`,
-            [params.id],
-          )
+          // Stripe d'abord : si le remboursement échoue, la transaction est annulée
+          refundId = await settlePaymentForCancellation(current)
+          await restockOrder(client, params.id)
         }
 
         const updated = await client.query(
-          `UPDATE orders o SET status = $1 WHERE o.id = $2 RETURNING ${ORDER_COLUMNS}`,
-          [body.status, params.id],
+          `UPDATE orders o SET status = $1, stripe_refund_id = COALESCE($3, o.stripe_refund_id)
+           WHERE o.id = $2 RETURNING ${ORDER_COLUMNS}`,
+          [body.status, params.id, refundId],
         )
-        return updated.rows[0]
+        return { order: updated.rows[0], actor, refundId }
       })
+
+      if (actor === 'PRODUCER') {
+        const summary = await loadOrderSummary(params.id)
+        const notification = summary && statusNotification(summary, refundId)
+        if (notification) await notify(notification)
+      }
+      return order
     },
     {
       params: t.Object({ id: t.String({ format: 'uuid' }) }),

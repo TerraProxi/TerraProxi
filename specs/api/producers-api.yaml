@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Producteurs
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Recherche géolocalisée (PostGIS ST_DWithin) et fiches producteurs.
     Implémentation : apps/api/src/routes/producers.routes.ts — scénarios : specs/features/producers.feature.
@@ -126,6 +126,96 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /producers/me/stats:
+    get:
+      summary: Statistiques de vente
+      description: |
+        Tableau de bord (BO-1) et statistiques (BO-5) sur les `days` derniers jours (30 par défaut) :
+        chiffre d'affaires du jour et de la période, panier moyen, commandes à préparer, stocks bas,
+        courbe quotidienne et produits les plus vendus.
+      operationId: getMyProducerStats
+      tags: [Producers]
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+      responses:
+        '200':
+          description: Statistiques
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/producer-stats.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /producers/me/newsletters:
+    get:
+      summary: Mes newsletters
+      description: Les 50 dernières newsletters envoyées.
+      operationId: listMyNewsletters
+      tags: [Producers]
+      responses:
+        '200':
+          description: Newsletters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/newsletter.schema.json'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Envoyer une newsletter
+      description: |
+        Envoie une notification NEWSLETTER aux clients ayant payé au moins une commande chez ce
+        producteur et ayant accepté les newsletters (newsletter_opt_in, RGPD). Une newsletter par
+        24 heures au maximum (429 avec Retry-After). Le brouillon peut venir de POST /ai/newsletter.
+      operationId: sendNewsletter
+      tags: [Producers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/newsletter.schema.json#/$defs/NewsletterDraft'
+      responses:
+        '201':
+          description: Newsletter envoyée
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/newsletter.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: Une newsletter a déjà été envoyée ces dernières 24 heures
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+
   /producers/{id}:
     get:
       summary: Fiche publique
@@ -212,9 +302,13 @@ components:
         website_url:
           type: string
           maxLength: 500
+          pattern: '^(https?://[^\s<>"]+)?$'
+          description: URL http(s) ; chaîne vide = champ effacé
         banner_url:
           type: string
           maxLength: 500
+          pattern: '^(https?://[^\s<>"]+)?$'
+          description: URL http(s) (POST /uploads) ; chaîne vide = champ effacé
         opening_hours:
           type: string
           maxLength: 500

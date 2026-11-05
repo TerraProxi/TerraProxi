@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import type Stripe from 'stripe'
 import { db } from '../../src/db/client'
-import { setStripeClient } from '../../src/routes/stripe.routes'
+import { setStripeClient } from '../../src/services/stripe.service'
 import { hasTestDatabase } from '../setup'
 import { call, createProducerWithProduct, registerAccount, resetDatabase } from './helpers'
 
