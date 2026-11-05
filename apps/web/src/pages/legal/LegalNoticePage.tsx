@@ -1,11 +1,12 @@
+import { Link } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
 
 /** RGPD-3 — mentions légales (LCEN, art. 6). */
 export function LegalNoticePage() {
   return (
-    <MainLayout>
+    <MainLayout title="Mentions légales">
       <article className="tp-prose" style={{ maxWidth: 820 }}>
-        <h1 style={{ fontSize: 'var(--text-3xl)' }}>Mentions légales</h1>
+        <h1 className="tp-page-title">Mentions légales</h1>
 
         <h2>Éditeur</h2>
         <p>
@@ -32,7 +33,7 @@ export function LegalNoticePage() {
         </p>
 
         <h2>Données personnelles</h2>
-        <p>Voir la <a href="/privacy">politique de confidentialité</a>.</p>
+        <p>Voir la <Link to="/privacy">politique de confidentialité</Link>.</p>
       </article>
     </MainLayout>
   )

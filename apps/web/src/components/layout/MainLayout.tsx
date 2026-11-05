@@ -5,14 +5,14 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 interface Props {
   /** Titre de l'onglet (suffixé par « · TerraProxi »). */
-  title?: string
+  title: string
   children: ReactNode
   fullWidth?: boolean
 }
 
 const MAIN_ID = 'contenu'
 
-export function MainLayout({ title = 'TerraProxi', children, fullWidth = false }: Props) {
+export function MainLayout({ title, children, fullWidth = false }: Props) {
   useDocumentTitle(title)
 
   return (
