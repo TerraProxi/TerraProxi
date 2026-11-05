@@ -1,179 +1,175 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
-  Image, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
+  View, Text, FlatList, TextInput, TouchableOpacity, ScrollView, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
-import { MaterialCommunityIcons } from '@expo/vector-icons'
+import { useFocusEffect } from '@react-navigation/native'
 import type { StackScreenProps } from '@react-navigation/stack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors } from '../theme'
-import api from '../services/api'
+import { Colors, Fonts, MIN_TOUCH_TARGET } from '../theme'
+import api, { apiErrorMessage } from '../services/api'
+import { useAuthStore } from '../store/auth.store'
+import { useUnreadStore } from '../store/unread.store'
+import { IconButton } from '../components/IconButton'
+import { MessageState } from '../components/ScreenState'
 
 type Props = StackScreenProps<RootStackParamList, 'Conversation'>
 
+/** specs/schemas/message.schema.json */
 interface ApiMessage {
   id: string
   sender_id: string
   receiver_id: string
   content: string
-  created_at: string
-  image_url?: string
+  is_read: boolean
+  sent_at: string
+  first_name?: string
+  last_name?: string
 }
 
-interface LocalMessage {
+type DeliveryStatus = 'sent' | 'sending' | 'failed'
+
+interface ChatMessage {
   id: string
-  sender: 'user' | 'partner'
+  isMine: boolean
   text: string
-  timestamp: string
-  image?: string
-  pending?: boolean
+  sentAt: string
+  status: DeliveryStatus
 }
 
+const POLL_INTERVAL_MS = 10_000
+const MAX_MESSAGE_LENGTH = 4000
 const QUICK_REPLIES = ["C'est prêt ?", 'Encore du stock ?', 'Merci beaucoup !', 'À quelle heure ?']
+
+const toChatMessage = (m: ApiMessage, partnerId: string): ChatMessage => ({
+  id: m.id,
+  isMine: m.sender_id !== partnerId,
+  text: m.content,
+  sentAt: m.sent_at,
+  status: 'sent',
+})
+
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso)
+  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  if (date.toDateString() === new Date().toDateString()) return time
+  return `${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · ${time}`
+}
 
 export function ChatScreen({ route, navigation }: Props) {
   const { partnerId, partnerName } = route.params
-  const listRef = useRef<FlatList>(null)
-  const [messages, setMessages] = useState<LocalMessage[]>([])
-  const [loading, setLoading] = useState(true)
+  const insets = useSafeAreaInsets()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const refreshUnread = useUnreadStore((s) => s.refresh)
+  const listRef = useRef<FlatList<ChatMessage>>(null)
+  const [serverMessages, setServerMessages] = useState<ChatMessage[]>([])
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [text, setText] = useState('')
 
-  useEffect(() => {
-    api.get<ApiMessage[]>(`/messages/${partnerId}`)
-      .then(({ data }) => {
-        setMessages(
-          data.map((m) => ({
-            id: m.id,
-            sender: m.sender_id === partnerId ? 'partner' : 'user',
-            text: m.content,
-            timestamp: m.created_at,
-            image: m.image_url,
-          })),
-        )
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [partnerId])
-
-  const scrollToBottom = () => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
-  }
-
-  const handleSend = async () => {
-    if (!text.trim()) return
-
-    const content = text.trim()
-    const optimistic: LocalMessage = {
-      id: `pending-${Date.now()}`,
-      sender: 'user',
-      text: content,
-      timestamp: new Date().toISOString(),
-      pending: true,
-    }
-
-    setMessages((prev) => [...prev, optimistic])
-    setText('')
-    scrollToBottom()
-
+  const loadThread = useCallback(async () => {
     try {
-      const { data } = await api.post<ApiMessage>('/messages', {
-        receiver_id: partnerId,
-        content,
-      })
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === optimistic.id
-            ? { id: data.id, sender: 'user', text: data.content, timestamp: data.created_at }
-            : m,
-        ),
-      )
+      const { data } = await api.get<ApiMessage[]>(`/messages/${partnerId}`)
+      setServerMessages(data.map((m) => toChatMessage(m, partnerId)))
+      setLoadError(null)
+      // Ouvrir le fil marque les messages comme lus : le badge global doit suivre
+      void refreshUnread()
+    } catch (err) {
+      setLoadError(apiErrorMessage(err, 'Impossible de charger la conversation'))
+    } finally {
+      setLoading(false)
+    }
+  }, [partnerId, refreshUnread])
+
+  // Chargement puis rafraîchissement périodique tant que la conversation est affichée
+  useFocusEffect(useCallback(() => {
+    if (!isAuthenticated) return undefined
+    void loadThread()
+    const timer = setInterval(() => { void loadThread() }, POLL_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [isAuthenticated, loadThread]))
+
+  const send = async (content: string, localId: string) => {
+    setLocalMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, status: 'sending' } : m)))
+    try {
+      const { data } = await api.post<ApiMessage>('/messages', { receiver_id: partnerId, content })
+      setLocalMessages((prev) => prev.filter((m) => m.id !== localId))
+      setServerMessages((prev) => [...prev, toChatMessage(data, partnerId)])
     } catch {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimistic.id ? { ...m, pending: false } : m)),
-      )
+      setLocalMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, status: 'failed' } : m)))
     }
   }
 
-  const formatTime = (ts: string) => {
-    const d = new Date(ts)
-    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
+  const handleSend = () => {
+    const content = text.trim()
+    if (!content) return
+    const localId = `local-${Date.now()}`
+    setLocalMessages((prev) => [
+      ...prev,
+      { id: localId, isMine: true, text: content, sentAt: new Date().toISOString(), status: 'sending' },
+    ])
+    setText('')
+    void send(content, localId)
   }
 
-  const renderMessage = ({ item, index }: { item: LocalMessage; index: number }) => {
-    const isUser = item.sender === 'user'
-    const showAvatar = !isUser && (index === 0 || messages[index - 1]?.sender === 'user')
+  const messages = [...serverMessages, ...localMessages]
 
+  if (!isAuthenticated) {
     return (
-      <View style={{ marginBottom: 8 }}>
-        {showAvatar && (
-          <View style={styles.avatarRow}>
-            <View style={styles.msgAvatarFallback}>
-              <Text style={styles.msgAvatarLetter}>{partnerName[0]}</Text>
-            </View>
-            <Text style={styles.avatarName}>{partnerName}</Text>
-          </View>
-        )}
-        <View style={[isUser ? styles.userRow : styles.producerRow, !showAvatar && !isUser && { marginLeft: 44 }]}>
-          {!isUser && !showAvatar && <View style={{ width: 44 }} />}
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.msgImage} />
-          ) : (
-            <View style={[styles.bubble, isUser ? styles.userBubble : styles.producerBubble]}>
-              <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{item.text}</Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.timestamp, isUser ? styles.timestampRight : styles.timestampLeft]}>
-          {formatTime(item.timestamp)}
-        </Text>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <MessageState
+          icon="chat-outline"
+          title="Connectez-vous pour discuter"
+          message={`La messagerie avec ${partnerName} est réservée aux comptes connectés.`}
+          actionLabel="Se connecter"
+          onAction={() => navigation.navigate('Login')}
+        />
       </View>
     )
   }
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={Colors.dark} />
-        </TouchableOpacity>
-        <View style={styles.avatarContainer}>
-          <View style={styles.headerAvatarFallback}>
-            <Text style={styles.headerAvatarLetter}>{partnerName[0]}</Text>
-          </View>
-          <View style={styles.onlineDot} />
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>{partnerName}</Text>
-          <Text style={styles.headerSubtitle}>Producteur Bio</Text>
-        </View>
-        <TouchableOpacity style={styles.callBtn}>
-          <MaterialCommunityIcons name="phone" size={18} color={Colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.orderBar}>
-        <MaterialCommunityIcons name="basket" size={18} color={Colors.blue600} />
-        <Text style={styles.orderBarText} numberOfLines={1}>
-          Réf: Commande #2390 · Panier Légumes
+  const renderMessage = ({ item }: { item: ChatMessage }) => (
+    <View style={styles.messageBlock}>
+      <TouchableOpacity
+        disabled={item.status !== 'failed'}
+        onPress={() => void send(item.text, item.id)}
+        style={[styles.bubble, item.isMine ? styles.myBubble : styles.partnerBubble, item.status === 'failed' && styles.failedBubble]}
+        accessibilityRole={item.status === 'failed' ? 'button' : 'text'}
+        accessibilityHint={item.status === 'failed' ? 'Toucher pour renvoyer le message' : undefined}
+      >
+        <Text style={[styles.bubbleText, item.isMine && item.status !== 'failed' && styles.myBubbleText]}>
+          {item.text}
         </Text>
-        <TouchableOpacity>
-          <Text style={styles.orderBarLink}>Voir</Text>
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
+      <Text style={[styles.meta, item.isMine && styles.metaRight, item.status === 'failed' && styles.metaFailed]}>
+        {item.status === 'sending' && 'Envoi…'}
+        {item.status === 'failed' && 'Échec de l\'envoi · toucher pour réessayer'}
+        {item.status === 'sent' && formatTimestamp(item.sentAt)}
+      </Text>
+    </View>
+  )
 
-      <View style={styles.dateSeparator}>
-        <View style={styles.datePill}>
-          <Text style={styles.dateText}>Aujourd'hui</Text>
+  return (
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <IconButton icon="arrow-left" label="Retour" onPress={() => navigation.goBack()} size={24} />
+        <View style={styles.avatar}>
+          <Text style={styles.avatarLetter}>{partnerName.charAt(0).toUpperCase()}</Text>
         </View>
+        <Text style={styles.headerName} numberOfLines={1} accessibilityRole="header">{partnerName}</Text>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+      {loadError && (
+        <TouchableOpacity style={styles.errorBanner} onPress={() => void loadThread()} accessibilityRole="button">
+          <Text style={styles.errorText}>{loadError} · Réessayer</Text>
+        </TouchableOpacity>
+      )}
+
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primaryDark} accessibilityLabel="Chargement" />
         </View>
       ) : (
         <FlatList
@@ -181,78 +177,73 @@ export function ChatScreen({ route, navigation }: Props) {
           data={messages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.messageList}
-          onContentSizeChange={scrollToBottom}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={renderMessage}
-          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>Aucun message. Écrivez à {partnerName} ci-dessous.</Text>
+          }
         />
       )}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplies} contentContainerStyle={styles.quickRepliesContent}>
-        {QUICK_REPLIES.map((qr) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.quickReplies}
+        contentContainerStyle={styles.quickRepliesContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {QUICK_REPLIES.map((reply) => (
           <TouchableOpacity
-            key={qr}
+            key={reply}
             style={styles.quickPill}
-            onPress={() => {
-              setText(qr)
-            }}
-            activeOpacity={0.7}
+            onPress={() => setText(reply)}
+            accessibilityRole="button"
+            accessibilityHint="Insère cette réponse dans le message"
           >
-            <Text style={styles.quickPillText}>{qr}</Text>
+            <Text style={styles.quickPillText}>{reply}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.plusBtn}>
-          <MaterialCommunityIcons name="plus" size={22} color={Colors.gray600} />
-        </TouchableOpacity>
+      <View style={[styles.inputContainer, { marginBottom: insets.bottom + 10 }]}>
         <TextInput
           value={text}
           onChangeText={setText}
           placeholder="Votre message…"
+          placeholderTextColor={Colors.gray600}
           style={styles.input}
           multiline
-          maxLength={500}
+          maxLength={MAX_MESSAGE_LENGTH}
+          accessibilityLabel={`Message à ${partnerName}`}
         />
-        <TouchableOpacity
+        <IconButton
+          icon="send"
+          label="Envoyer"
           onPress={handleSend}
           disabled={!text.trim()}
+          color={Colors.white}
+          size={18}
           style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="send" size={18} color={Colors.white} />
-        </TouchableOpacity>
+        />
       </View>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.gray50,
-  },
+  container: { flex: 1, backgroundColor: Colors.gray50 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 52,
-    paddingBottom: 12,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
-    gap: 10,
+    gap: 8,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    position: 'relative',
-  },
-  headerAvatarFallback: {
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -260,223 +251,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerAvatarLetter: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.green500,
-    borderWidth: 2,
-    borderColor: Colors.white,
-  },
-  headerInfo: {
-    flex: 1,
-    gap: 1,
-  },
-  headerName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.dark,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.gray500,
-  },
-  callBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: Colors.green50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  orderBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.blue50,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  orderBarText: {
-    flex: 1,
-    fontSize: 13,
-    color: Colors.blue600,
-    fontWeight: '500',
-  },
-  orderBarLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.blue600,
-  },
-  dateSeparator: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  datePill: {
-    backgroundColor: Colors.gray200,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-  },
-  dateText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.gray600,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messageList: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  msgAvatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  msgAvatarLetter: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  avatarName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.gray700,
-  },
-  producerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  userRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '75%',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-  },
-  producerBubble: {
+  avatarLetter: { fontSize: 16, fontFamily: Fonts.bold, color: Colors.primaryDark },
+  headerName: { flex: 1, fontSize: 16, fontFamily: Fonts.title, color: Colors.dark },
+  errorBanner: { backgroundColor: Colors.red50, paddingHorizontal: 16, paddingVertical: 12 },
+  errorText: { fontSize: 13, fontFamily: Fonts.semibold, color: Colors.danger },
+  messageList: { padding: 16, flexGrow: 1 },
+  emptyText: { fontSize: 14, fontFamily: Fonts.regular, color: Colors.gray600, textAlign: 'center', marginTop: 40 },
+  messageBlock: { marginBottom: 10 },
+  bubble: { maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16 },
+  partnerBubble: {
+    alignSelf: 'flex-start',
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.gray200,
     borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
   },
-  userBubble: {
-    backgroundColor: Colors.primary,
-    borderBottomRightRadius: 4,
-  },
-  bubbleText: {
-    fontSize: 15,
-    lineHeight: 20,
-    color: Colors.gray700,
-  },
-  userBubbleText: {
-    color: Colors.white,
-  },
-  msgImage: {
-    width: 200,
-    height: 160,
-    borderRadius: 14,
-    backgroundColor: Colors.gray200,
-  },
-  timestamp: {
-    fontSize: 10,
-    color: Colors.gray400,
-    marginTop: 2,
-  },
-  timestampLeft: {
-    marginLeft: 44,
-  },
-  timestampRight: {
-    textAlign: 'right',
-  },
+  myBubble: { alignSelf: 'flex-end', backgroundColor: Colors.primaryDark, borderBottomRightRadius: 4 },
+  failedBubble: { backgroundColor: Colors.red50, borderWidth: 1, borderColor: Colors.danger },
+  bubbleText: { fontSize: 15, lineHeight: 20, fontFamily: Fonts.regular, color: Colors.gray800 },
+  myBubbleText: { color: Colors.white },
+  meta: { fontSize: 11, fontFamily: Fonts.regular, color: Colors.gray600, marginTop: 3 },
+  metaRight: { textAlign: 'right' },
+  metaFailed: { color: Colors.danger, fontFamily: Fonts.semibold },
   quickReplies: {
-    maxHeight: 44,
+    maxHeight: 56,
     backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderTopColor: Colors.gray100,
   },
-  quickRepliesContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-    alignItems: 'center',
-  },
+  quickRepliesContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, alignItems: 'center' },
   quickPill: {
     backgroundColor: Colors.gray100,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
   },
-  quickPillText: {
-    fontSize: 13,
-    color: Colors.gray700,
-    fontWeight: '500',
-  },
+  quickPillText: { fontSize: 13, fontFamily: Fonts.medium, color: Colors.gray700 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     backgroundColor: Colors.gray100,
     borderRadius: 28,
     marginHorizontal: 12,
-    marginVertical: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    marginTop: 10,
+    paddingLeft: 16,
+    paddingRight: 4,
+    paddingVertical: 4,
     gap: 6,
-  },
-  plusBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
   },
   input: {
     flex: 1,
     fontSize: 15,
+    fontFamily: Fonts.regular,
     maxHeight: 100,
-    paddingVertical: 6,
+    minHeight: MIN_TOUCH_TARGET,
+    paddingVertical: 10,
     color: Colors.dark,
   },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendBtnDisabled: {
-    backgroundColor: Colors.gray300,
-  },
+  sendBtn: { borderRadius: 22, backgroundColor: Colors.primaryDark },
+  sendBtnDisabled: { backgroundColor: Colors.gray400 },
 })
