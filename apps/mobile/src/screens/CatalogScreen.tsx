@@ -11,6 +11,7 @@ import { api } from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
 import { useFocusLoader } from '../hooks/useFocusLoader'
+import { getKnownPosition } from '../services/location'
 import { CATEGORY_LABELS, type Product, type ProductCategory, type Producer } from '../types/catalog'
 import { IconButton } from '../components/IconButton'
 import { ProductImage } from '../components/ProductImage'
@@ -21,6 +22,8 @@ type Props = StackScreenProps<RootStackParamList, 'Catalog'>
 type CategoryFilter = ProductCategory | 'ALL'
 
 const NOTICE_DURATION_MS = 1800
+/** Rayon maximal de /products : au-delà, le producteur sort des résultats géolocalisés. */
+const PRODUCTS_MAX_RADIUS_KM = 500
 
 export function CatalogScreen({ route, navigation }: Props) {
   const { producerId } = route.params
@@ -40,12 +43,21 @@ export function CatalogScreen({ route, navigation }: Props) {
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
+    const baseParams = { producer_id: producerId, available: true, limit: 100 }
+    const position = await getKnownPosition()
     const [producerRes, productsRes] = await Promise.all([
       api.get<Producer>(`/producers/${producerId}`),
-      api.get<Product[]>('/products', { params: { producer_id: producerId, available: true, limit: 100 } }),
+      // Position connue : chaque produit porte distance_km (specs/api/products-api.yaml)
+      api.get<Product[]>('/products', {
+        params: position
+          ? { ...baseParams, lat: position.lat, lon: position.lon, radius: PRODUCTS_MAX_RADIUS_KM }
+          : baseParams,
+      }),
     ])
     setProducer(producerRes.data)
-    setProducts(productsRes.data)
+    // Producteur hors du rayon géolocalisé : catalogue complet, sans distance
+    const isOutOfRange = position !== null && productsRes.data.length === 0
+    setProducts(isOutOfRange ? (await api.get<Product[]>('/products', { params: baseParams })).data : productsRes.data)
   }, [producerId])
   const { isLoading, isRefreshing, error, refresh, reload } = useFocusLoader(load, 'Producteur introuvable')
 
@@ -100,6 +112,8 @@ export function CatalogScreen({ route, navigation }: Props) {
       />
     )
   }
+
+  const distanceKm = products.find((p) => p.distance_km != null)?.distance_km
 
   const renderItem = ({ item }: { item: Product }) => {
     const isFavorite = favoriteProductIds.includes(item.id)
@@ -165,6 +179,9 @@ export function CatalogScreen({ route, navigation }: Props) {
           <Text style={styles.producerDescription} numberOfLines={2}>
             {producer.description ?? producer.city ?? ''}
           </Text>
+          {distanceKm != null && (
+            <Text style={styles.distance}>À {distanceKm.toFixed(1)} km de vous</Text>
+          )}
         </View>
       </View>
 
@@ -288,6 +305,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   verifiedText: { fontSize: 11, fontFamily: Fonts.bold, color: Colors.primaryDark },
+  distance: { fontSize: 12, fontFamily: Fonts.semibold, color: Colors.primaryDark, marginTop: 2 },
   producerDescription: { fontSize: 13, fontFamily: Fonts.regular, color: Colors.gray700 },
   searchContainer: {
     flexDirection: 'row',
