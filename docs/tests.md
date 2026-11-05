@@ -1,6 +1,6 @@
 # TerraProxi — Plan de tests et de recette
 
-*Version 2 — 04/11/2026*
+*Version 3 — 05/11/2026*
 
 ## 1. Stratégie
 
@@ -12,6 +12,7 @@
 | Unitaires | `bun test` | `apps/api/tests/unit` | `pnpm test`, CI |
 | Intégration | `bun test` + PostgreSQL/PostGIS réel | `apps/api/tests/integration` | `pnpm test`, CI (service PostGIS) |
 | Web (logique et composants) | Vitest + Testing Library + jsdom | `apps/web/src/**/*.test.ts(x)` | `pnpm test:web` (enchaîné par `pnpm test`), CI |
+| Mobile (logique) | Jest + `jest-expo` 51 | `apps/mobile/src/**/*.test.ts` | `pnpm test:mobile` (enchaîné par `pnpm test`), CI |
 | Déploiement | build des images + démarrage du conteneur API | `.github/workflows/ci.yml` | CI |
 | Recette | parcours manuels ci-dessous | web, mobile | avant chaque soutenance / mise en production |
 
