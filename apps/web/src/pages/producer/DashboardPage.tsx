@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MainLayout } from '../../components/layout/MainLayout'
-import { ordersService, type Order, type OrderStatus } from '../../services/orders.service'
-import { productsService, type Product } from '../../services/products.service'
+import { RevenueChart } from '../../components/producer/RevenueChart'
 import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
 import { useAuth } from '../../contexts/AuthContext'
-import { producersService } from '../../services/producers.service'
+import { ordersService, type Order } from '../../services/orders.service'
+import { producersService, type ProducerStats } from '../../services/producers.service'
 import { aiService, type ForecastLine } from '../../services/ai.service'
 import { apiErrorMessage, apiErrorStatus } from '../../services/api'
 import { formatPrice } from '../../utils/format'
 
-/** Commandes qui représentent un encaissement (payées, quel que soit leur avancement). */
-const PAID_STATUSES = new Set<OrderStatus>(['PAID', 'PREPARING', 'READY', 'COMPLETED'])
-const LOW_STOCK_THRESHOLD = 3
-const RECENT_ORDERS_LIMIT = 100
+const PERIODS = [7, 30, 90] as const
+type Period = (typeof PERIODS)[number]
+const DEFAULT_PERIOD: Period = 30
 const RECENT_ORDERS_SHOWN = 5
 const FORECAST_LINES_SHOWN = 5
 const CONFIDENCE_LABELS = { HIGH: 'Bonne', MEDIUM: 'Moyenne', LOW: 'Faible' } as const
@@ -21,52 +21,52 @@ const CONFIDENCE_LABELS = { HIGH: 'Bonne', MEDIUM: 'Moyenne', LOW: 'Faible' } as
 const QUICK_LINKS = [
   { to: '/producer/catalog', icon: '📦', label: 'Gérer le catalogue' },
   { to: '/producer/orders', icon: '🧾', label: 'Suivre les commandes' },
+  { to: '/producer/agenda', icon: '📅', label: 'Mon agenda' },
+  { to: '/producer/newsletter', icon: '📰', label: 'Newsletter' },
   { to: '/messages', icon: '💬', label: 'Messagerie' },
   { to: '/producer/profile', icon: '⚙️', label: 'Mon profil' },
 ]
 
+/** BO-1 / BO-5 — tableau de bord calculé par l'API (GET /producers/me/stats). */
 export function ProducerDashboardPage() {
   const { user } = useAuth()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [products, setProducts] = useState<Product[]>([])
-  const [forecast, setForecast] = useState<ForecastLine[]>([])
-  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState<Period>(DEFAULT_PERIOD)
+  const [stats, setStats] = useState<ProducerStats | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
   const [hasProfile, setHasProfile] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [ordersError, setOrdersError] = useState<string | null>(null)
+  const [forecast, setForecast] = useState<ForecastLine[]>([])
   const [forecastError, setForecastError] = useState<string | null>(null)
 
   useEffect(() => {
-    producersService.me()
-      .then(async ({ data: producer }) => {
-        // Chaque bloc se dégrade seul : une prévision indisponible ne masque pas les commandes
-        const [ordersRes, productsRes, forecastRes] = await Promise.allSettled([
-          ordersService.list({ limit: RECENT_ORDERS_LIMIT }),
-          productsService.mine(),
-          aiService.forecast(producer.id),
-        ])
-        if (ordersRes.status === 'fulfilled') setOrders(ordersRes.value.data)
-        else setError(apiErrorMessage(ordersRes.reason, 'Impossible de charger vos commandes'))
-        if (productsRes.status === 'fulfilled') setProducts(productsRes.value.data)
-        else setError(apiErrorMessage(productsRes.reason, 'Impossible de charger votre catalogue'))
-        if (forecastRes.status === 'fulfilled') setForecast(forecastRes.value.data)
-        else setForecastError(apiErrorMessage(forecastRes.reason, 'Prévisions indisponibles pour le moment'))
-      })
+    let isCurrent = true
+    setIsLoadingStats(true)
+    producersService.stats(period)
+      .then(({ data }) => { if (isCurrent) { setStats(data); setStatsError(null) } })
       .catch((err) => {
+        if (!isCurrent) return
         if (apiErrorStatus(err) === 404) setHasProfile(false)
-        else setError(apiErrorMessage(err, 'Impossible de charger le tableau de bord'))
+        else setStatsError(apiErrorMessage(err, 'Impossible de charger vos statistiques'))
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (isCurrent) setIsLoadingStats(false) })
+    return () => { isCurrent = false }
+  }, [period, reloadKey])
+
+  // Blocs secondaires : chacun se dégrade seul
+  useEffect(() => {
+    ordersService.list({ limit: RECENT_ORDERS_SHOWN })
+      .then(({ data }) => setOrders(data))
+      .catch((err) => setOrdersError(apiErrorMessage(err, 'Commandes récentes indisponibles')))
+    producersService.me()
+      .then(({ data: producer }) => aiService.forecast(producer.id))
+      .then(({ data }) => setForecast(data))
+      .catch((err) => setForecastError(apiErrorMessage(err, 'Prévisions indisponibles pour le moment')))
   }, [])
 
-  const today = new Date().toDateString()
-  const toPrepare = orders.filter((o) => o.status === 'PAID' || o.status === 'PREPARING')
-  const lowStock = products.filter((p) => p.stock <= LOW_STOCK_THRESHOLD && p.is_available)
-  const todayRevenue = orders
-    .filter((o) => PAID_STATUSES.has(o.status) && new Date(o.created_at).toDateString() === today)
-    .reduce((sum, o) => sum + Number(o.total_price), 0)
-  const topForecast = forecast.filter((f) => f.forecast_next_week > 0).slice(0, FORECAST_LINES_SHOWN)
-
-  if (!loading && !hasProfile) {
+  if (!hasProfile) {
     return (
       <MainLayout title="Mon espace producteur">
         <h1 className="tp-page-title">Bienvenue sur TerraProxi 👋</h1>
@@ -78,29 +78,44 @@ export function ProducerDashboardPage() {
     )
   }
 
+  const topForecast = forecast.filter((f) => f.forecast_next_week > 0).slice(0, FORECAST_LINES_SHOWN)
   // Couleurs de valeur : variantes foncées (≥ 4,5:1 sur blanc)
-  const kpis = [
-    { label: 'Commandes à préparer', value: String(toPrepare.length), color: 'var(--color-warning-strong)', link: '/producer/orders' },
-    { label: 'Produits en stock faible', value: String(lowStock.length), color: 'var(--color-danger-strong)', link: '/producer/catalog' },
-    { label: 'Chiffre du jour', value: formatPrice(todayRevenue), color: 'var(--color-secondary-strong)', link: null },
-    { label: 'Produits actifs', value: String(products.filter((p) => p.is_available).length), color: 'var(--color-primary-strong)', link: '/producer/catalog' },
-  ]
+  const kpis = stats ? [
+    { label: 'Chiffre du jour', value: formatPrice(stats.revenue_today), color: 'var(--color-secondary-strong)', link: null },
+    { label: 'Commandes du jour', value: String(stats.orders_today), color: 'var(--color-primary-strong)', link: null },
+    { label: `Panier moyen (${period} j)`, value: formatPrice(stats.average_basket), color: 'var(--color-primary-strong)', link: null },
+    { label: 'Commandes à préparer', value: String(stats.orders_to_prepare), color: 'var(--color-warning-strong)', link: '/producer/orders' },
+    { label: 'Produits en stock bas', value: String(stats.low_stock.length), color: 'var(--color-danger-strong)', link: '/producer/catalog' },
+  ] : []
 
   return (
     <MainLayout title="Mon espace producteur">
-      <div style={{ marginBottom: 'var(--space-8)' }}>
-        <h1 className="tp-page-title" style={{ marginBottom: 4 }}>Bonjour, {user?.first_name} 👋</h1>
-        <p className="tp-muted">Voici l'état de votre boutique.</p>
+      <div className="tp-page-header">
+        <div>
+          <h1 className="tp-page-title" style={{ marginBottom: 4 }}>Bonjour, {user?.first_name} 👋</h1>
+          <p className="tp-muted">Voici l'état de votre boutique.</p>
+        </div>
+        <div className="tp-cluster" role="group" aria-label="Période des statistiques">
+          {PERIODS.map((days) => (
+            <button key={days} type="button" className="tp-chip" aria-pressed={period === days} onClick={() => setPeriod(days)}>
+              {days} jours
+            </button>
+          ))}
+        </div>
       </div>
 
-      {error && <div className="tp-alert tp-alert--error" role="alert">{error}</div>}
+      {statsError && (
+        <div className="tp-alert tp-alert--error" role="alert">
+          {statsError} <Button variant="ghost" size="sm" onClick={() => setReloadKey((k) => k + 1)}>Réessayer</Button>
+        </div>
+      )}
 
-      <div className="tp-card-grid" style={{ marginBottom: 'var(--space-8)' }}>
+      <div className="tp-card-grid" style={{ marginBottom: 'var(--space-8)' }} aria-busy={isLoadingStats}>
         {kpis.map((kpi) => (
           <div key={kpi.label} className="tp-card">
             <p className="tp-small tp-muted" style={{ marginBottom: 8 }}>{kpi.label}</p>
             <p style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-3xl)', color: kpi.color, fontWeight: 700 }}>
-              {loading ? '…' : kpi.value}
+              {kpi.value}
             </p>
             {kpi.link && (
               <Link to={kpi.link} className="tp-small" style={{ marginTop: 8, display: 'block' }}>
@@ -109,7 +124,55 @@ export function ProducerDashboardPage() {
             )}
           </div>
         ))}
+        {isLoadingStats && !stats && <p>Chargement des statistiques…</p>}
       </div>
+
+      {stats && (
+        <div className="tp-split" style={{ marginBottom: 'var(--space-8)' }}>
+          <section className="tp-card" aria-labelledby="titre-courbe">
+            <h2 id="titre-courbe" style={{ fontSize: 'var(--text-xl)', marginBottom: 'var(--space-1)' }}>Ventes des {stats.period_days} derniers jours</h2>
+            <p className="tp-small tp-muted" style={{ marginBottom: 'var(--space-4)' }}>
+              {formatPrice(stats.revenue_period)} encaissés · {stats.orders_period} commande{stats.orders_period > 1 ? 's' : ''}
+            </p>
+            <RevenueChart daily={stats.daily} />
+          </section>
+
+          <div className="tp-stack">
+            <section className="tp-card" aria-labelledby="titre-top">
+              <h2 id="titre-top" style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Meilleures ventes</h2>
+              {stats.top_products.length === 0 ? (
+                <p className="tp-muted tp-small">Aucune vente sur la période.</p>
+              ) : (
+                <ol style={{ paddingLeft: 'var(--space-5)' }} className="tp-stack tp-small">
+                  {stats.top_products.map((p) => (
+                    <li key={p.product_id ?? p.product_name}>
+                      <strong>{p.product_name}</strong> — {p.quantity} vendu{p.quantity > 1 ? 's' : ''}, {formatPrice(p.revenue)}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section className="tp-card" aria-labelledby="titre-stock">
+              <h2 id="titre-stock" style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>
+                Stock bas (≤ {stats.low_stock_threshold})
+              </h2>
+              {stats.low_stock.length === 0 ? (
+                <p className="tp-muted tp-small">Aucun produit en stock bas.</p>
+              ) : (
+                <ul style={{ listStyle: 'none' }} className="tp-stack tp-small">
+                  {stats.low_stock.map((p) => (
+                    <li key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <Link to="/producer/catalog">{p.name}</Link>
+                      <span style={{ color: 'var(--color-danger-strong)', fontWeight: 600 }}>{p.stock} {p.unit}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
 
       <nav aria-label="Raccourcis" className="tp-card-grid" style={{ marginBottom: 'var(--space-8)' }}>
         {QUICK_LINKS.map((link) => (
@@ -168,13 +231,13 @@ export function ProducerDashboardPage() {
 
       <section aria-labelledby="titre-recentes">
         <h2 id="titre-recentes" className="tp-section-title" style={{ fontSize: 'var(--text-xl)' }}>Commandes récentes</h2>
-        {loading ? (
-          <p>Chargement…</p>
+        {ordersError ? (
+          <p className="tp-muted">{ordersError}</p>
         ) : orders.length === 0 ? (
           <p className="tp-muted">Aucune commande reçue.</p>
         ) : (
           <div className="tp-stack" style={{ gap: 'var(--space-3)' }}>
-            {orders.slice(0, RECENT_ORDERS_SHOWN).map((order) => (
+            {orders.map((order) => (
               <Link
                 key={order.id}
                 to={`/producer/orders/${order.id}`}
