@@ -28,6 +28,9 @@ import { CatalogPage }           from './pages/producer/CatalogPage'
 import { OrdersManagePage }      from './pages/producer/OrdersManagePage'
 import { ProducerProfilePage as ProducerProfileEditPage } from './pages/producer/ProfilePage'
 
+// Administration
+import { AdminPage } from './pages/admin/AdminPage'
+
 // Compte & pages légales
 import { AccountPage }     from './pages/account/AccountPage'
 import { PrivacyPage }     from './pages/legal/PrivacyPage'
@@ -52,7 +55,7 @@ export function App() {
             <Route path="/privacy"  element={<PrivacyPage />} />
             <Route path="/legal"    element={<LegalNoticePage />} />
             <Route path="/account"  element={<RequireAuth><AccountPage /></RequireAuth>} />
-            <Route path="/messages"            element={<RequireAuth><MessagesPage /></RequireAuth>} />
+              <Route path="/messages"            element={<RequireAuth><MessagesPage /></RequireAuth>} />
             <Route path="/messages/:partnerId" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 
             {/* Consommateur — le panier reste consultable sans compte */}
@@ -68,6 +71,9 @@ export function App() {
             <Route path="/producer/orders"          element={<RequireAuth role="PRODUCER"><OrdersManagePage /></RequireAuth>} />
             <Route path="/producer/orders/:orderId" element={<RequireAuth role="PRODUCER"><OrderDetailPage /></RequireAuth>} />
             <Route path="/producer/profile"         element={<RequireAuth role="PRODUCER"><ProducerProfileEditPage /></RequireAuth>} />
+  
+            {/* Administration */}
+            <Route path="/admin" element={<RequireAuth role="ADMIN"><AdminPage /></RequireAuth>} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

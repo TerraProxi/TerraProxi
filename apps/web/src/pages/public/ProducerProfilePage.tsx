@@ -4,6 +4,7 @@ import { MainLayout } from '../../components/layout/MainLayout'
 import { ProductCard } from '../../components/producer/ProductCard'
 import { ProducerMap } from '../../components/map/ProducerMap'
 import { Button } from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
 import { producersService, type Producer } from '../../services/producers.service'
 import { productsService, type Product } from '../../services/products.service'
 import { apiErrorMessage, apiErrorStatus } from '../../services/api'
@@ -78,10 +79,10 @@ export function ProducerProfilePage() {
         />
       )}
 
-      <h1 className="tp-page-title">
-        {producer.company_name}
-        {producer.is_verified && <span title="Producteur vérifié"> ✅<span className="sr-only">Producteur vérifié</span></span>}
-      </h1>
+      <div className="tp-page-header">
+        <h1 className="tp-page-title">{producer.company_name}</h1>
+        {producer.is_verified && <Badge variant="success" label="✓ Producteur vérifié" />}
+      </div>
 
       <div className="tp-split">
         <div>

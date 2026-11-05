@@ -10,7 +10,7 @@ interface Props {
   quantity?: number
 }
 
-/** Ajout au panier avec confirmation annoncée aux lecteurs d'écran. Masqué pour les producteurs. */
+/** Ajout au panier avec confirmation annoncée aux lecteurs d'écran. Réservé aux visiteurs et consommateurs. */
 export function AddToCartButton({ product, quantity = 1 }: Props) {
   const { user } = useAuth()
   const { add } = useCart()
@@ -22,7 +22,7 @@ export function AddToCartButton({ product, quantity = 1 }: Props) {
     return () => window.clearTimeout(timer)
   }, [isAdded])
 
-  if (user?.role === 'PRODUCER') return null
+  if (user && user.role !== 'CONSUMER') return null
 
   const handleAdd = () => {
     add(toCartProduct(product), quantity)

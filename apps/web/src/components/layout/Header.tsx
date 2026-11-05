@@ -16,6 +16,9 @@ export function Header() {
   const toggleRef = useRef<HTMLButtonElement>(null)
   const navRef = useRef<HTMLElement>(null)
   const isProducer = user?.role === 'PRODUCER'
+  const isAdmin = user?.role === 'ADMIN'
+  // Visiteurs et consommateurs achètent ; producteurs et administrateurs ont leur propre espace
+  const canShop = !user || user.role === 'CONSUMER'
 
   // Le menu mobile se referme à chaque changement de page
   useEffect(() => { setIsMenuOpen(false) }, [pathname])
@@ -68,7 +71,9 @@ export function Header() {
             </>
           )}
 
-          {!isProducer && (
+          {isAdmin && <NavLink to="/admin" className="tp-nav-link">Administration</NavLink>}
+
+          {canShop && (
             <NavLink to="/cart" className="tp-nav-link">
               <span aria-hidden="true">🛒</span> Panier
               {count > 0 && <span className="tp-nav-badge">{count}<span className="sr-only"> article(s)</span></span>}
@@ -77,7 +82,7 @@ export function Header() {
 
           {isAuthenticated ? (
             <>
-              {!isProducer && (
+              {canShop && (
                 <>
                   <NavLink to="/orders" className="tp-nav-link">Commandes</NavLink>
                   <NavLink to="/assistant" className="tp-nav-link">Assistant</NavLink>

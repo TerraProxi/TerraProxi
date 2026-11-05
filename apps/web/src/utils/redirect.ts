@@ -5,8 +5,14 @@ export interface RedirectState {
   from?: string
 }
 
-/** Page d'accueil selon le rôle : les producteurs arrivent sur leur tableau de bord. */
-export const homeFor = (user: Pick<User, 'role'>) => (user.role === 'PRODUCER' ? '/producer/dashboard' : '/')
+const ROLE_HOMES: Readonly<Record<User['role'], string>> = {
+  CONSUMER: '/',
+  PRODUCER: '/producer/dashboard',
+  ADMIN: '/admin',
+}
+
+/** Page d'accueil selon le rôle : tableau de bord pour les producteurs, back-office pour les administrateurs. */
+export const homeFor = (user: Pick<User, 'role'>) => ROLE_HOMES[user.role]
 
 /** N'accepte qu'un chemin interne (pas de redirection ouverte vers un autre site). */
 export function readRedirectTarget(state: unknown): string | null {
