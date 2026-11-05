@@ -4,6 +4,9 @@ import { ProductCard } from '../../components/producer/ProductCard'
 import { Button } from '../../components/ui/Button'
 import { CATEGORY_LABELS, productsService, type Product } from '../../services/products.service'
 import { apiErrorMessage } from '../../services/api'
+import { useGeolocation } from '../../hooks/useGeolocation'
+
+const NEARBY_RADIUS_KM = 30
 
 const CATEGORY_FILTERS = [{ value: '', label: 'Tous' }].concat(
   Object.entries(CATEGORY_LABELS)
@@ -18,16 +21,33 @@ export function ProductsPage() {
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
   const [submittedSearch, setSubmittedSearch] = useState('')
+  const { lat, lon, loading: isLocating, error: geoError, request: locate } = useGeolocation()
+  const [isNearbyOnly, setIsNearbyOnly] = useState(false)
+  // Position connue et filtre actif : catalogue trié par distance (GET /products?lat&lon&radius)
+  const isNearbyActive = isNearbyOnly && lat != null && lon != null
+  const nearLat = isNearbyActive ? lat : undefined
+  const nearLon = isNearbyActive ? lon : undefined
 
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
     productsService
-      .list({ category: category || undefined, available: 'true', search: submittedSearch || undefined })
+      .list({ category: category || undefined, available: 'true', search: submittedSearch || undefined,
+        ...(nearLat !== undefined && nearLon !== undefined && { lat: nearLat, lon: nearLon, radius: NEARBY_RADIUS_KM }),
+      })
       .then(({ data }) => setProducts(data))
       .catch((err) => setError(apiErrorMessage(err, 'Impossible de charger les produits')))
       .finally(() => setLoading(false))
-  }, [category, submittedSearch])
+  }, [category, submittedSearch, nearLat, nearLon])
+
+  const toggleNearby = () => {
+    if (isNearbyOnly) {
+      setIsNearbyOnly(false)
+      return
+    }
+    setIsNearbyOnly(true)
+    if (lat == null || lon == null) locate()
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -55,6 +75,13 @@ export function ProductsPage() {
             <Button type="submit" variant="outline">Chercher</Button>
           </div>
         </form>
+
+        <div className="tp-cluster">
+          <button type="button" className="tp-chip" aria-pressed={isNearbyOnly} onClick={toggleNearby} disabled={isLocating}>
+            📍 {isLocating ? 'Localisation…' : `Près de moi (${NEARBY_RADIUS_KM} km)`}
+          </button>
+          {geoError && isNearbyOnly && <span className="tp-field-error" role="alert">{geoError}</span>}
+        </div>
 
         <div className="tp-cluster" role="group" aria-label="Filtrer par catégorie">
           {CATEGORY_FILTERS.map((cat) => (

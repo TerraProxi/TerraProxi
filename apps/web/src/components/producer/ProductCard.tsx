@@ -32,7 +32,12 @@ export function ProductCard({ product }: Props) {
           <Link to={`/products/${product.id}`}>{product.name}</Link>
         </h3>
 
-        {product.producer_name && <p className="tp-small tp-muted">{product.producer_name}</p>}
+        {product.producer_name && (
+          <p className="tp-small tp-muted">
+            {product.producer_name}
+            {product.distance_km !== undefined && <> · à {product.distance_km.toFixed(1).replace('.', ',')} km</>}
+          </p>
+        )}
 
         {description && (
           <p className="tp-small tp-muted">

@@ -15,13 +15,15 @@ export interface Product {
   producer_name?: string
   /** Présent dans GET /products/{id} uniquement. */
   producer_city?: string | null
+  /** Présent quand le catalogue est filtré par position (lat/lon). */
+  distance_km?: number
   created_at: string
 }
 
 /** Ce qu'une vignette produit affiche : produit du catalogue ou recommandation (AI-2). */
 export type ProductSummary =
   Pick<Product, 'id' | 'producer_id' | 'name' | 'price' | 'unit' | 'category' | 'description' | 'image_url' | 'producer_name'>
-  & Partial<Pick<Product, 'stock' | 'is_available'>>
+  & Partial<Pick<Product, 'stock' | 'is_available' | 'distance_km'>>
 
 export const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   FRUITS_VEGETABLES: '🥦 Fruits & Légumes',
@@ -49,6 +51,9 @@ export interface ProductsQuery {
   category?: string
   available?: string
   search?: string
+  lat?: number
+  lon?: number
+  radius?: number
   limit?: number
   offset?: number
 }
