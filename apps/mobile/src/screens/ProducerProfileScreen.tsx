@@ -44,7 +44,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
         <Text style={styles.errorTitle}>Producteur introuvable</Text>
         <Text style={styles.errorSub}>Ce producteur n'existe pas ou a été supprimé.</Text>
-        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()} accessibilityRole="button">
           <Text style={styles.errorBtnText}>Retour</Text>
         </TouchableOpacity>
       </View>
@@ -162,11 +162,11 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         ) : null}
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.shopBtn} onPress={handleShop}>
+          <TouchableOpacity style={styles.shopBtn} onPress={handleShop} accessibilityRole="button">
             <MaterialCommunityIcons name="storefront" size={20} color={Colors.white} />
             <Text style={styles.shopBtnText}>Voir Boutique</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
+          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage} accessibilityRole="button">
             <MaterialCommunityIcons name="chat-outline" size={20} color={Colors.primary} />
             <Text style={styles.messageBtnText}>Message</Text>
           </TouchableOpacity>
@@ -205,7 +205,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
               <Text style={styles.distanceText}>{producer.distance_km.toFixed(1)} km de vous</Text>
             )}
           </View>
-          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
+          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections} accessibilityRole="button">
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />
             <Text style={styles.directionsBtnText}>Itinéraire</Text>
           </TouchableOpacity>

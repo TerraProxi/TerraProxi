@@ -386,7 +386,7 @@ export function CartScreen() {
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="basket" size={80} color={Colors.gray300} />
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
-          <TouchableOpacity onPress={() => nav.navigate('Tabs')}>
+          <TouchableOpacity onPress={() => nav.navigate('Tabs')} accessibilityRole="button">
             <Text style={styles.emptyLink}>Commencer vos achats</Text>
           </TouchableOpacity>
         </View>

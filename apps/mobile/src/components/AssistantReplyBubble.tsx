@@ -10,7 +10,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { ChatMessageText } from './ChatMessageText'
 import { ProductPickList, type ProductPick } from './ProductPickList'
 import { useTypewriter } from '../hooks/useTypewriter'
-import { Colors, Radius, Spacing, Fonts } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Radius, Spacing, Fonts } from '../theme'
 
 interface ProducerLink {
   producer_id: string
@@ -119,6 +119,8 @@ export function AssistantReplyBubble({
             styles.assistantBubble,
             isTyping && pressed && styles.bubblePressed,
           ]}
+          disabled={!isTyping}
+          accessibilityRole={isTyping ? 'button' : 'text'}
           accessibilityHint={isTyping ? 'Appuyez pour afficher toute la réponse' : undefined}
         >
           <View style={styles.textRow}>
@@ -179,7 +181,7 @@ export function AssistantReplyBubble({
                       styles.quickReplyPill,
                       isInteractionDisabled && styles.quickReplyPillDisabled,
                       pressed && !isInteractionDisabled && styles.quickReplyPillPressed,
-                    ]}
+                    ]} accessibilityRole="button"
                   >
                     <Text style={styles.quickReplyText}>{reply}</Text>
                   </Pressable>
@@ -196,7 +198,7 @@ export function AssistantReplyBubble({
                       styles.producerCard,
                       pressed && styles.producerCardPressed,
                     ]}
-                    onPress={() => onOpenProducer(link.producer_id)}
+                    onPress={() => onOpenProducer(link.producer_id)} accessibilityRole="button"
                   >
                     <View style={styles.producerCardIcon}>
                       <MaterialCommunityIcons
@@ -325,10 +327,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 10,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: Colors.primary,
-    minWidth: 44,
+    minWidth: MIN_TOUCH_TARGET,
     alignItems: 'center',
   },
   quickReplyPillPressed: {
