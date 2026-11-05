@@ -11,6 +11,7 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, MIN_TOUCH_TARGET, Spacing, Radius, Fonts } from '../theme'
 import { api } from '../services/api'
+import { mapSearchRadiusKm } from '../services/mapRadius'
 import { CATEGORY_LABELS, type Producer } from '../types/catalog'
 import { IconButton } from '../components/IconButton'
 import { ProductImage } from '../components/ProductImage'
@@ -20,9 +21,6 @@ type Nav = StackNavigationProp<RootStackParamList>
 const ALL_CATEGORIES = 'Tous'
 /** Le filtre porte sur Producer.categories (libellés français) : /producers n'a pas de paramètre de catégorie. */
 const CATEGORIES = [ALL_CATEGORIES, ...Object.values(CATEGORY_LABELS)]
-/** Rayon maximal accepté par GET /producers (specs/api/producers-api.yaml). */
-const MAX_RADIUS_KM = 500
-const KM_PER_DEGREE = 111
 
 type LocatedProducer = Producer & { latitude: number; longitude: number }
 const isLocated = (p: Producer): p is LocatedProducer => p.latitude != null && p.longitude != null
@@ -47,7 +45,7 @@ export function MapScreen() {
   const isValidLocation = (lat: number, lng: number) => lat > 40 && lat < 52 && lng > -6 && lng < 10
 
   const fetchProducers = useCallback(async (searchQuery?: string) => {
-    const radius = Math.min(MAX_RADIUS_KM, Math.max(region.latitudeDelta, region.longitudeDelta) * KM_PER_DEGREE)
+    const radius = mapSearchRadiusKm(region.latitudeDelta, region.longitudeDelta)
     try {
       const res = await api.get<Producer[]>('/producers', {
         params: {

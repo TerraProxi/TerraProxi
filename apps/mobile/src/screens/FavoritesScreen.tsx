@@ -6,7 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Fonts, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
-import { api, apiErrorStatus } from '../services/api'
+import { fetchFavoritesByIds } from '../services/favorites'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useCartStore } from '../store/cart.store'
 import { useFocusLoader } from '../hooks/useFocusLoader'
@@ -20,22 +20,6 @@ type Tab = 'producers' | 'products'
 
 const { width } = Dimensions.get('window')
 const CARD_WIDTH = (width - Spacing.xl * 3) / 2
-const HTTP_NOT_FOUND = 404
-
-/**
- * Charge chaque favori par son identifiant. Un favori supprimé côté serveur (404) est
- * retiré de la liste locale ; les autres erreurs remontent pour afficher un message.
- */
-async function fetchByIds<T>(ids: string[], path: string, forget: (id: string) => void): Promise<T[]> {
-  const results = await Promise.allSettled(ids.map((id) => api.get<T>(`${path}/${id}`)))
-  const items: T[] = []
-  results.forEach((result, index) => {
-    if (result.status === 'fulfilled') items.push(result.value.data)
-    else if (apiErrorStatus(result.reason) === HTTP_NOT_FOUND) forget(ids[index])
-    else throw result.reason
-  })
-  return items
-}
 
 export function FavoritesScreen({ navigation }: Props) {
   const [tab, setTab] = useState<Tab>('producers')
@@ -50,8 +34,8 @@ export function FavoritesScreen({ navigation }: Props) {
 
   const load = useCallback(async () => {
     const [producerList, productList] = await Promise.all([
-      fetchByIds<Producer>(producerIds, '/producers', toggleProducer),
-      fetchByIds<Product>(productIds, '/products', toggleProduct),
+      fetchFavoritesByIds<Producer>(producerIds, '/producers', toggleProducer),
+      fetchFavoritesByIds<Product>(productIds, '/products', toggleProduct),
     ])
     setProducers(producerList)
     setProducts(productList)

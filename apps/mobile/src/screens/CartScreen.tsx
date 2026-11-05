@@ -17,7 +17,8 @@ import {
   getCartGrandTotal,
 } from '../store/cart.store'
 import { useAuthStore } from '../store/auth.store'
-import api, { apiErrorMessage } from '../services/api'
+import api from '../services/api'
+import { placeOrdersByProducer } from '../services/orders'
 import { IconButton } from '../components/IconButton'
 import { ProductImage } from '../components/ProductImage'
 
@@ -331,18 +332,8 @@ export function CartScreen() {
       }
     }
 
-    // Une commande par producteur : celles qui réussissent quittent le panier, les autres y restent
     setOrdering(true)
-    const orderIds: string[] = []
-    const failures: string[] = []
-    for (const group of [...groups]) {
-      try {
-        orderIds.push(await createOrder(group))
-        removeProducer(group.producerId)
-      } catch (err) {
-        failures.push(`• ${group.producerName} : ${apiErrorMessage(err, 'commande refusée')}`)
-      }
-    }
+    const { orderIds, failures } = await placeOrdersByProducer(groups, createOrder, removeProducer)
     setOrdering(false)
 
     const goToCheckout = () => {
