@@ -28,6 +28,7 @@ import { ProducerDashboardPage } from './pages/producer/DashboardPage'
 import { CatalogPage }           from './pages/producer/CatalogPage'
 import { OrdersManagePage }      from './pages/producer/OrdersManagePage'
 import { ProducerProfilePage as ProducerProfileEditPage } from './pages/producer/ProfilePage'
+import { AgendaPage }            from './pages/producer/AgendaPage'
 import { NewsletterPage }        from './pages/producer/NewsletterPage'
 
 // Administration
@@ -76,7 +77,8 @@ export function App() {
               <Route path="/producer/orders"          element={<RequireAuth role="PRODUCER"><OrdersManagePage /></RequireAuth>} />
               <Route path="/producer/orders/:orderId" element={<RequireAuth role="PRODUCER"><OrderDetailPage /></RequireAuth>} />
               <Route path="/producer/profile"         element={<RequireAuth role="PRODUCER"><ProducerProfileEditPage /></RequireAuth>} />
-                <Route path="/producer/newsletter"      element={<RequireAuth role="PRODUCER"><NewsletterPage /></RequireAuth>} />
+              <Route path="/producer/agenda"          element={<RequireAuth role="PRODUCER"><AgendaPage /></RequireAuth>} />
+              <Route path="/producer/newsletter"      element={<RequireAuth role="PRODUCER"><NewsletterPage /></RequireAuth>} />
 
               {/* Administration */}
               <Route path="/admin" element={<RequireAuth role="ADMIN"><AdminPage /></RequireAuth>} />

@@ -5,6 +5,7 @@ import { ProductCard } from '../../components/producer/ProductCard'
 import { ProducerMap } from '../../components/map/ProducerMap'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
+import { ProducerEvents } from '../../components/events/ProducerEvents'
 import { producersService, type Producer } from '../../services/producers.service'
 import { productsService, type Product } from '../../services/products.service'
 import { apiErrorMessage, apiErrorStatus } from '../../services/api'
@@ -100,6 +101,8 @@ export function ProducerProfilePage() {
               {products.map((p) => <ProductCard key={p.id} product={p} />)}
             </div>
           )}
+
+          <ProducerEvents producerId={producer.id} />
         </div>
 
         <aside className="tp-stack" aria-label="Informations pratiques">

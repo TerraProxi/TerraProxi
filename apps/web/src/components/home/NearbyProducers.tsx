@@ -3,29 +3,36 @@ import { Link } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { producersService, type Producer } from '../../services/producers.service'
 import { apiErrorMessage } from '../../services/api'
-import { useGeolocation, type MapNavigationState } from '../../hooks/useGeolocation'
+import type { GeoPosition, MapNavigationState } from '../../hooks/useGeolocation'
 
 const NEARBY_RADIUS_KM = 50
 const NEARBY_LIMIT = 6
 
+interface Props {
+  position: GeoPosition | null
+  isLocating: boolean
+  onLocate: () => void
+}
+
 /** Producteurs proches (après « Me localiser ») ou derniers inscrits. */
-export function NearbyProducers() {
-  const { lat, lon, loading: isLocating, error: geoError, request } = useGeolocation()
+export function NearbyProducers({ position, isLocating, onLocate }: Props) {
   const [producers, setProducers] = useState<Producer[]>([])
   const [error, setError] = useState<string | null>(null)
-  const isLocated = lat != null && lon != null
+  const isLocated = position !== null
+  const lat = position?.lat
+  const lon = position?.lon
 
   useEffect(() => {
-    const query = isLocated
+    const query = lat !== undefined && lon !== undefined
       ? { lat, lon, radius: NEARBY_RADIUS_KM, limit: NEARBY_LIMIT }
       : { limit: NEARBY_LIMIT }
     setError(null)
     producersService.list(query)
       .then(({ data }) => setProducers(data))
       .catch((err) => setError(apiErrorMessage(err, 'Impossible de charger les producteurs')))
-  }, [isLocated, lat, lon])
+  }, [lat, lon])
 
-  const mapState: MapNavigationState | undefined = isLocated ? { position: { lat, lon } } : undefined
+  const mapState: MapNavigationState | undefined = position ? { position } : undefined
 
   return (
     <section className="tp-section" aria-labelledby="titre-producteurs">
@@ -35,13 +42,12 @@ export function NearbyProducers() {
         </h2>
         <div className="tp-cluster">
           {!isLocated && (
-            <Button variant="outline" size="sm" onClick={request} loading={isLocating}>📍 Me localiser</Button>
+            <Button variant="outline" size="sm" onClick={onLocate} loading={isLocating}>📍 Me localiser</Button>
           )}
           <Link to="/map" state={mapState} style={{ fontWeight: 600 }}>Voir sur la carte →</Link>
         </div>
       </div>
 
-      {geoError && <p className="tp-field-error" role="alert">{geoError}</p>}
       {error && <p className="tp-alert tp-alert--error" role="alert">{error}</p>}
 
       {!error && producers.length === 0 ? (

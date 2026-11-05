@@ -4,10 +4,11 @@ import { MainLayout } from '../../components/layout/MainLayout'
 import { ProductCard } from '../../components/producer/ProductCard'
 import { NearbyProducers } from '../../components/home/NearbyProducers'
 import { Recommendations } from '../../components/home/Recommendations'
+import { UpcomingEvents } from '../../components/home/UpcomingEvents'
 import { productsService, type Product } from '../../services/products.service'
 import { apiErrorMessage } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import type { MapNavigationState } from '../../hooks/useGeolocation'
+import { useGeolocation, type MapNavigationState } from '../../hooks/useGeolocation'
 
 const HOME_PRODUCTS_LIMIT = 8
 
@@ -25,6 +26,8 @@ export function HomePage() {
   const [products, setProducts] = useState<Product[]>([])
   const [productsError, setProductsError] = useState<string | null>(null)
   const isConsumer = user?.role === 'CONSUMER'
+  const { lat, lon, loading: isLocating, error: geoError, request: locate } = useGeolocation()
+  const position = lat != null && lon != null ? { lat, lon } : null
 
   useEffect(() => {
     productsService.list({ limit: HOME_PRODUCTS_LIMIT, available: 'true' })
@@ -66,7 +69,9 @@ export function HomePage() {
           </div>
         </section>
 
-        <NearbyProducers />
+        {geoError && <p className="tp-alert tp-alert--error" role="alert">{geoError}</p>}
+        <NearbyProducers position={position} isLocating={isLocating} onLocate={locate} />
+        <UpcomingEvents position={position} />
 
         {isConsumer && <Recommendations />}
 
