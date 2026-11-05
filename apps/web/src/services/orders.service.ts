@@ -13,6 +13,11 @@ export interface OrderItem {
 
 export type DeliveryMode = 'pickup' | 'delivery'
 
+export const DELIVERY_MODE_LABELS: Readonly<Record<DeliveryMode, string>> = {
+  pickup:   'Retrait chez le producteur',
+  delivery: 'Livraison',
+}
+
 export interface Order {
   id: string
   consumer_id: string | null
