@@ -19,6 +19,7 @@ import { CartPage }      from './pages/consumer/CartPage'
 import { OrdersPage }    from './pages/consumer/OrdersPage'
 import { CheckoutPage }  from './pages/consumer/CheckoutPage'
 import { MessagesPage }  from './pages/consumer/MessagesPage'
+import { OrderDetailPage } from './pages/orders/OrderDetailPage'
 
 // Producteur
 import { ProducerDashboardPage } from './pages/producer/DashboardPage'
@@ -56,12 +57,14 @@ export function App() {
             {/* Consommateur — le panier reste consultable sans compte */}
             <Route path="/cart"              element={<RequireAuth role="CONSUMER" allowAnonymous><CartPage /></RequireAuth>} />
             <Route path="/orders"            element={<RequireAuth role="CONSUMER"><OrdersPage /></RequireAuth>} />
+            <Route path="/orders/:orderId"   element={<RequireAuth role="CONSUMER"><OrderDetailPage /></RequireAuth>} />
             <Route path="/checkout/:orderId" element={<RequireAuth role="CONSUMER"><CheckoutPage /></RequireAuth>} />
 
             {/* Producteur */}
             <Route path="/producer/dashboard"       element={<RequireAuth role="PRODUCER"><ProducerDashboardPage /></RequireAuth>} />
             <Route path="/producer/catalog"         element={<RequireAuth role="PRODUCER"><CatalogPage /></RequireAuth>} />
             <Route path="/producer/orders"          element={<RequireAuth role="PRODUCER"><OrdersManagePage /></RequireAuth>} />
+            <Route path="/producer/orders/:orderId" element={<RequireAuth role="PRODUCER"><OrderDetailPage /></RequireAuth>} />
             <Route path="/producer/profile"         element={<RequireAuth role="PRODUCER"><ProducerProfileEditPage /></RequireAuth>} />
 
             {/* Fallback */}
