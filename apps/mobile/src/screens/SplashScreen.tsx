@@ -6,11 +6,13 @@ import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors } from '../theme'
 import { useAuthStore } from '../store/auth.store'
+import { hasSeenOnboarding } from '../services/onboarding'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
 export function SplashScreen() {
   const nav = useNavigation<Nav>()
+  const isAuthLoading = useAuthStore((s) => s.isLoading)
   const dot1 = useRef(new Animated.Value(0)).current
   const dot2 = useRef(new Animated.Value(0)).current
   const dot3 = useRef(new Animated.Value(0)).current
@@ -33,20 +35,23 @@ export function SplashScreen() {
     ])
     anim.start()
 
-    // Utilisateur déjà connecté → directement l'application, sinon l'onboarding
-    const timer = setTimeout(() => {
-      const { isAuthenticated } = useAuthStore.getState()
-      nav.reset({ index: 0, routes: [{ name: isAuthenticated ? 'Tabs' : 'Onboarding' }] })
-    }, 3000)
+    return () => anim.stop()
+  }, [dot1, dot2, dot3])
 
-    return () => {
-      anim.stop()
-      clearTimeout(timer)
-    }
-  }, [])
+  // Attend la restauration de la session, puis : application si connecté ou onboarding déjà vu
+  useEffect(() => {
+    if (isAuthLoading) return
+    let isActive = true
+    void hasSeenOnboarding().then((seen) => {
+      if (!isActive) return
+      const { isAuthenticated } = useAuthStore.getState()
+      nav.reset({ index: 0, routes: [{ name: isAuthenticated || seen ? 'Tabs' : 'Onboarding' }] })
+    })
+    return () => { isActive = false }
+  }, [isAuthLoading, nav])
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityLabel="TerraProxi, chargement en cours">
       <View style={styles.logoCircle}>
         <MaterialCommunityIcons name="leaf" size={64} color={Colors.white} />
       </View>

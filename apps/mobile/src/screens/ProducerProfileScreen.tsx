@@ -1,43 +1,30 @@
 import { useState, useEffect } from 'react'
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions, ActivityIndicator, Linking, Alert, Platform } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Alert, Platform, Share } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Spacing, Radius } from '../theme'
 import api from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
+import { useAuthStore } from '../store/auth.store'
+import { WEB_URL } from '../config'
+import type { Producer } from '../types/catalog'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
-
-interface ProducerData {
-  id: string
-  user_id: string
-  company_name: string
-  description: string
-  address: string
-  city: string
-  latitude: number
-  longitude: number
-  banner_url: string
-  is_verified: boolean
-  first_name: string
-  last_name: string
-  distance_km?: number | null
-  categories: string[]
-  opening_hours?: string | null
-}
-
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { toggleProducer, isProducerFavorite } = useFavoritesStore()
-  const [producer, setProducer] = useState<ProducerData | null>(null)
+  const toggleProducer = useFavoritesStore((s) => s.toggleProducer)
+  const favoriteProducerIds = useFavoritesStore((s) => s.producerIds)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const [producer, setProducer] = useState<Producer | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    api.get<ProducerData>(`/producers/${producerId}`)
+    api.get<Producer>(`/producers/${producerId}`)
       .then(({ data }) => setProducer(data))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
@@ -64,19 +51,30 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
     )
   }
 
-  const favorite = isProducerFavorite(producer.id)
+  const favorite = favoriteProducerIds.includes(producer.id)
 
   const handleShop = () => {
     navigation.navigate('Catalog', { producerId: producer.id })
   }
 
   const handleMessage = () => {
+    // La messagerie exige un compte : on passe d'abord par la connexion
+    if (!isAuthenticated) {
+      navigation.navigate('Login')
+      return
+    }
     navigation.navigate('Conversation', { partnerId: producer.user_id, partnerName: producer.company_name })
   }
 
+  const handleShare = () => {
+    const url = `${WEB_URL}/producers/${producer.id}`
+    Share.share({ title: producer.company_name, message: `${producer.company_name} sur TerraProxi : ${url}` })
+      .catch(() => Alert.alert('Partage impossible', 'Le partage n\'est pas disponible sur cet appareil.'))
+  }
+
   const handleDirections = async () => {
-    const hasCoordinates = Number.isFinite(producer.latitude) && Number.isFinite(producer.longitude)
-    const destinationLabel = encodeURIComponent(`${producer.company_name}, ${producer.address}`)
+    const hasCoordinates = producer.latitude != null && producer.longitude != null
+    const destinationLabel = encodeURIComponent([producer.company_name, producer.address, producer.city].filter(Boolean).join(', '))
 
     const appUrls = hasCoordinates
       ? Platform.select({
@@ -118,30 +116,34 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.coverContainer}>
-        <Image source={{ uri: producer.banner_url }} style={styles.coverImage} />
+        <ProductImage uri={producer.banner_url} style={styles.coverImage} iconSize={56} />
         <View style={styles.coverGradient} />
         <View style={styles.topNav}>
-          <TouchableOpacity style={styles.topNavBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.white} />
-          </TouchableOpacity>
+          <IconButton icon="arrow-left" label="Retour" onPress={() => navigation.goBack()} color={Colors.white} style={styles.topNavBtn} />
           <View style={styles.topNavRight}>
-            <TouchableOpacity style={styles.topNavBtn} onPress={() => toggleProducer(producer.id)}>
-              <MaterialCommunityIcons
-                name={favorite ? 'heart' : 'heart-outline'}
-                size={22}
-                color={favorite ? Colors.danger : Colors.white}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.topNavBtn}>
-              <MaterialCommunityIcons name="share-variant-outline" size={20} color={Colors.white} />
-            </TouchableOpacity>
+            <IconButton
+              icon={favorite ? 'heart' : 'heart-outline'}
+              label={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              selected={favorite}
+              onPress={() => toggleProducer(producer.id)}
+              color={favorite ? Colors.danger : Colors.white}
+              style={styles.topNavBtn}
+            />
+            <IconButton
+              icon="share-variant-outline"
+              label={`Partager la fiche de ${producer.company_name}`}
+              onPress={handleShare}
+              color={Colors.white}
+              size={20}
+              style={styles.topNavBtn}
+            />
           </View>
         </View>
       </View>
 
       <View style={styles.contentCard}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: producer.banner_url }} style={styles.avatar} />
+          <ProductImage uri={producer.banner_url} style={styles.avatar} />
           {producer.is_verified && (
             <View style={styles.verifiedBadge}>
               <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
@@ -177,7 +179,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           <Text style={styles.sectionTitle}>À propos</Text>
         </View>
         <View style={styles.aboutCard}>
-          <Text style={styles.aboutText}>{producer.description}</Text>
+          {producer.description ? <Text style={styles.aboutText}>{producer.description}</Text> : null}
           <View style={styles.categoryPills}>
             {(producer.categories ?? []).map((cat) => (
               <View key={cat} style={styles.categoryPill}>
@@ -198,7 +200,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
             <MaterialCommunityIcons name="map-marker" size={56} color={Colors.gray300} />
           </View>
           <View style={styles.locationInfo}>
-            <Text style={styles.addressText}>{producer.address}</Text>
+            <Text style={styles.addressText}>{[producer.address, producer.postal_code, producer.city].filter(Boolean).join(', ')}</Text>
             {producer.distance_km != null && (
               <Text style={styles.distanceText}>{producer.distance_km.toFixed(1)} km de vous</Text>
             )}
@@ -255,10 +257,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   topNavBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },

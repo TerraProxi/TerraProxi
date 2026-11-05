@@ -3,23 +3,31 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors } from '../theme'
+import { Colors, MIN_TOUCH_TARGET } from '../theme'
+import { markOnboardingSeen } from '../services/onboarding'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
 export function OnboardingScreen() {
   const nav = useNavigation<Nav>()
 
+  const finish = (target: 'Tabs' | 'Login') => {
+    // Échec d'écriture sans gravité : l'onboarding sera simplement reproposé au prochain lancement
+    markOnboardingSeen().catch(() => undefined)
+    if (target === 'Tabs') nav.reset({ index: 0, routes: [{ name: 'Tabs' }] })
+    else nav.navigate('Login')
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.bgCircle1} />
       <View style={styles.bgCircle2} />
 
-      <TouchableOpacity style={styles.skipBtn} onPress={() => nav.navigate('Tabs')}>
+      <TouchableOpacity style={styles.skipBtn} onPress={() => finish('Tabs')} accessibilityRole="button">
         <Text style={styles.skipText}>Passer</Text>
       </TouchableOpacity>
 
-      <View style={styles.illustration}>
+      <View style={styles.illustration} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <View style={styles.outerCircle}>
           <View style={styles.pinsRing}>
             <MaterialCommunityIcons name="map-marker" size={28} color={Colors.primary} style={styles.pin1} />
@@ -39,18 +47,12 @@ export function OnboardingScreen() {
         Connectez-vous directement aux producteurs locaux et recevez des produits frais, bio et de saison.
       </Text>
 
-      <View style={styles.pagination}>
-        <View style={[styles.pageDot, styles.pageDotActive]} />
-        <View style={styles.pageDot} />
-        <View style={styles.pageDot} />
-      </View>
-
-      <TouchableOpacity style={styles.ctaBtn} onPress={() => nav.navigate('Tabs')}>
+      <TouchableOpacity style={styles.ctaBtn} onPress={() => finish('Tabs')} accessibilityRole="button">
         <Text style={styles.ctaText}>C'est parti</Text>
         <MaterialCommunityIcons name="arrow-right" size={20} color={Colors.white} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.loginRow} onPress={() => nav.navigate('Login')}>
+      <TouchableOpacity style={styles.loginRow} onPress={() => finish('Login')} accessibilityRole="button">
         <Text style={styles.loginText}>
           Déjà un compte ? <Text style={styles.loginLink}>Se connecter</Text>
         </Text>
@@ -90,7 +92,8 @@ const styles = StyleSheet.create({
   skipBtn: {
     alignSelf: 'flex-end',
     marginBottom: 24,
-    paddingVertical: 6,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
     paddingHorizontal: 12,
   },
   skipText: {
@@ -150,23 +153,8 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     textAlign: 'center',
     lineHeight: 23,
-    marginBottom: 28,
-    paddingHorizontal: 12,
-  },
-  pagination: {
-    flexDirection: 'row',
     marginBottom: 36,
-  },
-  pageDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.gray300,
-    marginHorizontal: 4,
-  },
-  pageDotActive: {
-    width: 26,
-    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
   },
   ctaBtn: {
     flexDirection: 'row',
@@ -190,8 +178,10 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   loginRow: {
-    marginTop: 22,
+    marginTop: 14,
     marginBottom: 40,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
   },
   loginText: {
     fontSize: 14,
