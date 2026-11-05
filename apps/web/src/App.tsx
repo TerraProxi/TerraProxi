@@ -7,6 +7,7 @@ import { RequireAuth } from './components/layout/RequireAuth'
 import { HomePage }            from './pages/public/HomePage'
 import { MapPage }             from './pages/public/MapPage'
 import { ProductsPage }        from './pages/public/ProductsPage'
+import { ProductDetailPage }   from './pages/public/ProductDetailPage'
 import { ProducerProfilePage } from './pages/public/ProducerProfilePage'
 
 // Auth
@@ -40,6 +41,7 @@ export function App() {
             <Route path="/"                 element={<HomePage />} />
             <Route path="/map"              element={<MapPage />} />
             <Route path="/products"         element={<ProductsPage />} />
+            <Route path="/products/:id"     element={<ProductDetailPage />} />
             <Route path="/producers/:id"    element={<ProducerProfilePage />} />
 
             {/* Auth */}
