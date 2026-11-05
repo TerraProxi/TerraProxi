@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Catalogue
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Catalogue public et gestion des produits par leur producteur.
     Implémentation : apps/api/src/routes/products.routes.ts — scénarios : specs/features/products.feature.
@@ -24,7 +24,10 @@ paths:
   /products:
     get:
       summary: Catalogue public
-      description: Produits de tous les producteurs, les plus récents d'abord, filtrables.
+      description: |
+        Produits de tous les producteurs, les plus récents d'abord, filtrables (CAT-4).
+        Avec lat et lon, seuls les producteurs à moins de radius km (30 par défaut) sont retenus,
+        du plus proche au plus éloigné, et chaque produit porte distance_km.
       operationId: listProducts
       tags: [Products]
       security: []
@@ -34,6 +37,26 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: lat
+          in: query
+          description: À fournir avec lon
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: radius
+          in: query
+          description: Rayon en km autour de lat/lon
+          schema:
+            type: number
+            minimum: 0.1
+            maximum: 500
         - name: category
           in: query
           schema:

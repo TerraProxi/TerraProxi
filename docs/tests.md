@@ -22,14 +22,14 @@ sont ignorés et seuls les tests unitaires tournent.
 
 ## 2. Tests automatisés — résultats
 
-Dernière exécution : 04/11/2026 — **115 tests, 115 réussis, 0 échec** (~25 s).
+Dernière exécution : 05/11/2026 — **184 tests API, 184 réussis, 0 échec** (~90 s sous Windows).
 
 ### Conformité aux specs
 
 | Contrôle | Résultat |
 |----------|----------|
-| Les 28 routes de l'API et celles de `specs/api` sont identiques (aucune manquante, aucune en trop, aucune décrite deux fois) | ✅ |
-| Paramètres de requête et champs de corps identiques, route par route (50 vérifications) | ✅ |
+| Les 56 routes de l'API et celles de `specs/api` sont identiques (aucune manquante, aucune en trop, aucune décrite deux fois) | ✅ |
+| Paramètres de requête et champs de corps identiques, route par route | ✅ |
 | Chaque réponse obtenue par les tests d'intégration a un code documenté et un corps conforme au schéma de la spec, champs en trop refusés | ✅ |
 
 ### Unitaires
@@ -38,6 +38,7 @@ Dernière exécution : 04/11/2026 — **115 tests, 115 réussis, 0 échec** (~25
 |---------|--------------|
 | Cycle de vie des commandes | 6 transitions autorisées et 6 refusées côté producteur ; le client ne peut qu'annuler une commande non payée ; états terminaux ; remise en stock uniquement à l'annulation |
 | Jetons | conversion des durées (`7d`, `12h`, `30m`, valeurs invalides) ; empreinte SHA-256 du refresh token |
+| Sécurité | limiteur (blocage, `Retry-After`, fenêtre, clés indépendantes) ; `JWT_SECRET` faible refusé en production ; URL `javascript:` / `data:` refusées ; type d'image déduit des octets |
 
 ### Intégration (API + PostGIS)
 
@@ -56,13 +57,25 @@ Dernière exécution : 04/11/2026 — **115 tests, 115 réussis, 0 échec** (~25
 | Messagerie | envoi (contenu nettoyé) ; boîte de réception par interlocuteur ; compteur de non-lus ; lecture marque comme lu ; nom du producteur affiché ; message vide, à soi-même, destinataire inconnu refusés | ✅ |
 | RGPD | export JSON complet sans hash (consommateur et producteur) ; suppression du compte : messages et sessions effacés, commandes anonymisées, accès refusé ensuite ; suppression d'un producteur : lignes de commande gardent le nom du produit | ✅ |
 | Prévisions IA | réservées au producteur propriétaire (403 sinon) | ✅ |
+| Paiement : annulation et remboursement | double clic → un seul PaymentIntent ; annulation pendant le paiement → intent annulé, stock remis ; paiement déjà validé → 409 ; paiement reçu après annulation → remboursé une seule fois ; annulation producteur d'une commande payée → remboursement ; Stripe muet → 502 sans modification ; paiement refusé → client prévenu | ✅ |
+| Expiration | commande non payée depuis plus d'une heure annulée, stock libéré, client notifié ; commande récente intacte | ✅ |
+| Notifications | commande payée → producteur et client notifiés, push envoyé ; préparation et commande prête ; message sans rafale, lu avec la conversation ; lecture une par une / toutes ; 404 sur celle d'un autre ; jeton push validé et unique par appareil | ✅ |
+| Agenda | publication, agenda public par producteur et par zone ; passés masqués ; dates incohérentes 400 ; propriétaire seul (403) | ✅ |
+| Statistiques | chiffre du jour, panier moyen, commandes à préparer, courbe complète, top produits, stock bas ; commandes non payées exclues ; 403 consommateur | ✅ |
+| Newsletter | destinataires = clients abonnés ayant payé ; une par 24 h (429) ; brouillon IA : 503 sans clé, clé en en-tête, 403 consommateur | ✅ |
+| Administration | 401 / 403 hors ADMIN ; indicateurs ; recherche ; suspension immédiate (jeton, refresh, connexion) puis réactivation ; pas d'auto-suspension ; vérification d'un producteur notifiée | ✅ |
+| Sécurité | 429 après 5 échecs de connexion, même avec le bon mot de passe ; compteur remis à zéro ; URL piégées 400 ; deux clients ne peuvent pas s'écrire ; `/health` détaillé | ✅ |
+| Photos | PNG accepté et téléchargeable ; script déguisé 400 ; plus de 5 Mo 413 ; sans compte 401 ; fichiers effacés avec le compte | ✅ |
+| Droit à l'oubli et commandes | producteur avec commande payée 409 puis OK une fois remise ; commandes non payées annulées et stock remis | ✅ |
 
 Commande : `pnpm test` (avec `TEST_DATABASE_URL`). Détail : `apps/api/tests/`.
 
 ### Non couvert automatiquement
 
 - Interfaces web et mobile (pas de tests de composants ni E2E) : couvertes par la recette manuelle.
-- Assistant IA Gemini : dépend d'un service externe, vérifié manuellement avec une clé de test.
+- Assistant IA Gemini : dépend d'un service externe, vérifié manuellement avec une clé de test
+  (la newsletter IA est testée avec un faux transport Gemini).
+- Push mobile réel (Expo) : nécessite un téléphone et un build EAS ; l'envoi est testé avec un faux émetteur.
 - Paiement réel Stripe de bout en bout : vérifié manuellement en mode test (§3).
 
 ## 3. Recette manuelle

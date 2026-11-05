@@ -1,6 +1,7 @@
 # language: fr
 # Contrat : specs/api/auth-api.yaml, specs/api/users-api.yaml
-# Vérifié par : apps/api/tests/integration/auth.test.ts
+# Vérifié par : apps/api/tests/integration/auth.test.ts, admin-security.test.ts,
+#               apps/api/tests/unit/security.test.ts
 
 Fonctionnalité: Inscription
   En tant que visiteur, je crée un compte consommateur ou producteur après avoir accepté la
@@ -76,3 +77,29 @@ Fonctionnalité: Supervision
   Scénario: Santé de l'API
     Quand j'appelle GET /health
     Alors la réponse est 200 avec "status" à "ok" et "database" à "up"
+
+Fonctionnalité: Protection contre les tentatives frauduleuses (CDC « Sécurisation »)
+
+  Scénario: Force brute sur un compte
+    Étant donné un compte existant
+    Quand 5 connexions échouent depuis la même adresse
+    Alors la 6e tentative répond 429 avec l'en-tête Retry-After, même avec le bon mot de passe
+
+  Scénario: Une connexion réussie remet le compteur à zéro
+    Étant donné 4 échecs de connexion
+    Quand je me connecte avec le bon mot de passe
+    Alors la réponse est 200 et un nouvel échec répond 401
+
+  Scénario: Compte suspendu ou supprimé
+    Quand le compte est suspendu par un administrateur ou supprimé
+    Alors son jeton d'accès est refusé (401) dès la requête suivante, sans attendre son expiration
+
+  Scénario: Secret JWT faible en production
+    Quand l'API démarre en production avec un JWT_SECRET de moins de 32 caractères ou celui de .env.example
+    Alors elle refuse de démarrer
+
+  Scénario: URL piégée (XSS stockée)
+    Quand un producteur enregistre une photo "javascript:alert(1)" ou un site "data:text/html,…"
+    Alors la réponse est 400
+    Quand il enregistre une chaîne vide
+    Alors le champ est effacé

@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Agenda des producteurs
+  version: 1.2.0
+  description: |
+    Agenda des producteurs (PROD-6) : marchés, portes ouvertes, ventes à la ferme.
+    Lecture publique ; écriture réservée au producteur propriétaire.
+    Implémentation : apps/api/src/routes/events.routes.ts — scénarios : specs/features/agenda.feature.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production
+  - url: http://localhost:3002/api
+    description: Développement
+tags:
+  - name: Events
+    description: Agenda des producteurs
+
+paths:
+  /events:
+    get:
+      summary: Agenda public
+      description: |
+        Événements à venir ou en cours, du plus proche dans le temps au plus lointain.
+        Filtres : un producteur, ou une zone (lat, lon et radius en km, 30 par défaut).
+      operationId: listEvents
+      tags: [Events]
+      security: []
+      parameters:
+        - name: producer_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: lat
+          in: query
+          description: À fournir avec lon
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lon
+          in: query
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: radius
+          in: query
+          schema:
+            type: number
+            minimum: 0.1
+            maximum: 500
+        - name: include_past
+          in: query
+          description: Inclure les événements terminés
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Événements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/event.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      summary: Ajouter un événement
+      description: Rattaché à la fiche du producteur connecté (404 si elle n'existe pas).
+      operationId: createEvent
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/event.schema.json#/$defs/EventInput'
+      responses:
+        '201':
+          description: Événement créé
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/event.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /events/mine:
+    get:
+      summary: Mon agenda
+      description: Tous les événements du producteur connecté, passés compris, les plus récents d'abord.
+      operationId: listMyEvents
+      tags: [Events]
+      responses:
+        '200':
+          description: Événements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/event.schema.json'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /events/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      summary: Modifier un événement
+      description: Remplace tous les champs ; réservé au producteur propriétaire.
+      operationId: updateEvent
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/event.schema.json#/$defs/EventInput'
+      responses:
+        '200':
+          description: Événement modifié
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/event.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Supprimer un événement
+      description: Réservé au producteur propriétaire.
+      operationId: deleteEvent
+      tags: [Events]
+      responses:
+        '204':
+          description: Événement supprimé
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: 20 par défaut, 100 au maximum
+      schema:
+        type: integer
+        minimum: 1
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+  responses:
+    BadRequest:
+      description: Données invalides (fin avant le début, lat sans lon…)
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Forbidden:
+      description: Réservé au producteur propriétaire
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Événement ou profil producteur introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

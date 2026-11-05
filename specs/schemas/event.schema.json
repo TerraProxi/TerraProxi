@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event.schema.json",
+  "title": "ProducerEvent",
+  "description": "Événement de l'agenda d'un producteur : marché, portes ouvertes, vente à la ferme (table producer_events, PROD-6).",
+  "type": "object",
+  "required": ["id", "producer_id", "producer_name", "producer_city", "title", "description", "location", "starts_at", "ends_at", "created_at", "updated_at"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "producer_id": { "type": "string", "format": "uuid" },
+    "producer_name": { "type": "string" },
+    "producer_city": { "type": ["string", "null"] },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "description": { "type": ["string", "null"], "maxLength": 5000 },
+    "location": { "type": ["string", "null"], "maxLength": 500, "description": "Lieu s'il diffère de l'exploitation (ex. Marché des Arceaux)" },
+    "starts_at": { "type": "string", "format": "date-time" },
+    "ends_at": { "type": ["string", "null"], "format": "date-time", "description": "Postérieur à starts_at" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "EventInput": {
+      "type": "object",
+      "description": "Corps de POST /events et PUT /events/{id}",
+      "required": ["title", "starts_at"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "location": { "type": "string", "maxLength": 500 },
+        "starts_at": { "type": "string", "format": "date-time" },
+        "ends_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

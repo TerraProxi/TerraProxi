@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "product.schema.json",
   "title": "Product",
-  "description": "Produit du catalogue (table products). producer_name est ajouté dans les listes et la fiche, producer_city dans la fiche.",
+  "description": "Produit du catalogue (table products). producer_name est ajouté dans les listes et la fiche, producer_city dans la fiche, distance_km dans le catalogue filtré par position.",
   "type": "object",
   "required": ["id", "producer_id", "name", "price", "stock", "unit", "category", "is_available", "created_at", "updated_at"],
   "properties": {
@@ -14,12 +14,13 @@
     "stock": { "type": "integer", "minimum": 0 },
     "unit": { "type": "string", "minLength": 1, "maxLength": 50, "examples": ["kg", "unité", "boîte de 12"] },
     "category": { "$ref": "#/$defs/ProductCategory" },
-    "image_url": { "type": ["string", "null"], "maxLength": 500 },
+    "image_url": { "type": ["string", "null"], "maxLength": 500, "pattern": "^(https?://[^\\s<>\"]+)?$" },
     "is_available": { "type": "boolean" },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },
     "producer_name": { "type": "string" },
-    "producer_city": { "type": ["string", "null"] }
+    "producer_city": { "type": ["string", "null"] },
+    "distance_km": { "type": "number", "minimum": 0, "description": "Distance au point demandé (GET /products?lat=&lon=)" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -38,7 +39,7 @@
         "stock": { "type": "integer", "minimum": 0 },
         "unit": { "type": "string", "minLength": 1, "maxLength": 50, "default": "unité" },
         "category": { "$ref": "#/$defs/ProductCategory", "default": "OTHER" },
-        "image_url": { "type": "string", "maxLength": 500 },
+        "image_url": { "type": "string", "maxLength": 500, "pattern": "^(https?://[^\\s<>\"]+)?$", "description": "URL http(s) ; chaîne vide = pas de photo" },
         "is_available": { "type": "boolean", "default": true }
       },
       "additionalProperties": false

@@ -61,7 +61,7 @@ mot de passe `TerraProxi2026!`.
 ```bash
 pnpm spec:lint    # contrats OpenAPI
 pnpm typecheck    # API, web, mobile
-pnpm test         # 115 tests API : unitaires, conformité aux specs, intégration PostGIS
+pnpm test         # 184 tests API : unitaires, conformité aux specs, intégration PostGIS
 ```
 
 La CI GitHub Actions exécute ces vérifications, construit les images Docker et vérifie que l'API

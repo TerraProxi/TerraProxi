@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Assistant IA et données
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Assistant conversationnel (Google Gemini) nourri du catalogue des producteurs proches,
     recommandations et prévisions calculées sur l'historique des commandes.
@@ -48,12 +48,63 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/QuotaExceeded'
         '503':
-          description: GEMINI_API_KEY absente, Gemini indisponible ou réponse inexploitable
+          $ref: '#/components/responses/AiUnavailable'
+
+  /ai/newsletter:
+    post:
+      summary: Rédiger une newsletter avec l'IA
+      description: |
+        AI-4 — Brouillon (objet et texte) rédigé par Gemini à partir des produits disponibles et des
+        prochains événements du producteur connecté. Rien n'est envoyé : le producteur relit puis
+        envoie avec POST /producers/me/newsletters. Compte dans le quota IA de l'utilisateur.
+      operationId: draftNewsletter
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic:
+                  type: string
+                  maxLength: 500
+                  description: Sujet souhaité (ex. « arrivée des fraises »)
+                tone:
+                  type: string
+                  enum: [chaleureux, informatif, festif]
+                  default: chaleureux
+              additionalProperties: false
+      responses:
+        '200':
+          description: Brouillon
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/newsletter.schema.json#/$defs/NewsletterDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Réservé au rôle PRODUCER
           content:
             application/json:
               schema:
                 $ref: '../contracts/error-envelope.schema.json'
+        '404':
+          description: Fiche producteur pas encore créée
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '429':
+          $ref: '#/components/responses/QuotaExceeded'
+        '503':
+          $ref: '#/components/responses/AiUnavailable'
 
   /ai/recommendations:
     get:
@@ -194,6 +245,18 @@ components:
             $ref: '../contracts/error-envelope.schema.json'
     Unauthorized:
       description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    QuotaExceeded:
+      description: Quota IA atteint (RATE_LIMIT_AI_PER_USER appels par heure) ; en-tête Retry-After
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    AiUnavailable:
+      description: GEMINI_API_KEY absente, Gemini indisponible ou réponse inexploitable
       content:
         application/json:
           schema:

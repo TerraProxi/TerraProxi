@@ -97,3 +97,7 @@ export interface JwtPayload {
   iat?: number
   exp?: number
 }
+
+/** Colonnes du profil renvoyées aux clients (specs/schemas/user.schema.json). */
+export const PUBLIC_USER_COLUMNS =
+  'id, email, first_name, last_name, role, phone, avatar_url, newsletter_opt_in, created_at'

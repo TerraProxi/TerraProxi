@@ -1,10 +1,13 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Authentification
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Inscription, connexion et sessions. Le jeton d'accès (JWT, 15 min) est renouvelé avec un
     refresh token opaque (7 jours, usage unique) ; seule son empreinte SHA-256 est stockée.
+    Protection contre la force brute : au-delà de 5 échecs de connexion par compte et par IP
+    (30 par IP) en 15 minutes, et de 10 inscriptions par IP et par heure, l'API répond 429
+    avec l'en-tête Retry-After.
     Implémentation : apps/api/src/routes/auth.routes.ts — scénarios : specs/features/auth.feature.
   contact:
     name: TerraProxi Team
@@ -61,6 +64,10 @@ paths:
                 gdpr_consent:
                   type: boolean
                   description: Doit valoir true, sinon 400
+                newsletter_opt_in:
+                  type: boolean
+                  default: false
+                  description: Accepte de recevoir les newsletters des producteurs chez qui il a commandé
               additionalProperties: false
       responses:
         '201':
@@ -73,11 +80,15 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /auth/login:
     post:
       summary: Connexion
-      description: Vérifie l'email et le mot de passe (bcrypt). Un compte désactivé est refusé comme un mauvais mot de passe.
+      description: |
+        Vérifie l'email et le mot de passe (bcrypt). Un compte désactivé ou un email inconnu est refusé
+        comme un mauvais mot de passe, en temps constant. Les échecs répétés sont bloqués (429).
       operationId: login
       tags: [Auth]
       security: []
@@ -107,6 +118,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /auth/refresh:
     post:
@@ -231,6 +244,17 @@ components:
             $ref: '../contracts/error-envelope.schema.json'
     Conflict:
       description: Email déjà utilisé
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    TooManyRequests:
+      description: Trop de tentatives ; réessayer après le délai indiqué
+      headers:
+        Retry-After:
+          description: Secondes à attendre
+          schema:
+            type: integer
       content:
         application/json:
           schema:
