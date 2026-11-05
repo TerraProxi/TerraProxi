@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { AuthProvider } from './contexts/AuthContext'
 import { CartProvider } from './contexts/CartContext'
-import type { ReactNode } from 'react'
+import { RequireAuth } from './components/layout/RequireAuth'
 
 // Pages publiques
-import { HomePage }           from './pages/public/HomePage'
-import { MapPage }            from './pages/public/MapPage'
-import { ProductsPage }       from './pages/public/ProductsPage'
+import { HomePage }            from './pages/public/HomePage'
+import { MapPage }             from './pages/public/MapPage'
+import { ProductsPage }        from './pages/public/ProductsPage'
 import { ProducerProfilePage } from './pages/public/ProducerProfilePage'
 
 // Auth
@@ -30,21 +30,6 @@ import { AccountPage }     from './pages/account/AccountPage'
 import { PrivacyPage }     from './pages/legal/PrivacyPage'
 import { LegalNoticePage } from './pages/legal/LegalNoticePage'
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
-  if (isLoading) return null
-  if (!isAuthenticated) return <Navigate to="/login" replace />
-  return <>{children}</>
-}
-
-function RequireProducer({ children }: { children: ReactNode }) {
-  const { isAuthenticated, user, isLoading } = useAuth()
-  if (isLoading) return null
-  if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (user?.role !== 'PRODUCER') return <Navigate to="/" replace />
-  return <>{children}</>
-}
-
 export function App() {
   return (
     <BrowserRouter>
@@ -63,19 +48,19 @@ export function App() {
             <Route path="/privacy"  element={<PrivacyPage />} />
             <Route path="/legal"    element={<LegalNoticePage />} />
             <Route path="/account"  element={<RequireAuth><AccountPage /></RequireAuth>} />
-
-            {/* Consommateur */}
-            <Route path="/cart"              element={<RequireAuth><CartPage /></RequireAuth>} />
-            <Route path="/orders"            element={<RequireAuth><OrdersPage /></RequireAuth>} />
-            <Route path="/checkout/:orderId" element={<RequireAuth><CheckoutPage /></RequireAuth>} />
-            <Route path="/messages"          element={<RequireAuth><MessagesPage /></RequireAuth>} />
+            <Route path="/messages"            element={<RequireAuth><MessagesPage /></RequireAuth>} />
             <Route path="/messages/:partnerId" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 
+            {/* Consommateur — le panier reste consultable sans compte */}
+            <Route path="/cart"              element={<RequireAuth role="CONSUMER" allowAnonymous><CartPage /></RequireAuth>} />
+            <Route path="/orders"            element={<RequireAuth role="CONSUMER"><OrdersPage /></RequireAuth>} />
+            <Route path="/checkout/:orderId" element={<RequireAuth role="CONSUMER"><CheckoutPage /></RequireAuth>} />
+
             {/* Producteur */}
-            <Route path="/producer/dashboard" element={<RequireProducer><ProducerDashboardPage /></RequireProducer>} />
-            <Route path="/producer/catalog"   element={<RequireProducer><CatalogPage /></RequireProducer>} />
-            <Route path="/producer/orders"    element={<RequireProducer><OrdersManagePage /></RequireProducer>} />
-            <Route path="/producer/profile"   element={<RequireProducer><ProducerProfileEditPage /></RequireProducer>} />
+            <Route path="/producer/dashboard"       element={<RequireAuth role="PRODUCER"><ProducerDashboardPage /></RequireAuth>} />
+            <Route path="/producer/catalog"         element={<RequireAuth role="PRODUCER"><CatalogPage /></RequireAuth>} />
+            <Route path="/producer/orders"          element={<RequireAuth role="PRODUCER"><OrdersManagePage /></RequireAuth>} />
+            <Route path="/producer/profile"         element={<RequireAuth role="PRODUCER"><ProducerProfileEditPage /></RequireAuth>} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
