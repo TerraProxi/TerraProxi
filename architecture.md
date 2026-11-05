@@ -7,13 +7,15 @@ services tiers et déploiement. Les contrats détaillés (routes, schémas, scé
 ## 1. Architecture globale
 
 ```
- Navigateur ──HTTPS──▶ Caddy (TLS 1.3) ──▶ front : nginx, site React (app.terraproxi.fr)
- Mobile (Expo) ─HTTPS─▶ Caddy ───────────▶ back : API Bun + Elysia (gateway.terraproxi.fr)
-                                               │
-                                               ├──▶ PostgreSQL 16 + PostGIS (réseau interne)
-                                               ├──▶ Stripe (PaymentIntent, remboursement, webhook)
-                                               ├──▶ Google Gemini (assistant, newsletter)
-                                               └──▶ Expo Push (notifications mobiles)
+ Navigateur ─HTTPS─▶ Caddy ─▶ front : site React (app.terraproxi.fr)
+ Mobile ────HTTPS─▶ Caddy ─▶ back : API Bun + Elysia (gateway.terraproxi.fr)
+                               │
+                               ├─▶ PostgreSQL 16 + PostGIS (réseau interne)
+                               ├─▶ Stripe (paiement, remboursement, webhook)
+                               ├─▶ Google Gemini (assistant, newsletter)
+                               └─▶ Expo Push (notifications mobiles)
+
+ Caddy : TLS 1.3, certificats Let's Encrypt, en-têtes de sécurité
 ```
 
 - **Monorepo pnpm** : `apps/api`, `apps/web`, `apps/mobile`, `packages/shared-types`, `specs/`.
