@@ -163,7 +163,7 @@ function PrivacySection() {
   return (
     <section className="tp-card">
       <h2 style={{ marginBottom: 'var(--space-2)' }}>Mes données personnelles</h2>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
+      <p className="tp-muted" style={{ marginBottom: 'var(--space-4)' }}>
         Vos droits RGPD, détaillés dans la <Link to="/privacy">politique de confidentialité</Link>.
       </p>
       <FeedbackLine feedback={feedback} />
@@ -177,8 +177,8 @@ function PrivacySection() {
 
 export function AccountPage() {
   return (
-    <MainLayout>
-      <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-6)' }}>Mon compte</h1>
+    <MainLayout title="Mon compte">
+      <h1 className="tp-page-title">Mon compte</h1>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 820 }}>
         <ProfileSection />
         <SecuritySection />

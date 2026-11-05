@@ -94,16 +94,16 @@ export function ProducerProfilePage() {
     }
   }
 
-  if (loading) return <MainLayout><p>Chargement…</p></MainLayout>
+  if (loading) return <MainLayout title="Ma fiche producteur"><p>Chargement…</p></MainLayout>
 
-  const hasPosition = form.latitude !== undefined && form.longitude !== undefined
+  const { latitude, longitude } = form
 
   return (
-    <MainLayout>
-      <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-2)' }}>
+    <MainLayout title="Ma fiche producteur">
+      <h1 className="tp-page-title" style={{ marginBottom: 'var(--space-2)' }}>
         {isNew ? 'Créer ma fiche producteur' : 'Ma fiche producteur'}
       </h1>
-      <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)' }}>
+      <p className="tp-muted" style={{ marginBottom: 'var(--space-6)' }}>
         Ces informations apparaissent sur la carte et sur votre page publique.
       </p>
 
@@ -135,9 +135,9 @@ export function ProducerProfilePage() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
           <Button variant="outline" onClick={locate} loading={locating}>📍 Localiser l'adresse</Button>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-            {hasPosition
-              ? `Position : ${form.latitude!.toFixed(4)}, ${form.longitude!.toFixed(4)}`
+          <span className="tp-small tp-muted" role="status">
+            {latitude !== undefined && longitude !== undefined
+              ? `Position : ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
               : 'Sans position, vous n\'apparaissez pas sur la carte.'}
           </span>
         </div>

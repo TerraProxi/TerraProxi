@@ -1,13 +1,37 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCart } from '../../contexts/CartContext'
 import { useUnreadMessages } from '../../hooks/useUnreadMessages'
+
+const NAV_ID = 'navigation-principale'
 
 export function Header() {
   const { isAuthenticated, user, logout } = useAuth()
   const { count } = useCart()
   const unread = useUnreadMessages(isAuthenticated)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const isProducer = user?.role === 'PRODUCER'
+
+  // Le menu mobile se referme à chaque changement de page
+  useEffect(() => { setIsMenuOpen(false) }, [pathname])
+
+  // Échap referme le menu et rend le focus au bouton ; à l'ouverture, focus sur le premier lien
+  useEffect(() => {
+    if (!isMenuOpen) return
+    navRef.current?.querySelector<HTMLElement>('a, button')?.focus()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setIsMenuOpen(false)
+      toggleRef.current?.focus()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isMenuOpen])
 
   const handleLogout = async () => {
     await logout()
@@ -15,151 +39,66 @@ export function Header() {
   }
 
   return (
-    <header
-      style={{
-        background: 'var(--color-white)',
-        borderBottom: '1px solid var(--color-border)',
-        boxShadow: 'var(--shadow-sm)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-      }}
-    >
-      <div
-        className="container"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: 64,
-        }}
-      >
-        {/* Logo */}
-        <Link
-          to="/"
-          style={{
-            fontFamily: 'var(--font-heading)',
-            fontWeight: 700,
-            fontSize: 'var(--text-xl)',
-            color: 'var(--color-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          🌱 TerraProxi
+    <header className="tp-header">
+      <div className="container tp-header__bar">
+        <Link to="/" className="tp-header__logo">
+          <span aria-hidden="true">🌱</span> TerraProxi
         </Link>
 
-        {/* Nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-          <Link to="/map" style={{ color: 'var(--color-dark)', fontWeight: 500 }}>
-            Carte
-          </Link>
-          <Link to="/products" style={{ color: 'var(--color-dark)', fontWeight: 500 }}>
-            Produits
-          </Link>
+        <button
+          ref={toggleRef}
+          type="button"
+          className="tp-header__toggle"
+          aria-expanded={isMenuOpen}
+          aria-controls={NAV_ID}
+          onClick={() => setIsMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">{isMenuOpen ? '✕' : '☰'}</span>
+          Menu
+        </button>
+
+        <nav id={NAV_ID} ref={navRef} className="tp-header__nav" data-open={isMenuOpen} aria-label="Navigation principale">
+          <NavLink to="/map" className="tp-nav-link">Carte</NavLink>
+          <NavLink to="/products" className="tp-nav-link">Produits</NavLink>
+
+          {isProducer && (
+            <>
+              <NavLink to="/producer/dashboard" className="tp-nav-link">Mon espace</NavLink>
+              <NavLink to="/producer/orders" className="tp-nav-link">Commandes reçues</NavLink>
+            </>
+          )}
+
+          {!isProducer && (
+            <NavLink to="/cart" className="tp-nav-link">
+              <span aria-hidden="true">🛒</span> Panier
+              {count > 0 && <span className="tp-nav-badge">{count}<span className="sr-only"> article(s)</span></span>}
+            </NavLink>
+          )}
 
           {isAuthenticated ? (
             <>
-              {user?.role === 'PRODUCER' && (
-                <Link
-                  to="/producer/dashboard"
-                  style={{ color: 'var(--color-secondary)', fontWeight: 600 }}
-                >
-                  Mon espace
-                </Link>
+              {!isProducer && (
+                <>
+                  <NavLink to="/orders" className="tp-nav-link">Commandes</NavLink>
+                </>
               )}
-              <Link
-                to="/cart"
-                style={{ position: 'relative', color: 'var(--color-dark)' }}
-              >
-                <span aria-hidden="true">🛒</span>
-                <span className="sr-only">Panier ({count} article(s))</span>
-                {count > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: -6,
-                      right: -8,
-                      background: 'var(--color-primary)',
-                      color: '#fff',
-                      borderRadius: '50%',
-                      width: 18,
-                      height: 18,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
-              </Link>
-              <Link
-                to="/orders"
-                style={{ color: 'var(--color-dark)', fontWeight: 500 }}
-              >
-                Commandes
-              </Link>
-              <Link
-                to="/messages"
-                style={{ color: 'var(--color-dark)', fontWeight: 500 }}
-              >
+              <NavLink to="/messages" className="tp-nav-link">
                 Messages
                 {unread > 0 && (
-                  <span
-                    aria-label={`${unread} message(s) non lu(s)`}
-                    style={{
-                      marginLeft: 6,
-                      background: '#B91C1C',
-                      color: '#fff',
-                      borderRadius: 'var(--radius-full)',
-                      padding: '0 7px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {unread}
+                  <span className="tp-nav-badge tp-nav-badge--alert">
+                    {unread}<span className="sr-only"> non lu(s)</span>
                   </span>
                 )}
-              </Link>
-              <Link to="/account" style={{ color: 'var(--color-dark)', fontWeight: 500 }}>
-                Mon compte
-              </Link>
-              <button
-                onClick={handleLogout}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.375rem 0.875rem',
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                }}
-              >
+              </NavLink>
+              <NavLink to="/account" className="tp-nav-link">Mon compte</NavLink>
+              <button type="button" className="tp-btn tp-btn--ghost tp-btn--sm" onClick={handleLogout}>
                 Déconnexion
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" style={{ color: 'var(--color-dark)', fontWeight: 500 }}>
-                Connexion
-              </Link>
-              <Link
-                to="/register"
-                style={{
-                  background: 'var(--color-secondary)',
-                  color: '#fff',
-                  padding: '0.5rem 1.25rem',
-                  borderRadius: 'var(--radius-md)',
-                  fontWeight: 600,
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                S'inscrire
-              </Link>
+              <NavLink to="/login" className="tp-nav-link">Connexion</NavLink>
+              <Link to="/register" className="tp-btn tp-btn--secondary tp-btn--sm">S'inscrire</Link>
             </>
           )}
         </nav>
