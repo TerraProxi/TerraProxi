@@ -24,11 +24,28 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY)
 }
 
-/** Message d'erreur lisible à partir de l'enveloppe {error, status} de l'API. */
+const SECONDS_PER_MINUTE = 60
+
+/** Délai indiqué par l'en-tête Retry-After d'une réponse 429 (en secondes). */
+export function retryAfterSeconds(err: unknown): number | null {
+  if (!(err instanceof AxiosError)) return null
+  const seconds = Number(err.response?.headers['retry-after'])
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+}
+
+function formatRetryDelay(seconds: number): string {
+  if (seconds < SECONDS_PER_MINUTE) return `${seconds} s`
+  return `${Math.ceil(seconds / SECONDS_PER_MINUTE)} min`
+}
+
+/** Message d'erreur lisible à partir de l'enveloppe {error, status} de l'API (délai d'attente compris pour un 429). */
 export function apiErrorMessage(err: unknown, fallback = 'Une erreur est survenue'): string {
   if (err instanceof AxiosError) {
     const data = err.response?.data as { error?: string } | undefined
-    if (data?.error) return data.error
+    const retryAfter = retryAfterSeconds(err)
+    const retryHint = err.response?.status === 429 && retryAfter ? ` Réessayez dans ${formatRetryDelay(retryAfter)}.` : ''
+    if (data?.error) return `${data.error}${retryHint}`
+    if (err.response?.status === 429) return `Trop de tentatives.${retryHint}`
     if (err.code === AxiosError.ECONNABORTED) return 'Le serveur met trop de temps à répondre, réessayez'
     if (!err.response) return 'Serveur injoignable, vérifiez votre connexion'
   }
