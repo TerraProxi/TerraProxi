@@ -632,3 +632,28 @@
 .tp-event__date { font-size: var(--text-sm); font-weight: 600; color: var(--color-secondary-strong); }
 .tp-event__date::first-letter { text-transform: uppercase; }
 .tp-event__title { font-size: var(--text-base); }
+
+/* ── Envoi de photo ──────────────────────────────────────────────────────── */
+
+.tp-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tp-upload__preview {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-light-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+.tp-upload input[type="file"] { max-width: 100%; font-size: var(--text-sm); }

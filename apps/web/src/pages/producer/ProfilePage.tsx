@@ -4,6 +4,7 @@ import { AxiosError } from 'axios'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { ImageUpload } from '../../components/ui/ImageUpload'
 import { producersService, type ProducerInput } from '../../services/producers.service'
 import { apiErrorMessage } from '../../services/api'
 import { geocodeAddress } from '../../services/geocoding.service'
@@ -132,6 +133,9 @@ export function ProducerProfilePage() {
           <Input label="Photo de couverture (URL)" id="banner_url" type="url" value={form.banner_url ?? ''}
             onChange={(e) => set('banner_url')(e.target.value)} />
         </div>
+
+        <ImageUpload id="banniere" label="Envoyer une photo de couverture" value={form.banner_url ?? ''}
+          onUploaded={(url) => setForm((f) => ({ ...f, banner_url: url }))} />
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
           <Button variant="outline" onClick={locate} loading={locating}>📍 Localiser l'adresse</Button>

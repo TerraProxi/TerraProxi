@@ -6,6 +6,7 @@ import { apiErrorMessage, apiErrorStatus } from '../../services/api'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { ImageUpload } from '../../components/ui/ImageUpload'
 import { formatPrice } from '../../utils/format'
 
 const CATEGORIES = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))
@@ -111,8 +112,11 @@ export function CatalogPage() {
             <Input label="Stock" id="produit-stock" type="number" min="0" step="1"
               value={editing.stock ?? 0} onChange={(e) => edit({ stock: Number(e.target.value) })} />
             <Input label="Unité" id="produit-unite" value={editing.unit ?? 'unité'} onChange={(e) => edit({ unit: e.target.value })} />
-            <Input label="URL de l'image" id="produit-image" type="url" value={editing.image_url ?? ''} onChange={(e) => edit({ image_url: e.target.value })} />
+            <Input label="URL de l'image (ou envoyez une photo ci-dessous)" id="produit-image" type="url" value={editing.image_url ?? ''} onChange={(e) => edit({ image_url: e.target.value })} />
           </div>
+
+          <ImageUpload id="produit-photo" label="Photo du produit" value={editing.image_url ?? ''}
+            onUploaded={(url) => edit({ image_url: url })} />
 
           <div className="tp-field">
             <label htmlFor="produit-description" className="tp-label">Description</label>
