@@ -24,6 +24,7 @@ export function RegisterPage() {
     last_name: '',
     role: defaultRole,
     gdpr_consent: false,
+    newsletter_opt_in: false,
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -84,7 +85,7 @@ export function RegisterPage() {
             value={form.password} onChange={(e) => set('password', e.target.value)} />
 
           {/* RGPD — consentement explicite */}
-          <div className="tp-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-6)' }}>
+          <div className="tp-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-4)' }}>
             <input
               id="gdpr_consent"
               type="checkbox"
@@ -96,6 +97,19 @@ export function RegisterPage() {
             <label htmlFor="gdpr_consent">
               J'accepte la <Link to="/privacy">politique de confidentialité</Link> et le traitement de mes
               données personnelles conformément au RGPD.
+            </label>
+          </div>
+
+          <div className="tp-small" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 'var(--space-6)' }}>
+            <input
+              id="newsletter_opt_in"
+              type="checkbox"
+              checked={form.newsletter_opt_in}
+              onChange={(e) => set('newsletter_opt_in', e.target.checked)}
+              style={{ marginTop: 3, flexShrink: 0, width: 20, height: 20 }}
+            />
+            <label htmlFor="newsletter_opt_in">
+              (Facultatif) Recevoir les newsletters des producteurs chez qui je commande.
             </label>
           </div>
 

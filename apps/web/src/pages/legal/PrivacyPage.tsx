@@ -25,6 +25,11 @@ export function PrivacyPage() {
             Vos données de carte sont saisies chez Stripe (certifié PCI-DSS) et ne transitent jamais par nos serveurs.</li>
           <li><strong>Messages</strong> — contenu et date : pour échanger avec les producteurs.
             Supprimés avec votre compte.</li>
+          <li><strong>Notifications et newsletters</strong> — suivi de vos commandes et messages ; les newsletters des
+            producteurs chez qui vous avez commandé ne vous parviennent que si vous l'avez accepté (case retirable à
+            tout moment dans « Mon compte »).</li>
+          <li><strong>Photos</strong> — celles que les producteurs publient (produits, couverture) sont hébergées par
+            TerraProxi et supprimées avec leur compte.</li>
           <li><strong>Position</strong> — utilisée uniquement pendant la recherche de producteurs, jamais enregistrée
             pour les consommateurs. Les producteurs publient volontairement l'adresse de leur exploitation.</li>
           <li><strong>Assistant IA</strong> — vos questions, le contenu de votre panier et, seulement si vous l'activez,
