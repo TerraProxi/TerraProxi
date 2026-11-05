@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native'
+import { Fonts } from '../theme'
 
 type InlineSegment =
   | { kind: 'text'; value: string }
@@ -98,7 +99,7 @@ function segmentStyle(
 
 const styles = StyleSheet.create({
   bold: {
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   italic: {
     fontStyle: 'italic',

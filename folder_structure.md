@@ -69,12 +69,10 @@ TerraProxi/
 │   └── ui-kit/                  # Composants UI purs partagés (si web/mobile unifiés)
 │
 ├── infrastructure/              # Fichiers de configuration DevOps
-│   ├── docker/                  # Dockerfiles et configurations
-│   ├── database/                # Scripts SQL, migrations (PostGIS)
-│   │   ├── init.sql
-│   │   └── migrations/
-│   ├── nginx/                   # Configuration du Reverse Proxy
-│   └── docker-compose.yml       # Orchestration locale / production
+│   ├── docker/                  # deploy.sh, backup.sh, healthcheck.sh (serveur OVH)
+│   └── database/
+│       └── migrations/          # Migrations SQL versionnées (PostGIS) et scripts down/
+│                                # Reverse proxy : Caddyfile ; orchestration : docker-compose*.yml (racine)
 │
 ├── docs/                        # Documentation complète
 │   ├── architecture.md

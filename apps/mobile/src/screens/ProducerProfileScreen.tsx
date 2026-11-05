@@ -1,46 +1,44 @@
 import { useState, useEffect } from 'react'
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Dimensions, ActivityIndicator, Linking, Alert, Platform } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Alert, Platform, Share } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import type { StackScreenProps } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
-import { Colors, Spacing, Radius } from '../theme'
+import { Colors, Spacing, Radius, Fonts } from '../theme'
 import api from '../services/api'
 import { useFavoritesStore } from '../store/favorites.store'
+import { useAuthStore } from '../store/auth.store'
+import { WEB_URL } from '../config'
+import type { Producer, ProducerEvent } from '../types/catalog'
+import { EventCard } from '../components/EventCard'
+import { IconButton } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
 
 type Props = StackScreenProps<RootStackParamList, 'ProducerProfile'>
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
-
-interface ProducerData {
-  id: string
-  user_id: string
-  company_name: string
-  description: string
-  address: string
-  city: string
-  latitude: number
-  longitude: number
-  banner_url: string
-  is_verified: boolean
-  first_name: string
-  last_name: string
-  distance_km?: number | null
-  categories: string[]
-  opening_hours?: string | null
-}
+const UPCOMING_EVENTS_LIMIT = 5
 
 export function ProducerProfileScreen({ route, navigation }: Props) {
   const { producerId } = route.params
-  const { toggleProducer, isProducerFavorite } = useFavoritesStore()
-  const [producer, setProducer] = useState<ProducerData | null>(null)
+  const toggleProducer = useFavoritesStore((s) => s.toggleProducer)
+  const favoriteProducerIds = useFavoritesStore((s) => s.producerIds)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const [producer, setProducer] = useState<Producer | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [events, setEvents] = useState<ProducerEvent[]>([])
 
   useEffect(() => {
-    api.get<ProducerData>(`/producers/${producerId}`)
+    api.get<Producer>(`/producers/${producerId}`)
       .then(({ data }) => setProducer(data))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
+  }, [producerId])
+
+  // Agenda (PROD-6) : section facultative, masquée si vide ou indisponible
+  useEffect(() => {
+    api.get<ProducerEvent[]>('/events', { params: { producer_id: producerId, limit: UPCOMING_EVENTS_LIMIT } })
+      .then(({ data }) => setEvents(data))
+      .catch(() => setEvents([]))
   }, [producerId])
 
   if (loading) {
@@ -57,26 +55,37 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.gray400} />
         <Text style={styles.errorTitle}>Producteur introuvable</Text>
         <Text style={styles.errorSub}>Ce producteur n'existe pas ou a été supprimé.</Text>
-        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.errorBtn} onPress={() => navigation.goBack()} accessibilityRole="button">
           <Text style={styles.errorBtnText}>Retour</Text>
         </TouchableOpacity>
       </View>
     )
   }
 
-  const favorite = isProducerFavorite(producer.id)
+  const favorite = favoriteProducerIds.includes(producer.id)
 
   const handleShop = () => {
     navigation.navigate('Catalog', { producerId: producer.id })
   }
 
   const handleMessage = () => {
+    // La messagerie exige un compte : on passe d'abord par la connexion
+    if (!isAuthenticated) {
+      navigation.navigate('Login')
+      return
+    }
     navigation.navigate('Conversation', { partnerId: producer.user_id, partnerName: producer.company_name })
   }
 
+  const handleShare = () => {
+    const url = `${WEB_URL}/producers/${producer.id}`
+    Share.share({ title: producer.company_name, message: `${producer.company_name} sur TerraProxi : ${url}` })
+      .catch(() => Alert.alert('Partage impossible', 'Le partage n\'est pas disponible sur cet appareil.'))
+  }
+
   const handleDirections = async () => {
-    const hasCoordinates = Number.isFinite(producer.latitude) && Number.isFinite(producer.longitude)
-    const destinationLabel = encodeURIComponent(`${producer.company_name}, ${producer.address}`)
+    const hasCoordinates = producer.latitude != null && producer.longitude != null
+    const destinationLabel = encodeURIComponent([producer.company_name, producer.address, producer.city].filter(Boolean).join(', '))
 
     const appUrls = hasCoordinates
       ? Platform.select({
@@ -118,38 +127,43 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.coverContainer}>
-        <Image source={{ uri: producer.banner_url }} style={styles.coverImage} />
+        <ProductImage uri={producer.banner_url} style={styles.coverImage} iconSize={56} />
         <View style={styles.coverGradient} />
         <View style={styles.topNav}>
-          <TouchableOpacity style={styles.topNavBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.white} />
-          </TouchableOpacity>
+          <IconButton icon="arrow-left" label="Retour" onPress={() => navigation.goBack()} color={Colors.white} style={styles.topNavBtn} />
           <View style={styles.topNavRight}>
-            <TouchableOpacity style={styles.topNavBtn} onPress={() => toggleProducer(producer.id)}>
-              <MaterialCommunityIcons
-                name={favorite ? 'heart' : 'heart-outline'}
-                size={22}
-                color={favorite ? Colors.danger : Colors.white}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.topNavBtn}>
-              <MaterialCommunityIcons name="share-variant-outline" size={20} color={Colors.white} />
-            </TouchableOpacity>
+            <IconButton
+              icon={favorite ? 'heart' : 'heart-outline'}
+              label={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              selected={favorite}
+              onPress={() => toggleProducer(producer.id)}
+              color={favorite ? Colors.danger : Colors.white}
+              style={styles.topNavBtn}
+            />
+            <IconButton
+              icon="share-variant-outline"
+              label={`Partager la fiche de ${producer.company_name}`}
+              onPress={handleShare}
+              color={Colors.white}
+              size={20}
+              style={styles.topNavBtn}
+            />
           </View>
         </View>
       </View>
 
       <View style={styles.contentCard}>
         <View style={styles.avatarContainer}>
-          <Image source={{ uri: producer.banner_url }} style={styles.avatar} />
-          {producer.is_verified && (
-            <View style={styles.verifiedBadge}>
-              <MaterialCommunityIcons name="check-circle" size={22} color={Colors.primary} />
-            </View>
-          )}
+          <ProductImage uri={producer.banner_url} style={styles.avatar} />
         </View>
 
-        <Text style={styles.producerName}>{producer.company_name}</Text>
+        <Text style={styles.producerName} accessibilityRole="header">{producer.company_name}</Text>
+        {producer.is_verified && (
+          <View style={styles.verifiedBadge}>
+            <MaterialCommunityIcons name="check-decagram" size={16} color={Colors.primaryDark} />
+            <Text style={styles.verifiedText}>Producteur vérifié</Text>
+          </View>
+        )}
         <Text style={styles.producerMeta}>{producer.city}</Text>
 
         {producer.opening_hours ? (
@@ -160,11 +174,11 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
         ) : null}
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.shopBtn} onPress={handleShop}>
+          <TouchableOpacity style={styles.shopBtn} onPress={handleShop} accessibilityRole="button">
             <MaterialCommunityIcons name="storefront" size={20} color={Colors.white} />
             <Text style={styles.shopBtnText}>Voir Boutique</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage}>
+          <TouchableOpacity style={styles.messageBtn} onPress={handleMessage} accessibilityRole="button">
             <MaterialCommunityIcons name="chat-outline" size={20} color={Colors.primary} />
             <Text style={styles.messageBtnText}>Message</Text>
           </TouchableOpacity>
@@ -177,7 +191,7 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           <Text style={styles.sectionTitle}>À propos</Text>
         </View>
         <View style={styles.aboutCard}>
-          <Text style={styles.aboutText}>{producer.description}</Text>
+          {producer.description ? <Text style={styles.aboutText}>{producer.description}</Text> : null}
           <View style={styles.categoryPills}>
             {(producer.categories ?? []).map((cat) => (
               <View key={cat} style={styles.categoryPill}>
@@ -187,6 +201,18 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
           </View>
         </View>
       </View>
+
+      {events.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="calendar-month-outline" size={22} color={Colors.primary} />
+            <Text style={styles.sectionTitle} accessibilityRole="header">Prochains rendez-vous</Text>
+          </View>
+          <View style={styles.eventList}>
+            {events.map((event) => <EventCard key={event.id} event={event} />)}
+          </View>
+        </View>
+      )}
 
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
@@ -198,12 +224,12 @@ export function ProducerProfileScreen({ route, navigation }: Props) {
             <MaterialCommunityIcons name="map-marker" size={56} color={Colors.gray300} />
           </View>
           <View style={styles.locationInfo}>
-            <Text style={styles.addressText}>{producer.address}</Text>
+            <Text style={styles.addressText}>{[producer.address, producer.postal_code, producer.city].filter(Boolean).join(', ')}</Text>
             {producer.distance_km != null && (
               <Text style={styles.distanceText}>{producer.distance_km.toFixed(1)} km de vous</Text>
             )}
           </View>
-          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections}>
+          <TouchableOpacity style={styles.directionsBtn} onPress={handleDirections} accessibilityRole="button">
             <MaterialCommunityIcons name="directions" size={20} color={Colors.white} />
             <Text style={styles.directionsBtnText}>Itinéraire</Text>
           </TouchableOpacity>
@@ -255,10 +281,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   topNavBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -295,20 +319,32 @@ const styles = StyleSheet.create({
     borderColor: Colors.white,
   },
   verifiedBadge: {
-    position: 'absolute',
-    right: -4,
-    bottom: -2,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    backgroundColor: Colors.green50,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 3,
+  },
+  verifiedText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Colors.primaryDark,
+  },
+  eventList: {
+    gap: Spacing.sm,
   },
   producerName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
     textAlign: 'center',
   },
   producerMeta: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: Spacing.xs,
     textAlign: 'center',
@@ -325,11 +361,12 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: Fonts.heavy,
     color: Colors.dark,
   },
   reviewCount: {
     fontSize: 13,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
   },
   actionRow: {
@@ -343,14 +380,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.lg,
     paddingVertical: Spacing.md,
     gap: Spacing.sm,
   },
   shopBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   messageBtn: {
@@ -366,8 +403,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   messageBtnText: {
-    color: Colors.primary,
-    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   sectionContainer: {
@@ -382,7 +419,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
   },
   aboutCard: {
@@ -397,6 +434,7 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     lineHeight: 22,
     color: Colors.gray700,
   },
@@ -414,7 +452,7 @@ const styles = StyleSheet.create({
   },
   categoryPillText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.green700,
   },
   locationCard: {
@@ -438,11 +476,12 @@ const styles = StyleSheet.create({
   },
   addressText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Fonts.semibold,
     color: Colors.dark,
   },
   distanceText: {
     fontSize: 13,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     marginTop: Spacing.xs,
   },
@@ -450,7 +489,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
     borderRadius: Radius.lg,
@@ -459,7 +498,7 @@ const styles = StyleSheet.create({
   },
   directionsBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
   errorContainer: {
@@ -471,18 +510,19 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.dark,
     marginTop: Spacing.lg,
   },
   errorSub: {
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: Colors.gray600,
     textAlign: 'center',
     marginTop: Spacing.sm,
   },
   errorBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.xxxl,
     paddingVertical: Spacing.md,
@@ -490,7 +530,7 @@ const styles = StyleSheet.create({
   },
   errorBtnText: {
     color: Colors.white,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     fontSize: 15,
   },
 })

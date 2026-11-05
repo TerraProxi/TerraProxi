@@ -28,6 +28,21 @@ export async function clearTokens() {
   await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY)
 }
 
+/** Statut HTTP d'une erreur d'API, ou null si le serveur n'a pas répondu. */
+export function apiErrorStatus(err: unknown): number | null {
+  return err instanceof AxiosError ? err.response?.status ?? null : null
+}
+
+const HTTP_TOO_MANY_REQUESTS = 429
+
+/**
+ * Titre d'alerte pour la connexion et l'inscription : l'API bloque les tentatives répétées
+ * (429, en-tête Retry-After) et son message indique le délai d'attente.
+ */
+export function authErrorTitle(err: unknown, fallback: string): string {
+  return apiErrorStatus(err) === HTTP_TOO_MANY_REQUESTS ? 'Trop de tentatives' : fallback
+}
+
 /** Message lisible à partir de l'enveloppe d'erreur {error, status} de l'API. */
 export function apiErrorMessage(err: unknown, fallback = 'Une erreur est survenue'): string {
   if (err instanceof AxiosError) {
@@ -36,6 +51,16 @@ export function apiErrorMessage(err: unknown, fallback = 'Une erreur est survenu
     if (!err.response) return 'Serveur injoignable, vérifiez votre connexion'
   }
   return fallback
+}
+
+/**
+ * Prévenu quand la session ne peut plus être renouvelée (refresh token expiré ou révoqué).
+ * Le store d'authentification s'y abonne pour déconnecter l'interface.
+ */
+let sessionExpiredHandler: (() => void) | null = null
+
+export function setSessionExpiredHandler(handler: (() => void) | null) {
+  sessionExpiredHandler = handler
 }
 
 api.interceptors.request.use(async (config) => {
@@ -57,6 +82,7 @@ async function refreshAccessToken(): Promise<string | null> {
     await storeTokens(data.access_token, data.refresh_token)
     return data.access_token
   } catch {
+    // Refresh refusé ou impossible : la session est perdue, géré par l'appelant.
     return null
   }
 }
@@ -80,7 +106,9 @@ api.interceptors.response.use(
       original.headers.Authorization = `Bearer ${newToken}`
       return api(original)
     }
+    const hadSession = Boolean(original.headers.Authorization)
     await clearTokens()
+    if (hadSession) sessionExpiredHandler?.()
     return Promise.reject(error)
   },
 )

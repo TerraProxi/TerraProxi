@@ -48,7 +48,7 @@ Si une migration a modifié le schéma, jouer son script `down/` ou restaurer la
 
 ## 3. Sauvegardes et restauration
 
-**Sauvegarde automatique** : quotidienne à 3 h (cron) via `infrastructure/docker/backup.sh`. Les dumps `.sql.gz` sont stockés dans `/opt/terraproxi/backups/` et conservés 30 jours.
+**Sauvegarde automatique** : quotidienne à 3 h (cron) via `infrastructure/docker/backup.sh`, et avant chaque déploiement (`deploy.sh`). Elle produit le dump de la base (`terraproxi_*.sql.gz`) et l'archive des photos envoyées (`uploads_*.tar.gz`), stockés dans `/opt/terraproxi/backups/` et conservés 30 jours. En cas d'échec, `ALERT_WEBHOOK_URL` est prévenu.
 
 ```bash
 # Crontab du serveur
@@ -63,7 +63,7 @@ Le script lit `POSTGRES_USER` et `POSTGRES_DB` dans `.env` (cron n'hérite d'auc
 /opt/terraproxi/infrastructure/docker/backup.sh
 ```
 
-**Copie hors serveur** : copier régulièrement les dumps vers un stockage externe (par exemple OVH Object Storage), afin de pouvoir reconstruire la plateforme si le serveur est perdu.
+**Copie hors serveur** : renseigner `BACKUP_REMOTE` dans `.env` (remote [rclone](https://rclone.org/), par exemple un conteneur OVH Object Storage configuré avec `rclone config`). `backup.sh` y copie chaque sauvegarde ; sans cette variable, il signale qu'aucune copie n'est faite hors du serveur.
 
 **Restauration** :
 
@@ -73,6 +73,10 @@ docker compose stop back
 gunzip -c backups/terraproxi_AAAAMMJJ_HHMMSS.sql.gz \
   | docker compose exec -T db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
 docker compose start back
+
+# Photos envoyées
+docker compose exec -T back sh -c 'rm -rf /app/uploads/*'
+docker compose exec -T back tar -C /app/uploads -xzf - < backups/uploads_AAAAMMJJ_HHMMSS.tar.gz
 ```
 
 Tester la restauration une fois par mois sur un environnement de préproduction.
@@ -81,21 +85,34 @@ Tester la restauration une fois par mois sur un environnement de préproduction.
 
 | Contrôle | Comment | Fréquence |
 |----------|---------|-----------|
-| Santé de l'API | `GET /health` : 200 avec `"database":"up"`, **503** si PostgreSQL ne répond pas (healthcheck Docker et `deploy.sh`) | continue |
+| Santé de l'API et du site | `infrastructure/docker/healthcheck.sh` (cron toutes les 5 min) : `/health`, page d'accueil, disque à 85 % ; alerte sur `ALERT_WEBHOOK_URL` à la panne et au rétablissement | continue |
+| Santé de l'API (Docker) | `GET /health` : 200 avec `"database":"up"`, latence de la base, Stripe et IA configurés ; **503** si PostgreSQL ne répond pas | continue |
 | État des conteneurs | `docker compose ps` | quotidienne |
-| Journaux | `docker compose logs -f back` (ou `front`, `caddy`, `db`) | en cas d'alerte |
+| Journaux | `docker compose logs -f back` : une ligne JSON par requête (`request_id`, statut, durée) et par erreur ; l'en-tête `X-Request-Id` renvoyé au client permet de retrouver une requête | en cas d'alerte |
 | Espace disque | `df -h` (sauvegardes, volumes Docker) | hebdomadaire |
 | Certificat TLS | renouvelé automatiquement par Caddy ; vérifier la date d'expiration | mensuelle |
 | Paiements | tableau de bord Stripe : webhooks en échec | quotidienne |
 
-Mettre en place une alerte externe (service de surveillance de disponibilité) sur l'URL publique et sur `/health`.
+Crontab du serveur :
+
+```
+0 3 * * *   /opt/terraproxi/infrastructure/docker/backup.sh >> /var/log/terraproxi-backup.log 2>&1
+*/5 * * * * /opt/terraproxi/infrastructure/docker/healthcheck.sh >> /var/log/terraproxi-health.log 2>&1
+```
+
+`healthcheck.sh` tourne sur le serveur lui-même : il ne voit pas une panne du serveur entier.
+Compléter par une sonde externe gratuite (UptimeRobot, Better Stack…) sur `https://gateway.terraproxi.fr/health`.
+
+**Sécurité des échanges** (`Caddyfile`) : TLS 1.3 uniquement, HTTP redirigé vers HTTPS, HSTS,
+politique de sécurité du contenu (CSP) limitée à Stripe, Google Fonts, OpenStreetMap et la
+Base Adresse Nationale. Une nouvelle ressource tierce dans le site doit y être ajoutée.
 
 ## 5. Mises à jour
 
 - **Système** : `sudo apt update && sudo apt upgrade` une fois par mois, et immédiatement pour un correctif de sécurité.
 - **Images Docker** : mettre à jour les versions de PostgreSQL, Caddy et nginx en fixant une version précise, jamais `latest`.
 - **Dépendances applicatives** : `pnpm outdated`, puis mise à jour sur une branche dédiée, tests et relecture avant fusion.
-- **Application mobile** : nouvelle version publiée via Expo (EAS Build), puis soumission sur Google Play et l'App Store.
+- **Application mobile** : nouvelle version publiée via Expo (EAS Build), puis soumission sur Google Play et l'App Store — procédure complète (eas init, variables, APK de test, iOS) dans [mobile-release.md](mobile-release.md). Les dépendances natives suivent le SDK Expo : les mettre à jour avec `npx expo install --fix` puis vérifier avec `npx expo-doctor`.
 
 ## 6. Gestion des secrets
 

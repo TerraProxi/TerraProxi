@@ -1,14 +1,29 @@
 # Caddyfile — TerraProxi
-# TLS automatique via Let's Encrypt (port 443 doit être ouvert)
+# TLS automatique via Let's Encrypt (ports 80 et 443 ouverts) ; HTTP est redirigé vers HTTPS.
+# TLS 1.3 uniquement (cahier des charges, « Sécurité des communications »).
+
+(tls13) {
+  tls {
+    protocols tls1.3
+  }
+}
+
+(common_headers) {
+  Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  X-Content-Type-Options nosniff
+  Referrer-Policy strict-origin-when-cross-origin
+  -Server
+}
 
 gateway.terraproxi.fr {
+  import tls13
   reverse_proxy back:3002
 
   header {
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    X-Content-Type-Options nosniff
+    import common_headers
     X-Frame-Options DENY
-    Referrer-Policy strict-origin-when-cross-origin
+    # L'API ne sert que du JSON et des photos : aucune ressource active
+    Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
   }
 
   log {
@@ -18,12 +33,16 @@ gateway.terraproxi.fr {
 }
 
 app.terraproxi.fr {
+  import tls13
   reverse_proxy front:8080
 
   header {
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    X-Content-Type-Options nosniff
+    import common_headers
     X-Frame-Options SAMEORIGIN
+    Permissions-Policy "geolocation=(self), camera=(), microphone=(), payment=(self \"https://js.stripe.com\")"
+    # Ressources tierces autorisées : Stripe (paiement), Google Fonts, tuiles OpenStreetMap,
+    # Base Adresse Nationale (géocodage), photos servies par l'API
+    Content-Security-Policy "default-src 'self'; script-src 'self' https://js.stripe.com; frame-src https://*.stripe.com https://*.stripe.network; connect-src 'self' https://gateway.terraproxi.fr https://*.stripe.com https://api-adresse.data.gouv.fr; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
   }
 
   log {

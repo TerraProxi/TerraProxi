@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import { Colors, Radius, Spacing } from '../theme'
+import { Colors, MIN_TOUCH_TARGET, Radius, Spacing, Fonts } from '../theme'
 
 export interface ProductPick {
   product_id: string
@@ -53,6 +53,11 @@ export function ProductPickList({ picks, disabled = false, onAdd }: ProductPickL
                   key={key}
                   disabled={disabled || isAdded}
                   onPress={() => handleAdd(pick, qty)}
+                  accessibilityRole="button"
+                  accessibilityLabel={isAdded
+                    ? `${qty} × ${pick.short_label} ajouté au panier`
+                    : `Ajouter ${qty} × ${pick.short_label} au panier`}
+                  accessibilityState={{ disabled: disabled || isAdded }}
                   style={({ pressed }) => [
                     styles.qtyBtn,
                     isAdded && styles.qtyBtnAdded,
@@ -81,7 +86,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.gray600,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -104,12 +109,13 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.dark,
   },
   meta: {
     fontSize: 12,
-    color: Colors.gray500,
+    fontFamily: Fonts.regular,
+    color: Colors.gray600,
   },
   qtyRow: {
     flexDirection: 'row',
@@ -118,8 +124,8 @@ const styles = StyleSheet.create({
   },
   qtyBtn: {
     minWidth: 56,
+    minHeight: MIN_TOUCH_TARGET,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
     borderRadius: Radius.sm,
     backgroundColor: Colors.primaryLight,
     borderWidth: 1.5,
@@ -128,7 +134,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   qtyBtnPressed: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
   },
   qtyBtnAdded: {
     backgroundColor: Colors.green50,
@@ -136,7 +142,7 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.primaryDark,
   },
 })

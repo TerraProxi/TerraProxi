@@ -1,9 +1,16 @@
+/**
+ * Charte TerraProxi : vert #5BAE6A, bleu #76CCD6, gris #333333 et blanc.
+ * Les teintes « Dark » servent au texte et aux fonds portant du texte blanc :
+ * elles respectent le contraste WCAG AA (≥ 4,5:1 sur blanc), contrairement aux
+ * couleurs de la charte (blanc sur #5BAE6A ≈ 2,7:1, sur #76CCD6 ≈ 1,8:1),
+ * réservées aux icônes, bordures et aplats décoratifs.
+ */
 export const Colors = {
   primary: '#5BAE6A',
-  primaryDark: '#4A9654',
+  primaryDark: '#3A7D45',
   primaryLight: '#EBF8F0',
   accent: '#76CCD6',
-  accentDark: '#5BB5BF',
+  accentDark: '#1F7A85',
   dark: '#333333',
   gray900: '#1F2937',
   gray800: '#374151',
@@ -52,4 +59,22 @@ export const Radius = {
   xl: 20,
   xxl: 24,
   full: 9999,
+}
+
+/** Taille minimale d'une cible tactile (WCAG 2.5.5 / recommandations iOS et Android). */
+export const MIN_TOUCH_TARGET = 44
+
+/**
+ * Polices de la charte, chargées au démarrage (App.tsx) : Montserrat pour les titres,
+ * Open Sans pour le texte. Une police personnalisée ne se met pas en gras via fontWeight
+ * sur Android : chaque graisse est une famille distincte.
+ */
+export const Fonts = {
+  title: 'Montserrat_700Bold',
+  titleHeavy: 'Montserrat_800ExtraBold',
+  regular: 'OpenSans_400Regular',
+  medium: 'OpenSans_500Medium',
+  semibold: 'OpenSans_600SemiBold',
+  bold: 'OpenSans_700Bold',
+  heavy: 'OpenSans_800ExtraBold',
 }

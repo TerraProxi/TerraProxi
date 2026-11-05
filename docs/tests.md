@@ -90,9 +90,31 @@ simulés (`vi.mock`), aucun snapshot. Configuration : `apps/web/vitest.config.ts
 
 Commande : `pnpm test:web` (ou `npx -y pnpm@9.15.9 --filter @terraproxi/web test`).
 
+### Tests mobile
+
+Dernière exécution : 05/11/2026 — **20 tests, 20 réussis, 0 échec** (7 fichiers, ~35 s sous Windows).
+Jest 29 avec le preset `jest-expo` 51 ; tests de logique uniquement (aucun snapshot).
+SecureStore, AsyncStorage (mock officiel), expo-notifications et expo-constants sont simulés ;
+le réseau est remplacé par un faux adaptateur axios (`apps/mobile/src/test/http.ts`).
+
+| Domaine | Cas couverts |
+|---------|--------------|
+| Panier | quantités cumulées pour un même produit ; regroupement par producteur ; quantité minimale 1 et producteur retiré quand il n'a plus d'article ; après un échec partiel, seuls les articles du producteur refusé restent, avec le message de l'API |
+| Persistance | panier écrit dans AsyncStorage puis restauré avec ses totaux au relancement |
+| Favoris | favori supprimé côté serveur (404) oublié, les autres affichés ; autres erreurs remontées sans rien oublier |
+| Session (API) | un 401 → un seul refresh puis requête rejouée avec le nouveau jeton ; trois requêtes refusées en même temps → un seul refresh ; refresh refusé → jetons effacés, store déconnecté, alerte « Session expirée » |
+| Notifications | ORDER → commandes, CONVERSATION → conversation avec `target_id`, PRODUCER → fiche producteur ; notification sans cible ignorée ; cible mise de côté pendant le démarrage puis ouverte |
+| Push | sans projectId EAS, aucun appel ; permission refusée → `{ token: null }` ; permission accordée → jeton Expo envoyé |
+| Carte | rayon calculé sur la zone visible et plafonné à 500 km |
+| Catalogue | libellé français pour chacune des 8 catégories de la spec, aucun code brut |
+| Erreurs | 429 → titre « Trop de tentatives » et message de l'API ; autres erreurs → titre habituel |
+
+Commande : `pnpm test:mobile` (aucune base ni serveur nécessaires). Détail : `apps/mobile/src/**/*.test.ts`.
+
 ### Non couvert automatiquement
 
-- Parcours web complets (E2E dans un vrai navigateur) et application mobile : couverts par la recette manuelle.
+- Parcours complets dans un vrai navigateur ou sur un téléphone (E2E) : couverts par la recette manuelle ;
+  la logique web et mobile est testée (voir « Tests web » et « Tests mobile »).
 - Assistant IA Gemini : dépend d'un service externe, vérifié manuellement avec une clé de test
   (la newsletter IA est testée avec un faux transport Gemini).
 - Push mobile réel (Expo) : nécessite un téléphone et un build EAS ; l'envoi est testé avec un faux émetteur.

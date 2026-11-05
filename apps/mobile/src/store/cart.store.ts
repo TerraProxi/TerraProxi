@@ -1,12 +1,6 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import * as SecureStore from 'expo-secure-store'
-
-const secureStorage = {
-  getItem: (name: string) => SecureStore.getItemAsync(name) ?? null,
-  setItem: (name: string, value: string) => SecureStore.setItemAsync(name, value),
-  removeItem: (name: string) => SecureStore.deleteItemAsync(name),
-}
+import { persist } from 'zustand/middleware'
+import { persistentStorage } from '../services/storage'
 
 export type DeliveryMode = 'delivery' | 'pickup'
 
@@ -17,10 +11,11 @@ export interface DeliveryAddress {
   extra: string
 }
 
+/** Adresse vide : le client la saisit avant de commander en livraison. */
 export const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
-  street: '12 Rue de la Republique',
-  postalCode: '34000',
-  city: 'Montpellier',
+  street: '',
+  postalCode: '',
+  city: '',
   extra: '',
 }
 
@@ -216,7 +211,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name: 'cart-store-v2',
-      storage: createJSONStorage(() => secureStorage),
+      storage: persistentStorage,
       partialize: (state) => ({ groups: state.groups }),
       merge: (persistedState, currentState) => {
         const groups = migrateLegacyCartState(persistedState)
@@ -229,9 +224,10 @@ export const useCartStore = create<CartStore>()(
   ),
 )
 
-export const DELIVERY_FEE_EUR = 5
-export const TVA_RATE = 0.055
-
+/**
+ * Les prix sont TTC et l'API calcule total_price = Σ prix × quantité, sans frais de
+ * livraison : le panier affiche exactement ce qui sera facturé.
+ */
 export function getGroupSubtotal(group: CartProducerGroup): number {
   return group.items.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -239,16 +235,6 @@ export function getGroupSubtotal(group: CartProducerGroup): number {
   )
 }
 
-export function getGroupDeliveryFee(group: CartProducerGroup): number {
-  return group.deliveryMode === 'delivery' ? DELIVERY_FEE_EUR : 0
-}
-
-export function getGroupTotal(group: CartProducerGroup): number {
-  const subtotal = getGroupSubtotal(group)
-  const delivery = getGroupDeliveryFee(group)
-  return subtotal + delivery + (subtotal + delivery) * TVA_RATE
-}
-
 export function getCartGrandTotal(groups: CartProducerGroup[]): number {
-  return groups.reduce((sum, group) => sum + getGroupTotal(group), 0)
+  return groups.reduce((sum, group) => sum + getGroupSubtotal(group), 0)
 }

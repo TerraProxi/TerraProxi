@@ -1,22 +1,35 @@
 import { create } from 'zustand'
+import { Alert } from 'react-native'
 import * as SecureStore from 'expo-secure-store'
-import api, { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, clearTokens, storeTokens } from '../services/api'
+import api, {
+  ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, clearTokens, setSessionExpiredHandler, storeTokens,
+} from '../services/api'
+import { unregisterPushToken } from '../services/pushNotifications'
 
+export type UserRole = 'CONSUMER' | 'PRODUCER' | 'ADMIN'
+
+/** specs/schemas/user.schema.json */
 export interface User {
   id: string
   email: string
   first_name: string
   last_name: string
-  role: 'CONSUMER' | 'PRODUCER' | 'ADMIN'
+  role: UserRole
+  phone?: string | null
+  avatar_url?: string | null
+  /** Consentement aux newsletters des producteurs (opt-in, faux par défaut). */
+  newsletter_opt_in: boolean
+  created_at: string
 }
 
+/** L'application mobile est réservée aux consommateurs (le back-office producteur est sur le web). */
 export interface RegisterData {
   email: string
   password: string
   first_name: string
   last_name: string
-  role?: 'CONSUMER' | 'PRODUCER'
   gdpr_consent: boolean
+  newsletter_opt_in: boolean
 }
 
 interface SessionResponse {
@@ -32,6 +45,8 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<void>
   register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
+  /** Met à jour le profil en mémoire après une modification (profil, email). */
+  setUser: (user: User) => void
   /** RGPD — droit à l'effacement depuis l'application (exigé aussi par les stores). */
   deleteAccount: () => Promise<void>
   initialize: () => Promise<void>
@@ -65,17 +80,25 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   register: async (payload) => {
-    const { data } = await api.post<SessionResponse>('/auth/register', payload)
+    const { data } = await api.post<SessionResponse>('/auth/register', { ...payload, role: 'CONSUMER' })
     await storeTokens(data.access_token, data.refresh_token)
     set({ user: data.user, isAuthenticated: true })
   },
 
   logout: async () => {
+    // Retrait du jeton push avant de révoquer la session (sinon la requête n'est plus autorisée).
+    // Au mieux : la déconnexion locale doit aboutir même hors ligne.
+    await unregisterPushToken().catch(() => undefined)
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY)
-    if (refreshToken) await api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => undefined)
+    if (refreshToken) {
+      // Révocation côté serveur au mieux : la déconnexion locale doit aboutir même hors ligne.
+      await api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => undefined)
+    }
     await clearTokens()
     set({ user: null, isAuthenticated: false })
   },
+
+  setUser: (user) => set({ user }),
 
   deleteAccount: async () => {
     await api.delete('/users/me')
@@ -83,3 +106,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ user: null, isAuthenticated: false })
   },
 }))
+
+setSessionExpiredHandler(() => {
+  if (!useAuthStore.getState().isAuthenticated) return
+  useAuthStore.setState({ user: null, isAuthenticated: false })
+  Alert.alert('Session expirée', 'Veuillez vous reconnecter pour continuer.')
+})
