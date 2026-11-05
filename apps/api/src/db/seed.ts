@@ -19,6 +19,15 @@ export const DEFAULT_SEED_PASSWORD = 'TerraProxi2026!'
 
 export const seedId = (legacyId: string) => uuidv5(legacyId, SEED_NAMESPACE)
 
+/** Compte administrateur de démonstration (le rôle ADMIN ne s'obtient pas à l'inscription). */
+export const DEMO_ADMIN_EMAIL = 'admin@terraproxi.fr'
+
+const DAY_MS = 24 * 3600 * 1000
+const DEMO_EVENTS = [
+  { title: 'Marché de producteurs', location: 'Place du marché', inDays: 3, hours: 5 },
+  { title: 'Portes ouvertes à la ferme', location: null, inDays: 10, hours: 6 },
+] as const
+
 async function insertUsers(client: PoolClient, passwordHash: string) {
   for (const u of seedUsers) {
     await client.query(
@@ -30,6 +39,14 @@ async function insertUsers(client: PoolClient, passwordHash: string) {
         u.role, u.phone ?? null, u.gdpr_consent_at ?? u.created_at, u.created_at],
     )
   }
+  // Le premier client de démonstration accepte les newsletters (AI-4)
+  await client.query('UPDATE users SET newsletter_opt_in = true WHERE id = $1', [seedId(seedUsers[0].id)])
+  await client.query(
+    `INSERT INTO users (id, email, password_hash, first_name, last_name, role, is_active, gdpr_consent, gdpr_consent_at)
+     VALUES ($1, $2, $3, 'Admin', 'TerraProxi', 'ADMIN', true, true, NOW())
+     ON CONFLICT DO NOTHING`,
+    [seedId('demo-admin'), DEMO_ADMIN_EMAIL, passwordHash],
+  )
 }
 
 async function insertProducers(client: PoolClient) {
@@ -101,6 +118,25 @@ async function insertDemoOrders(client: PoolClient) {
   }
 }
 
+/** Agenda (PROD-6) : deux rendez-vous à venir pour les trois premiers producteurs. */
+async function insertDemoEvents(client: PoolClient) {
+  for (const producer of seedProducers.slice(0, 3)) {
+    for (const [index, event] of DEMO_EVENTS.entries()) {
+      const startsAt = new Date(Date.now() + (event.inDays + index) * DAY_MS)
+      startsAt.setUTCHours(7, 0, 0, 0)
+      const endsAt = new Date(startsAt.getTime() + event.hours * 3600 * 1000)
+      await client.query(
+        `INSERT INTO producer_events (id, producer_id, title, location, starts_at, ends_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING`,
+        [seedId(`demo-event-${producer.id}-${index}`), seedId(producer.id), event.title,
+          event.location ? `${event.location}, ${producer.city ?? ''}`.replace(/, $/, '') : null,
+          startsAt.toISOString(), endsAt.toISOString()],
+      )
+    }
+  }
+}
+
 export async function seedDatabase(password = process.env.SEED_PASSWORD ?? DEFAULT_SEED_PASSWORD) {
   const passwordHash = await hashPassword(password)
   await withTransaction(async (client) => {
@@ -109,6 +145,7 @@ export async function seedDatabase(password = process.env.SEED_PASSWORD ?? DEFAU
     await insertProducts(client)
     await insertMessages(client)
     await insertDemoOrders(client)
+    await insertDemoEvents(client)
   })
 }
 
@@ -119,8 +156,8 @@ if (import.meta.main) {
   }
   seedDatabase()
     .then(async () => {
-      console.log(`[seed] ${seedUsers.length} comptes, ${seedProducers.length} producteurs, `
-        + `${seedProducts.length} produits chargés.`)
+      console.log(`[seed] ${seedUsers.length} comptes + administrateur ${DEMO_ADMIN_EMAIL}, `
+        + `${seedProducers.length} producteurs, ${seedProducts.length} produits chargés.`)
       await closeDb()
     })
     .catch(async (err) => {

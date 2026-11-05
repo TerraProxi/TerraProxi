@@ -10,25 +10,34 @@ specs/
 ├── api/                      # OpenAPI 3.1, un fichier par domaine
 │   ├── auth-api.yaml           # inscription, connexion, refresh, logout, /auth/me
 │   ├── users-api.yaml          # profil, mot de passe, email, export et suppression RGPD
-│   ├── producers-api.yaml      # recherche géolocalisée, fiches producteurs
-│   ├── products-api.yaml       # catalogue public, catalogue du producteur
-│   ├── orders-api.yaml         # commandes et cycle de vie
+│   ├── producers-api.yaml      # recherche géolocalisée, fiches, statistiques, newsletters
+│   ├── products-api.yaml       # catalogue public (filtre par distance), catalogue du producteur
+│   ├── orders-api.yaml         # commandes, cycle de vie, annulation et remboursement
 │   ├── stripe-api.yaml         # PaymentIntent, webhook
 │   ├── messages-api.yaml       # messagerie
-│   ├── ai-chat-api.yaml        # assistant IA, recommandations, prévisions
+│   ├── notifications-api.yaml  # notifications in-app (EPIC 7)
+│   ├── events-api.yaml         # agenda des producteurs (PROD-6)
+│   ├── uploads-api.yaml        # photos (CAT-1)
+│   ├── admin-api.yaml          # administration (rôle ADMIN)
+│   ├── ai-chat-api.yaml        # assistant IA, newsletter IA, recommandations, prévisions
 │   └── health-api.yaml         # /health
 ├── schemas/                  # JSON Schema 2020-12 des entités, référencés par les specs OpenAPI
 │   ├── user, producer, product, order, order-item, message (+ Conversation)
+│   ├── notification, event, newsletter, producer-stats
 │   ├── cart.schema.json        # corps de POST /orders (panier d'un producteur)
 │   └── ai-chat.schema.json     # requête / réponse de l'assistant
 ├── contracts/
 │   ├── error-envelope.schema.json   # format de toutes les erreurs : {error, status, details?}
-│   └── pact-overview.md             # services tiers (Stripe, Gemini, Base Adresse Nationale)
+│   └── pact-overview.md             # services tiers (Stripe, Gemini, Expo Push, Base Adresse Nationale)
 ├── features/                 # scénarios Gherkin (français), chacun relié à son test
 └── decisions/                # ADR
     ├── 0001-api-origin.md                       # monolithe Elysia + PostGIS (amendé)
     ├── 0002-postgresql-only-and-contract-tests.md
-    └── 0003-rgpd-anonymisation-des-commandes.md
+    ├── 0003-rgpd-anonymisation-des-commandes.md
+    ├── 0004-notifications-in-app-et-push-expo.md
+    ├── 0005-securite-force-brute-et-revocation.md
+    ├── 0006-annulation-remboursement-expiration.md
+    └── 0007-stockage-des-photos.md
 ```
 
 Chaque entité n'est définie qu'une fois : les fichiers OpenAPI référencent `../schemas/*.json`

@@ -13,3 +13,6 @@ ios/
 coverage/
 .pnpm-store/
 apps/api/.env
+
+# Photos envoyées en développement (UPLOAD_DIR)
+apps/api/uploads/

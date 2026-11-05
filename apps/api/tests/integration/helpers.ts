@@ -2,6 +2,7 @@ import { createApp } from '../../src/app'
 import { db } from '../../src/db/client'
 import { runMigrations } from '../../src/db/migrate'
 import { assertResponseConforms } from '../conformance/spec-contract'
+import { clearRateLimits } from '../../src/utils/rate-limit'
 
 export const app = createApp()
 
@@ -17,8 +18,10 @@ export async function call<T = any>(
 ): Promise<ApiResponse<T>> {
   const headers: Record<string, string> = { ...options.headers }
   if (options.token) headers.authorization = `Bearer ${options.token}`
-  let payload: string | undefined
-  if (options.body !== undefined) {
+  let payload: string | FormData | undefined
+  if (options.body instanceof FormData) {
+    payload = options.body
+  } else if (options.body !== undefined) {
     headers['content-type'] ??= 'application/json'
     payload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body)
   }
@@ -41,8 +44,9 @@ export async function resetDatabase() {
     await runMigrations(() => {})
     isSchemaReady = true
   }
+  clearRateLimits()
   await db.query(
-    'TRUNCATE users, producers, products, orders, order_items, messages, refresh_tokens RESTART IDENTITY CASCADE',
+    'TRUNCATE users, producers, products, orders, order_items, messages, refresh_tokens, notifications, producer_events, newsletters, uploads RESTART IDENTITY CASCADE',
   )
 }
 
@@ -71,6 +75,29 @@ export async function registerAccount(role: 'CONSUMER' | 'PRODUCER' = 'CONSUMER'
     token: res.body.access_token,
     refreshToken: res.body.refresh_token,
   }
+}
+
+/** Compte administrateur : l'inscription ne propose pas ce rôle, il est attribué en base. */
+export async function registerAdmin(): Promise<TestAccount> {
+  const account = await registerAccount('CONSUMER')
+  await db.query('UPDATE users SET role = \'ADMIN\' WHERE id = $1', [account.id])
+  return account
+}
+
+/** Simule un paiement validé par Stripe (statut posé directement en base). */
+export async function markPaid(orderId: string, intentId = `pi_${orderId.slice(0, 8)}`): Promise<void> {
+  await db.query(
+    'UPDATE orders SET status = \'PAID\', stripe_payment_intent = $1, stripe_payment_id = $1 WHERE id = $2',
+    [intentId, orderId],
+  )
+}
+
+export async function placeOrder(consumer: TestAccount, producerId: string, productId: string, quantity = 1) {
+  const res = await call('POST', '/api/orders', {
+    token: consumer.token, body: { producer_id: producerId, items: [{ product_id: productId, quantity }] },
+  })
+  if (res.status !== 201) throw new Error(`order failed: ${res.status} ${JSON.stringify(res.body)}`)
+  return res.body as { id: string; total_price: number }
 }
 
 /** Producteur avec profil géolocalisé (Montpellier) et un produit en stock. */

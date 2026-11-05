@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Commandes
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Commandes passées par les consommateurs auprès d'un producteur.
 
@@ -119,7 +119,12 @@ paths:
   /orders/{id}/status:
     patch:
       summary: Changer le statut
-      description: PAID n'est pas accepté ici (webhook Stripe). Une transition interdite → 409.
+      description: |
+        PAID n'est pas accepté ici (webhook Stripe). Une transition interdite → 409.
+        Annulation (CANCELLED) : le stock est remis ; une commande non payée voit son PaymentIntent
+        annulé chez Stripe (409 si le client vient de valider son paiement) ; une commande payée
+        est remboursée intégralement (502 si Stripe ne répond pas : rien n'est modifié).
+        Le client est notifié quand le producteur passe la commande en préparation, prête ou annulée.
       operationId: updateOrderStatus
       tags: [Orders]
       parameters:
@@ -152,7 +157,19 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Transition non autorisée pour ce statut ou ce rôle
+          description: Transition non autorisée pour ce statut ou ce rôle, ou paiement validé entre-temps
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '502':
+          description: Stripe n'a pas répondu (annulation ou remboursement) ; la commande est inchangée
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '503':
+          description: Annulation d'une commande liée à un paiement alors que Stripe n'est pas configuré
           content:
             application/json:
               schema:

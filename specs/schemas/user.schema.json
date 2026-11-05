@@ -4,7 +4,7 @@
   "title": "User",
   "description": "Utilisateur tel que renvoyé par l'API (jamais de hash de mot de passe). Table users.",
   "type": "object",
-  "required": ["id", "email", "first_name", "last_name", "role", "created_at"],
+  "required": ["id", "email", "first_name", "last_name", "role", "newsletter_opt_in", "created_at"],
   "properties": {
     "id": { "type": "string", "format": "uuid" },
     "email": { "type": "string", "format": "email", "maxLength": 255, "description": "Toujours en minuscules" },
@@ -12,7 +12,8 @@
     "last_name": { "type": "string", "minLength": 1, "maxLength": 100 },
     "role": { "$ref": "#/$defs/UserRole" },
     "phone": { "type": ["string", "null"], "maxLength": 20 },
-    "avatar_url": { "type": ["string", "null"], "maxLength": 500 },
+    "avatar_url": { "type": ["string", "null"], "maxLength": 500, "pattern": "^(https?://[^\\s<>\"]+)?$", "description": "URL http(s) uniquement (POST /uploads ou lien externe)" },
+    "newsletter_opt_in": { "type": "boolean", "description": "Accepte les newsletters des producteurs chez qui il a commandé (opt-in, faux par défaut)" },
     "created_at": { "type": "string", "format": "date-time" }
   },
   "additionalProperties": false,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraProxi API - Paiement Stripe
-  version: 1.1.0
+  version: 1.2.0
   description: |
     Paiement par PaymentIntent : la carte est saisie chez Stripe, le serveur ne la voit jamais (PCI-DSS).
     Contrat d'intégration : specs/contracts/pact-overview.md.
@@ -69,6 +69,12 @@ paths:
             application/json:
               schema:
                 $ref: '../contracts/error-envelope.schema.json'
+        '502':
+          description: Stripe n'a pas répondu
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
         '503':
           $ref: '#/components/responses/NotConfigured'
 
@@ -77,8 +83,12 @@ paths:
       summary: Webhook Stripe
       description: |
         Appelé par Stripe, sans JWT. La signature (en-tête stripe-signature) est vérifiée sur le corps brut
-        avec STRIPE_WEBHOOK_SECRET. payment_intent.succeeded passe la commande en PAID si l'intent
-        correspond à celui enregistré et que la commande est PENDING ; les autres événements sont ignorés.
+        avec STRIPE_WEBHOOK_SECRET. Traitement idempotent (Stripe peut renvoyer un événement) :
+        - payment_intent.succeeded : la commande passe en PAID si l'intent correspond à celui enregistré
+          et qu'elle est PENDING ; le producteur (NEW_ORDER) et le client (PAYMENT) sont notifiés. Si la
+          commande a été annulée ou a expiré pendant le paiement, le paiement est remboursé aussitôt ;
+        - payment_intent.payment_failed : le client est notifié (PAYMENT) ;
+        - les autres événements sont ignorés.
       operationId: handleStripeWebhook
       tags: [Stripe]
       security: []
@@ -116,6 +126,12 @@ paths:
                     const: true
         '400':
           description: Signature absente ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '502':
+          description: Remboursement impossible pour l'instant ; Stripe renverra l'événement
           content:
             application/json:
               schema:

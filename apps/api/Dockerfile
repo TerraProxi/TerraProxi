@@ -18,7 +18,7 @@ WORKDIR /repo
 COPY --from=deps /repo ./
 COPY apps/api apps/api
 WORKDIR /repo/apps/api
-RUN bun build src/index.ts src/db/migrate.ts src/db/seed.ts \
+RUN bun build src/index.ts src/db/migrate.ts src/db/seed.ts src/db/promote-admin.ts \
       --outdir dist --target bun --minify --external pg-native
 
 # 3. Image finale : uniquement le bundle et les migrations, utilisateur non root
@@ -29,6 +29,9 @@ ENV NODE_ENV=production \
     MIGRATIONS_DIR=/app/migrations
 COPY --from=build --chown=bun:bun /repo/apps/api/dist ./dist
 COPY --chown=bun:bun infrastructure/database/migrations ./migrations
+# Photos envoyées : volume Docker monté sur ce dossier (docker-compose.yml)
+ENV UPLOAD_DIR=/app/uploads
+RUN mkdir -p /app/uploads && chown bun:bun /app/uploads
 USER bun
 
 EXPOSE 3002

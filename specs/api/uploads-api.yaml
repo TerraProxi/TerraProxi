@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Photos
+  version: 1.2.0
+  description: |
+    Envoi de photos (CAT-1) : produits, bannière de l'exploitation, avatar. L'URL renvoyée
+    s'enregistre ensuite dans image_url, banner_url ou avatar_url. Le format est vérifié sur
+    le contenu du fichier (JPEG, PNG, WebP), 5 Mo au maximum. Les fichiers d'un compte sont
+    supprimés avec lui (RGPD). Implémentation : apps/api/src/routes/uploads.routes.ts.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production
+  - url: http://localhost:3002/api
+    description: Développement
+tags:
+  - name: Uploads
+    description: Photos
+
+paths:
+  /uploads:
+    post:
+      summary: Envoyer une photo
+      description: 30 envois par heure et par compte au maximum.
+      operationId: uploadImage
+      tags: [Uploads]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Photo enregistrée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Fichier de plus de 5 Mo
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+        '429':
+          description: Trop d'envois (en-tête Retry-After)
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+
+  /uploads/{filename}:
+    get:
+      summary: Télécharger une photo
+      description: Fichier immuable (nom aléatoire), mis en cache un an.
+      operationId: getImage
+      tags: [Uploads]
+      security: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f-]{36}\.(jpg|png|webp)$'
+      responses:
+        '200':
+          description: Image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Fichier introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '../contracts/error-envelope.schema.json'
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Upload:
+      type: object
+      required: [url, content_type, size_bytes]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: URL publique absolue (PUBLIC_API_URL + /api/uploads/{filename})
+        content_type:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        size_bytes:
+          type: integer
+          minimum: 1
+          maximum: 5242880
+      additionalProperties: false
+  responses:
+    BadRequest:
+      description: Fichier manquant ou format non pris en charge
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'

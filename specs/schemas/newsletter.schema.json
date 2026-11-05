@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "newsletter.schema.json",
+  "title": "Newsletter",
+  "description": "Newsletter envoyée par un producteur à ses clients abonnés (table newsletters, AI-4).",
+  "type": "object",
+  "required": ["id", "subject", "body", "recipient_count", "sent_at"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "body": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "recipient_count": { "type": "integer", "minimum": 0, "description": "Clients ayant payé une commande chez ce producteur et accepté les newsletters" },
+    "sent_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "NewsletterDraft": {
+      "type": "object",
+      "description": "Brouillon rédigé par l'IA (POST /ai/newsletter), à relire avant l'envoi",
+      "required": ["subject", "body"],
+      "properties": {
+        "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

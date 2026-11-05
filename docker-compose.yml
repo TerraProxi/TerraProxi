@@ -51,8 +51,16 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://app.terraproxi.fr}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://gateway.terraproxi.fr}
+      TRUST_PROXY: "true"
+      ORDER_PENDING_TTL_MINUTES: ${ORDER_PENDING_TTL_MINUTES:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      PUSH_NOTIFICATIONS_ENABLED: ${PUSH_NOTIFICATIONS_ENABLED:-true}
       NODE_ENV: production
       API_PORT: 3002
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -86,6 +94,7 @@ networks:
 
 volumes:
   pgdata:
+  uploads:
   caddy_data:
   caddy_config:
   caddy_logs:

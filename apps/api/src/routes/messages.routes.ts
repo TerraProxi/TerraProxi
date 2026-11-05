@@ -1,11 +1,43 @@
 import { Elysia, t } from 'elysia'
 import { authGuard } from '../middlewares/auth.middleware'
 import { db } from '../db/client'
-import { badRequest, notFound } from '../utils/errors'
-import type { Message } from '../models/types'
+import { AppError, badRequest, notFound } from '../utils/errors'
+import { notify } from '../services/notifications.service'
+import type { Message, UserRole } from '../models/types'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
+const PREVIEW_LENGTH = 120
+
+/** La messagerie relie un client et un producteur ; un administrateur peut écrire à tous. */
+const canConverse = (a: UserRole, b: UserRole) =>
+  a === 'ADMIN' || b === 'ADMIN' || a !== b
+
+/**
+ * Notifie le destinataire (NOTIF-3), une seule fois tant qu'il n'a pas lu la
+ * précédente notification de cet interlocuteur : pas de rafale pendant une discussion.
+ */
+async function notifyNewMessage(senderId: string, receiverId: string, content: string) {
+  const pending = await db.query(
+    `SELECT 1 FROM notifications
+     WHERE user_id = $1 AND type = 'NEW_MESSAGE' AND target_id = $2 AND NOT is_read LIMIT 1`,
+    [receiverId, senderId],
+  )
+  if (pending.rows[0]) return
+  const sender = await db.query<{ name: string }>(
+    `SELECT COALESCE(pr.company_name, u.first_name || ' ' || u.last_name) AS name
+     FROM users u LEFT JOIN producers pr ON pr.user_id = u.id WHERE u.id = $1`,
+    [senderId],
+  )
+  await notify({
+    userId: receiverId,
+    type: 'NEW_MESSAGE',
+    title: `Nouveau message de ${sender.rows[0]?.name ?? 'un utilisateur'}`,
+    body: content.length > PREVIEW_LENGTH ? `${content.slice(0, PREVIEW_LENGTH - 1)}…` : content,
+    targetType: 'CONVERSATION',
+    targetId: senderId,
+  })
+}
 
 export const messagesRoutes = new Elysia({ prefix: '/messages' })
   .use(authGuard())
@@ -16,7 +48,8 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
    */
   .get(
     '/',
-    async ({ user }) => {
+    async ({ user, query }) => {
+      const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT)
       const result = await db.query(
         `WITH mine AS (
            SELECT m.*,
@@ -43,12 +76,19 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
          JOIN users u ON u.id = lm.partner_id
          LEFT JOIN producers pr ON pr.user_id = u.id
          LEFT JOIN unread un ON un.partner_id = lm.partner_id
-         ORDER BY lm.sent_at DESC`,
-        [user.sub],
+         ORDER BY lm.sent_at DESC
+         LIMIT $2 OFFSET $3`,
+        [user.sub, limit, query.offset ?? 0],
       )
       return result.rows
     },
-    { detail: { summary: 'Liste des conversations', tags: ['Messages'] } },
+    {
+      query: t.Object({
+        limit:  t.Optional(t.Integer({ minimum: 1 })),
+        offset: t.Optional(t.Integer({ minimum: 0 })),
+      }),
+      detail: { summary: 'Liste des conversations', tags: ['Messages'] },
+    },
   )
 
   /** GET /api/messages/unread-count — badge global de notification (MSG-4). */
@@ -93,6 +133,11 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
          WHERE sender_id = $1 AND receiver_id = $2 AND is_read = false`,
         [params.partnerId, user.sub],
       )
+      await db.query(
+        `UPDATE notifications SET is_read = true
+         WHERE user_id = $1 AND type = 'NEW_MESSAGE' AND target_id = $2 AND NOT is_read`,
+        [user.sub, params.partnerId],
+      )
 
       return result.rows
     },
@@ -114,11 +159,14 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
       if (!content) throw badRequest('Le message est vide')
       if (body.receiver_id === user.sub) throw badRequest('Impossible de s\'écrire à soi-même')
 
-      const receiver = await db.query(
-        'SELECT id FROM users WHERE id = $1 AND is_active',
+      const receiver = await db.query<{ role: UserRole }>(
+        'SELECT role FROM users WHERE id = $1 AND is_active',
         [body.receiver_id],
       )
       if (!receiver.rows[0]) throw notFound('Destinataire')
+      if (!canConverse(user.role, receiver.rows[0].role)) {
+        throw new AppError(403, 'La messagerie relie un client et un producteur')
+      }
 
       const result = await db.query<Message>(
         `INSERT INTO messages (sender_id, receiver_id, content)
@@ -126,6 +174,7 @@ export const messagesRoutes = new Elysia({ prefix: '/messages' })
          RETURNING id, sender_id, receiver_id, content, is_read, sent_at`,
         [user.sub, body.receiver_id, content],
       )
+      await notifyNewMessage(user.sub, body.receiver_id, content)
       set.status = 201
       return result.rows[0]
     },

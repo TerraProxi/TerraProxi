@@ -1,0 +1,157 @@
+openapi: 3.1.0
+info:
+  title: TerraProxi API - Notifications
+  version: 1.2.0
+  description: |
+    Notifications in-app (EPIC 7) : commande payée pour le producteur (NOTIF-1), commande en
+    préparation, prête ou annulée pour le client (NOTIF-2), nouveau message (NOTIF-3), paiement,
+    newsletter, vérification de l'exploitation. Chaque notification part aussi en push sur le
+    mobile quand l'appareil a enregistré son jeton (PUT /users/me/push-token, NOTIF-4).
+    Implémentation : apps/api/src/routes/notifications.routes.ts,
+    apps/api/src/services/notifications.service.ts — scénarios : specs/features/notifications.feature.
+  contact:
+    name: TerraProxi Team
+    email: dev@terraproxi.fr
+  license:
+    name: Proprietary
+    url: https://app.terraproxi.fr/legal
+servers:
+  - url: https://gateway.terraproxi.fr/api
+    description: Production
+  - url: http://localhost:3002/api
+    description: Développement
+tags:
+  - name: Notifications
+    description: Notifications in-app
+
+paths:
+  /notifications:
+    get:
+      summary: Mes notifications
+      description: Les plus récentes d'abord.
+      operationId: listNotifications
+      tags: [Notifications]
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '../schemas/notification.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/unread-count:
+    get:
+      summary: Nombre de notifications non lues
+      description: Badge de la cloche.
+      operationId: countUnreadNotifications
+      tags: [Notifications]
+      responses:
+        '200':
+          description: Compteur
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unread_count]
+                properties:
+                  unread_count:
+                    type: integer
+                    minimum: 0
+                additionalProperties: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/read-all:
+    post:
+      summary: Tout marquer comme lu
+      description: Remet le badge à zéro.
+      operationId: markAllNotificationsRead
+      tags: [Notifications]
+      responses:
+        '204':
+          description: Notifications marquées comme lues
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/{id}/read:
+    patch:
+      summary: Marquer une notification comme lue
+      description: Seulement une notification du compte connecté (404 sinon).
+      operationId: markNotificationRead
+      tags: [Notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification lue
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/notification.schema.json'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: 30 par défaut, 100 au maximum
+      schema:
+        type: integer
+        minimum: 1
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+  responses:
+    BadRequest:
+      description: Paramètre invalide
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré, ou compte désactivé
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
+    NotFound:
+      description: Notification introuvable ou appartenant à un autre compte
+      content:
+        application/json:
+          schema:
+            $ref: '../contracts/error-envelope.schema.json'
