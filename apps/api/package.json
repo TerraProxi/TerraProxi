@@ -11,7 +11,8 @@
     "test": "bun test",
     "test:unit": "bun test tests/unit",
     "db:migrate": "bun run src/db/migrate.ts",
-    "db:seed": "bun run src/db/seed.ts"
+    "db:seed": "bun run src/db/seed.ts",
+    "db:promote-admin": "bun run src/db/promote-admin.ts"
   },
   "dependencies": {
     "@elysiajs/bearer": "^1.1.2",
