@@ -1,219 +1,207 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  View, Text, FlatList, TouchableOpacity, TextInput, Image,
-  StyleSheet, ScrollView, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useNavigation } from '@react-navigation/native'
+import type { StackNavigationProp } from '@react-navigation/stack'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as Location from 'expo-location'
-import { Colors, Spacing, Radius } from '../theme'
-import { api } from '../services/api'
+import type { RootStackParamList } from '../navigation/RootNavigator'
+import { Colors, Fonts, MIN_TOUCH_TARGET, Spacing, Radius } from '../theme'
+import { api, apiErrorMessage } from '../services/api'
+import type { Producer } from '../types/catalog'
+import type { IconName } from '../components/IconButton'
+import { ProductImage } from '../components/ProductImage'
+import { MessageState } from '../components/ScreenState'
+import { RecommendationsCarousel } from '../components/RecommendationsCarousel'
 
+type Nav = StackNavigationProp<RootStackParamList>
 type Filter = 'closest' | 'verified' | 'name'
+type Coordinates = { lat: number; lon: number }
 
-interface Producer {
-  id: string
-  user_id: string
-  company_name: string
-  description: string | null
-  address: string
-  city: string
-  postal_code: string
-  latitude: number
-  longitude: number
-  website_url: string | null
-  banner_url: string | null
-  is_verified: boolean
-  first_name: string
-  last_name: string
-  distance_km: number | null
-  categories?: string[]
-  opening_hours?: string | null
-}
-
-const FILTERS: { key: Filter; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
+const FILTERS: { key: Filter; label: string; icon: IconName }[] = [
   { key: 'closest', label: 'Plus proche', icon: 'map-marker' },
   { key: 'verified', label: 'Vérifiés', icon: 'check-decagram' },
   { key: 'name', label: 'A → Z', icon: 'sort-alphabetical-ascending' },
 ]
 
-export function ShopListScreen({ navigation }: any) {
+const SEARCH_RADIUS_KM = 100
+const PAGE_SIZE = 20
+
+const isInCoveredArea = ({ lat, lon }: Coordinates) => lat > 40 && lat < 52 && lon > -6 && lon < 10
+
+async function locateUser(): Promise<Coordinates | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync()
+    if (status !== 'granted') return null
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+    const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude }
+    return isInCoveredArea(coords) ? coords : null
+  } catch {
+    // Position indisponible : la liste est alors triée par date d'inscription
+    return null
+  }
+}
+
+export function ShopListScreen() {
+  const nav = useNavigation<Nav>()
   const insets = useSafeAreaInsets()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<Filter>('closest')
   const [producers, setProducers] = useState<Producer[]>([])
-  const [loading, setLoading] = useState(true)
-  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null)
+  const [isLoading, setLoading] = useState(true)
+  const [isRefreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(null)
 
-  const fetchProducers = async (searchQuery?: string) => {
+  const fetchProducers = useCallback(async (location: Coordinates | null, searchQuery: string) => {
     try {
-      setLoading(true)
-      const params: Record<string, any> = { limit: 20 }
-      if (userLocation) {
-        params.lat = userLocation.lat
-        params.lon = userLocation.lon
-        params.radius = 100
-      }
-      if (searchQuery?.trim()) {
-        params.search = searchQuery.trim()
-      }
-      const res = await api.get<Producer[]>('/producers', { params })
-      setProducers(res.data)
-    } catch (err: any) {
-      console.error('[ShopList] fetch error:', err?.message, err?.code, err?.response?.status)
-      setProducers([])
-    } finally {
-      setLoading(false)
+      const { data } = await api.get<Producer[]>('/producers', {
+        params: {
+          limit: PAGE_SIZE,
+          ...(location ? { lat: location.lat, lon: location.lon, radius: SEARCH_RADIUS_KM } : {}),
+          ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+        },
+      })
+      setProducers(data)
+      setError(null)
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Impossible de charger les producteurs'))
     }
-  }
-
-  useEffect(() => {
-    ;(async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync()
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-          const { latitude, longitude } = pos.coords
-          if (latitude > 40 && latitude < 52 && longitude > -6 && longitude < 10) {
-            setUserLocation({ lat: latitude, lon: longitude })
-          }
-        }
-      } catch {}
-      fetchProducers()
-    })()
   }, [])
 
-  const handleSearchSubmit = () => {
-    fetchProducers(search)
+  useEffect(() => {
+    void (async () => {
+      const location = await locateUser()
+      setUserLocation(location)
+      await fetchProducers(location, '')
+      setLoading(false)
+    })()
+  }, [fetchProducers])
+
+  const refresh = async () => {
+    setRefreshing(true)
+    await fetchProducers(userLocation, search)
+    setRefreshing(false)
   }
 
-  const handleFilterChange = (filter: Filter) => {
-    setActiveFilter(filter)
-    if (filter === 'closest' && userLocation) {
-      fetchProducers(search)
-    }
+  const retry = async () => {
+    setLoading(true)
+    await fetchProducers(userLocation, search)
+    setLoading(false)
   }
 
   const filtered = useMemo(() => {
-    let result = [...producers]
     switch (activeFilter) {
       case 'closest':
-        result.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
-        break
+        return [...producers].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
       case 'verified':
-        result = result.filter((p) => p.is_verified)
-        break
+        return producers.filter((p) => p.is_verified)
       case 'name':
-        result.sort((a, b) => a.company_name.localeCompare(b.company_name, 'fr'))
-        break
+        return [...producers].sort((a, b) => a.company_name.localeCompare(b.company_name, 'fr'))
     }
-    return result
   }, [producers, activeFilter])
 
-  return (
-    <View style={styles.container}>
+  const header = (
+    <>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.lg }]}>
-        <Text style={styles.headerTitle}>Producteurs Locaux</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Producteurs locaux</Text>
         <Text style={styles.headerSubtitle}>En direct du terroir héraultais</Text>
       </View>
-
+      <RecommendationsCarousel onOpenProduct={(productId) => nav.navigate('ProductDetail', { productId })} />
       <View style={styles.searchWrapper}>
-        <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray400} />
+        <MaterialCommunityIcons name="magnify" size={20} color={Colors.gray600} />
         <TextInput
           style={styles.searchInput}
           placeholder="Rechercher un producteur…"
-          placeholderTextColor={Colors.gray400}
+          placeholderTextColor={Colors.gray600}
           value={search}
           onChangeText={setSearch}
-          onSubmitEditing={handleSearchSubmit}
+          onSubmitEditing={() => void retry()}
           returnKeyType="search"
+          accessibilityLabel="Rechercher un producteur"
         />
       </View>
-
-      <View style={styles.filterRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
-          {FILTERS.map((f) => {
-            const active = activeFilter === f.key
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => handleFilterChange(f.key)}
-                style={[styles.filterPill, active && styles.filterPillActive]}
-              >
-                <MaterialCommunityIcons
-                  name={f.icon}
-                  size={14}
-                  color={active ? Colors.white : Colors.primary}
-                />
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-      </View>
-
-      {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.emptyState}>
-          <MaterialCommunityIcons name="store-off" size={48} color={Colors.gray300} />
-          <Text style={styles.emptyTitle}>Aucun producteur trouvé</Text>
-          <Text style={styles.emptySubtitle}>
-            {producers.length === 0 ? 'Vérifiez que l\'API est lancée sur localhost:3002' : 'Essayez un autre filtre'}
-          </Text>
-          <TouchableOpacity onPress={() => fetchProducers(search)} style={styles.retryBtn}>
-            <Text style={styles.retryBtnText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          renderItem={({ item }) => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+        {FILTERS.map((f) => {
+          const isActive = activeFilter === f.key
+          return (
             <TouchableOpacity
-              style={styles.card}
-              onPress={() => navigation.navigate('ProducerProfile', { producerId: item.id })}
-              activeOpacity={0.7}
+              key={f.key}
+              onPress={() => setActiveFilter(f.key)}
+              style={[styles.filterPill, isActive && styles.filterPillActive]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
             >
-              <View style={styles.imageWrapper}>
-                <Image source={{ uri: item.banner_url || undefined }} style={styles.image} />
-                {item.is_verified && (
-                  <View style={[styles.badge, styles.badgeOpen]}>
-                    <Text style={styles.badgeText}>VÉRIFIÉ</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.cardContent}>
-                <Text style={styles.producerName} numberOfLines={1}>{item.company_name}</Text>
-                {item.description ? (
-                  <Text style={styles.producerTagline} numberOfLines={2}>{item.description}</Text>
-                ) : null}
-                <View style={styles.cardBottom}>
-                  <View style={styles.distanceBadge}>
-                    <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primary} />
-                    <Text style={styles.distanceText}>
-                      {item.distance_km != null ? `${item.distance_km.toFixed(1)} km` : '—'}
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={22}
-                    color={Colors.gray400}
-                  />
-                </View>
-              </View>
+              <MaterialCommunityIcons name={f.icon} size={14} color={isActive ? Colors.white : Colors.primaryDark} />
+              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{f.label}</Text>
             </TouchableOpacity>
-          )}
+          )
+        })}
+      </ScrollView>
+    </>
+  )
+
+  return (
+    <FlatList
+      style={styles.container}
+      data={isLoading ? [] : filtered}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={header}
+      contentContainerStyle={styles.list}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} colors={[Colors.primaryDark]} />}
+      ListEmptyComponent={isLoading ? (
+        <ActivityIndicator size="large" color={Colors.primaryDark} style={styles.loader} accessibilityLabel="Chargement" />
+      ) : (
+        <MessageState
+          icon="store-off"
+          title={error ? 'Producteurs indisponibles' : 'Aucun producteur trouvé'}
+          message={error ?? 'Essayez une autre recherche ou un autre filtre.'}
+          actionLabel="Réessayer"
+          onAction={() => void retry()}
         />
       )}
-    </View>
+      renderItem={({ item }) => (
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => nav.navigate('ProducerProfile', { producerId: item.id })}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={[
+            item.company_name,
+            item.is_verified ? 'producteur vérifié' : null,
+            item.distance_km != null ? `à ${item.distance_km.toFixed(1)} kilomètres` : null,
+          ].filter(Boolean).join(', ')}
+        >
+          <View style={styles.imageWrapper}>
+            <ProductImage uri={item.banner_url} style={styles.image} />
+            {item.is_verified && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>VÉRIFIÉ</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.producerName} numberOfLines={1}>{item.company_name}</Text>
+            {item.description ? (
+              <Text style={styles.producerTagline} numberOfLines={2}>{item.description}</Text>
+            ) : null}
+            <View style={styles.cardBottom}>
+              <View style={styles.distanceBadge}>
+                <MaterialCommunityIcons name="map-marker" size={14} color={Colors.primaryDark} />
+                <Text style={styles.distanceText}>
+                  {item.distance_km != null ? `${item.distance_km.toFixed(1)} km` : item.city ?? '—'}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={Colors.gray600} />
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
+    />
   )
 }
 
@@ -231,13 +219,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: Fonts.titleHeavy,
     color: Colors.gray900,
     marginBottom: Spacing.xs,
   },
   headerSubtitle: {
     fontSize: 15,
-    color: Colors.gray600,
+    fontFamily: Fonts.regular,
+    color: Colors.gray700,
   },
   searchWrapper: {
     flexDirection: 'row',
@@ -246,76 +235,66 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.lg,
     marginHorizontal: Spacing.xl,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
     elevation: 3,
-    height: 48,
+    minHeight: 48,
   },
   searchInput: {
     flex: 1,
     marginLeft: Spacing.sm,
     fontSize: 15,
+    fontFamily: Fonts.regular,
     color: Colors.gray900,
-  },
-  filterRow: {
-    height: 52,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
   filterContent: {
     paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.md,
     gap: Spacing.sm,
-    justifyContent: 'center',
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    minHeight: MIN_TOUCH_TARGET,
     borderRadius: Radius.full,
     backgroundColor: Colors.white,
     borderWidth: 1.5,
     borderColor: Colors.gray200,
-    flexShrink: 0,
   },
   filterPillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryDark,
+    borderColor: Colors.primaryDark,
   },
   filterText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
     marginLeft: Spacing.xs,
   },
   filterTextActive: {
     color: Colors.white,
   },
   list: {
-    paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xxxl,
+    flexGrow: 1,
   },
   separator: {
     height: Spacing.md,
+  },
+  loader: {
+    marginTop: Spacing.xxxl,
   },
   card: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    marginHorizontal: Spacing.xl,
     elevation: 2,
   },
   imageWrapper: {
-    position: 'relative',
     width: 96,
     height: 96,
     borderRadius: Radius.lg,
@@ -324,7 +303,6 @@ const styles = StyleSheet.create({
   image: {
     width: 96,
     height: 96,
-    borderRadius: Radius.lg,
   },
   badge: {
     position: 'absolute',
@@ -333,16 +311,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.sm,
-  },
-  badgeOpen: {
-    backgroundColor: Colors.primary,
-  },
-  badgeClosed: {
-    backgroundColor: Colors.danger,
+    backgroundColor: Colors.primaryDark,
   },
   badgeText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    fontFamily: Fonts.heavy,
     color: Colors.white,
     letterSpacing: 0.5,
   },
@@ -353,13 +326,14 @@ const styles = StyleSheet.create({
   },
   producerName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: Colors.gray900,
     marginBottom: Spacing.xs,
   },
   producerTagline: {
     fontSize: 13,
-    color: Colors.gray600,
+    fontFamily: Fonts.regular,
+    color: Colors.gray700,
     lineHeight: 18,
     marginBottom: Spacing.sm,
   },
@@ -378,43 +352,8 @@ const styles = StyleSheet.create({
   },
   distanceText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: Fonts.semibold,
+    color: Colors.primaryDark,
     marginLeft: 3,
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.xxl,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.gray700,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: Colors.gray500,
-    textAlign: 'center',
-    marginBottom: Spacing.xl,
-  },
-  retryBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-  },
-  retryBtnText: {
-    color: Colors.white,
-    fontWeight: '700',
-    fontSize: 15,
   },
 })
