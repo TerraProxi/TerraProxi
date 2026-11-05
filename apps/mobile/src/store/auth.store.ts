@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store'
 import api, {
   ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, clearTokens, setSessionExpiredHandler, storeTokens,
 } from '../services/api'
+import { unregisterPushToken } from '../services/pushNotifications'
 
 export type UserRole = 'CONSUMER' | 'PRODUCER' | 'ADMIN'
 
@@ -16,6 +17,8 @@ export interface User {
   role: UserRole
   phone?: string | null
   avatar_url?: string | null
+  /** Consentement aux newsletters des producteurs (opt-in, faux par défaut). */
+  newsletter_opt_in: boolean
   created_at: string
 }
 
@@ -26,6 +29,7 @@ export interface RegisterData {
   first_name: string
   last_name: string
   gdpr_consent: boolean
+  newsletter_opt_in: boolean
 }
 
 interface SessionResponse {
@@ -82,6 +86,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   logout: async () => {
+    // Retrait du jeton push avant de révoquer la session (sinon la requête n'est plus autorisée).
+    // Au mieux : la déconnexion locale doit aboutir même hors ligne.
+    await unregisterPushToken().catch(() => undefined)
     const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY)
     if (refreshToken) {
       // Révocation côté serveur au mieux : la déconnexion locale doit aboutir même hors ligne.

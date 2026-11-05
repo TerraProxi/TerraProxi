@@ -17,7 +17,10 @@ import { ProductDetailScreen } from '../screens/ProductDetailScreen'
 import { EditProfileScreen } from '../screens/EditProfileScreen'
 import { ChangeEmailScreen } from '../screens/ChangeEmailScreen'
 import { ChangePasswordScreen } from '../screens/ChangePasswordScreen'
+import { NotificationsScreen } from '../screens/NotificationsScreen'
 import { useUiStore } from '../store/ui.store'
+import { usePushNotifications } from '../hooks/usePushNotifications'
+import { navigationRef, flushPendingNotificationTarget } from './navigationRef'
 import { Colors, Fonts } from '../theme'
 
 export type RootStackParamList = {
@@ -34,16 +37,19 @@ export type RootStackParamList = {
   Checkout: { orderId: string; pendingOrderIds?: string[] }
   Messages: undefined
   Favorites: undefined
-  Conversation: { partnerId: string; partnerName: string }
+  /** partnerName absent quand on vient d'une notification : l'écran le retrouve. */
+  Conversation: { partnerId: string; partnerName?: string }
   EditProfile: undefined
   ChangeEmail: undefined
   ChangePassword: undefined
+  Notifications: undefined
 }
 
 const Stack = createStackNavigator<RootStackParamList>()
 
 export function RootNavigator() {
   const darkMode = useUiStore((s) => s.darkMode)
+  usePushNotifications()
 
   const navigationTheme = darkMode
     ? {
@@ -71,7 +77,12 @@ export function RootNavigator() {
     }
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      onReady={flushPendingNotificationTarget}
+      onStateChange={flushPendingNotificationTarget}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -98,6 +109,7 @@ export function RootNavigator() {
         <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Mon profil' }} />
         <Stack.Screen name="ChangeEmail" component={ChangeEmailScreen} options={{ headerShown: true, title: 'Adresse email' }} />
         <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: true, title: 'Mot de passe' }} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: true, title: 'Notifications' }} />
       </Stack.Navigator>
     </NavigationContainer>
   )

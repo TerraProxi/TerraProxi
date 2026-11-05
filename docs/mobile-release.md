@@ -74,7 +74,25 @@ d'une application doit être fait à la main dans la Play Console.
 - Apple Pay n'est pas activé : le `merchantIdentifier` déclaré pour Stripe ne sert que si on l'active.
 - Sur iOS, la carte utilise Apple Plans : aucune clé Google n'est nécessaire.
 
-## 6. Vérifications avant publication
+## 6. Notifications push (NOTIF-4)
+
+- Après la connexion, l'application demande l'autorisation, récupère le jeton Expo Push
+  (`getExpoPushTokenAsync({ projectId })`) et l'envoie à `PUT /users/me/push-token`. À la
+  déconnexion, elle envoie `{ "token": null }` avant de révoquer la session. Une autorisation
+  refusée retire aussi le jeton.
+- Le jeton exige l'**identifiant du projet EAS** : sans `EAS_PROJECT_ID` (donc sans
+  `extra.eas.projectId`), l'enregistrement est simplement ignoré ; les notifications in-app
+  (cloche, `GET /notifications`) fonctionnent quand même.
+- Les push ne fonctionnent que dans un **build EAS** (`development`, `preview` ou `production`) sur
+  un vrai téléphone : ni Expo Go, ni les émulateurs sans services Google, ni le simulateur iOS.
+- Android : envoi via FCM. Déclarer les identifiants FCM du projet Firebase dans EAS
+  (`eas credentials` → Android → Push Notifications : clé de compte de service FCM v1). Le canal
+  Android `default` (« Notifications TerraProxi ») est créé par l'application.
+- iOS : `eas build` propose de créer la clé APNs ; l'accepter.
+- Appuyer sur une notification ouvre sa cible (`data.target_type` / `data.target_id`) : commandes,
+  conversation ou fiche producteur, y compris quand l'application était fermée.
+
+## 7. Vérifications avant publication
 
 ```bash
 pnpm --filter @terraproxi/mobile typecheck
