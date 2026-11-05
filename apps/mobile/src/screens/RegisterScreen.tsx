@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { useAuthStore, type RegisterData } from '../store/auth.store'
-import { apiErrorMessage } from '../services/api'
+import { apiErrorMessage, authErrorTitle } from '../services/api'
 import { WEB_URL } from '../config'
 import { FormField } from '../components/FormField'
 import { PrimaryButton } from '../components/PrimaryButton'
@@ -17,7 +17,9 @@ type Nav = StackNavigationProp<RootStackParamList>
 
 const MIN_PASSWORD_LENGTH = 8
 
-const EMPTY_FORM: RegisterData = { first_name: '', last_name: '', email: '', password: '', gdpr_consent: false }
+const EMPTY_FORM: RegisterData = {
+  first_name: '', last_name: '', email: '', password: '', gdpr_consent: false, newsletter_opt_in: false,
+}
 
 export function RegisterScreen() {
   const nav = useNavigation<Nav>()
@@ -42,7 +44,7 @@ export function RegisterScreen() {
       await register({ ...form, email: form.email.trim() })
       nav.reset({ index: 0, routes: [{ name: 'Tabs' }] })
     } catch (err) {
-      Alert.alert('Inscription impossible', apiErrorMessage(err, 'L\'inscription a échoué'))
+      Alert.alert(authErrorTitle(err, 'Inscription impossible'), apiErrorMessage(err, 'L\'inscription a échoué'))
     } finally {
       setLoading(false)
     }
@@ -84,6 +86,19 @@ export function RegisterScreen() {
           </View>
           <Text style={styles.gdprText}>
             J'accepte la politique de confidentialité et le traitement de mes données (RGPD)
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => update('newsletter_opt_in', !form.newsletter_opt_in)}
+          style={styles.gdprRow}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: form.newsletter_opt_in }}
+        >
+          <View style={[styles.checkbox, form.newsletter_opt_in && styles.checkboxChecked]}>
+            {form.newsletter_opt_in && <MaterialCommunityIcons name="check" size={16} color={Colors.white} />}
+          </View>
+          <Text style={styles.gdprText}>
+            Recevoir les newsletters des producteurs chez qui je commande (facultatif, modifiable à tout moment)
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

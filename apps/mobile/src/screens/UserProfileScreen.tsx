@@ -1,27 +1,32 @@
 import { useCallback, useState } from 'react'
-import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, Alert, Linking } from 'react-native'
+import { View, Text, TouchableOpacity, FlatList, Switch, StyleSheet, Alert, Linking, Image, ActivityIndicator } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { StackNavigationProp } from '@react-navigation/stack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { RootStackParamList } from '../navigation/RootNavigator'
 import { Colors, Fonts, MIN_TOUCH_TARGET, Radius, Spacing } from '../theme'
-import { useAuthStore } from '../store/auth.store'
+import { useAuthStore, type User } from '../store/auth.store'
 import { useFavoritesStore } from '../store/favorites.store'
 import { useUiStore } from '../store/ui.store'
 import { useUnreadStore } from '../store/unread.store'
+import { useNotificationsStore } from '../store/notifications.store'
 import api, { apiErrorMessage } from '../services/api'
 import { shareMyDataExport } from '../services/dataExport'
+import { pickAndUploadAvatar } from '../services/avatar'
 import { WEB_URL } from '../config'
 import { IconButton, type IconName } from '../components/IconButton'
 import { PrimaryButton } from '../components/PrimaryButton'
 
 type Nav = StackNavigationProp<RootStackParamList>
 
+type ToggleId = 'darkMode' | 'newsletter'
 type MenuId =
-  | 'orders' | 'messages' | 'favorites' | 'cart'
-  | 'editProfile' | 'email' | 'password' | 'darkMode'
+  | 'orders' | 'notifications' | 'messages' | 'favorites' | 'cart'
+  | 'editProfile' | 'email' | 'password' | ToggleId
   | 'export' | 'privacy' | 'deleteAccount'
+
+const isToggle = (id: MenuId): id is ToggleId => id === 'darkMode' || id === 'newsletter'
 
 interface MenuItem {
   id: MenuId
@@ -34,12 +39,14 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { id: 'orders', label: 'Mes commandes', icon: 'shopping-outline', iconColor: Colors.blue600, iconBg: Colors.blue50, section: 'Mon activité' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell-outline', iconColor: Colors.primaryDark, iconBg: Colors.green50, section: 'Mon activité' },
   { id: 'messages', label: 'Messages', icon: 'chat-outline', iconColor: Colors.primaryDark, iconBg: Colors.green50, section: 'Mon activité' },
   { id: 'favorites', label: 'Mes favoris', icon: 'heart', iconColor: Colors.danger, iconBg: Colors.red50, section: 'Mon activité' },
   { id: 'cart', label: 'Mon panier', icon: 'cart', iconColor: Colors.primaryDark, iconBg: Colors.green50, section: 'Mon activité' },
   { id: 'editProfile', label: 'Modifier mon profil', icon: 'account-edit', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
   { id: 'email', label: 'Adresse email', icon: 'email-outline', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
   { id: 'password', label: 'Mot de passe', icon: 'lock-outline', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
+  { id: 'newsletter', label: 'Recevoir les newsletters des producteurs', icon: 'email-newsletter', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
   { id: 'darkMode', label: 'Mode sombre', icon: 'weather-night', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Mon compte' },
   { id: 'export', label: 'Exporter mes données', icon: 'download', iconColor: Colors.accentDark, iconBg: '#E0F7FA', section: 'Confidentialité' },
   { id: 'privacy', label: 'Politique de confidentialité', icon: 'file-document', iconColor: Colors.gray700, iconBg: Colors.gray100, section: 'Confidentialité' },
@@ -68,6 +75,11 @@ export function UserProfileScreen() {
   const favoriteCount = useFavoritesStore((s) => s.producerIds.length + s.productIds.length)
   const unreadCount = useUnreadStore((s) => s.count)
   const refreshUnread = useUnreadStore((s) => s.refresh)
+  const unreadNotifications = useNotificationsStore((s) => s.unreadCount)
+  const refreshNotifications = useNotificationsStore((s) => s.refresh)
+  const setUser = useAuthStore((s) => s.setUser)
+  const [isSavingNewsletter, setSavingNewsletter] = useState(false)
+  const [isUploadingAvatar, setUploadingAvatar] = useState(false)
   const [orderCount, setOrderCount] = useState<number | null>(null)
   const [isExporting, setExporting] = useState(false)
 
@@ -75,10 +87,11 @@ export function UserProfileScreen() {
   useFocusEffect(useCallback(() => {
     if (!isAuthenticated) return
     void refreshUnread()
+    void refreshNotifications()
     api.get<unknown[]>('/orders', { params: { limit: ORDER_COUNT_LIMIT } })
       .then(({ data }) => setOrderCount(data.length))
       .catch(() => setOrderCount(null))
-  }, [isAuthenticated, refreshUnread]))
+  }, [isAuthenticated, refreshUnread, refreshNotifications]))
 
   if (!isAuthenticated) {
     return (
@@ -120,8 +133,42 @@ export function UserProfileScreen() {
     }
   }
 
-  const MENU_ACTIONS: Record<Exclude<MenuId, 'darkMode'>, () => void> = {
+  const setNewsletterOptIn = async (isOptedIn: boolean) => {
+    setSavingNewsletter(true)
+    try {
+      const { data } = await api.patch<User>('/users/profile', { newsletter_opt_in: isOptedIn })
+      setUser(data)
+    } catch (err) {
+      Alert.alert('Préférence non enregistrée', apiErrorMessage(err))
+    } finally {
+      setSavingNewsletter(false)
+    }
+  }
+
+  const changeAvatar = async () => {
+    setUploadingAvatar(true)
+    try {
+      const updated = await pickAndUploadAvatar()
+      if (updated) setUser(updated)
+    } catch (err) {
+      Alert.alert('Photo non enregistrée', apiErrorMessage(err, 'La photo n\'a pas pu être envoyée'))
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  const TOGGLES: Record<ToggleId, { value: boolean; onChange: (value: boolean) => void; disabled: boolean }> = {
+    darkMode: { value: isDark, onChange: setDarkMode, disabled: false },
+    newsletter: {
+      value: user?.newsletter_opt_in ?? false,
+      onChange: (value) => void setNewsletterOptIn(value),
+      disabled: isSavingNewsletter,
+    },
+  }
+
+  const MENU_ACTIONS: Record<Exclude<MenuId, ToggleId>, () => void> = {
     orders: () => nav.navigate('Orders'),
+    notifications: () => nav.navigate('Notifications'),
     messages: () => nav.navigate('Messages'),
     favorites: () => nav.navigate('Favorites'),
     cart: () => nav.navigate('Cart'),
@@ -136,8 +183,9 @@ export function UserProfileScreen() {
   }
 
   const renderItem = (item: MenuItem) => {
-    const badge = item.id === 'messages' && unreadCount > 0 ? unreadCount : null
-    const isToggle = item.id === 'darkMode'
+    const counts: Partial<Record<MenuId, number>> = { messages: unreadCount, notifications: unreadNotifications }
+    const count = counts[item.id] ?? 0
+    const badge = count > 0 ? count : null
     const content = (
       <>
         <View style={[styles.menuIcon, { backgroundColor: item.iconBg }]}>
@@ -154,13 +202,15 @@ export function UserProfileScreen() {
       </>
     )
 
-    if (isToggle) {
+    if (isToggle(item.id)) {
+      const toggle = TOGGLES[item.id]
       return (
         <View style={[styles.menuRow, isDark && styles.menuRowDark]}>
           {content}
           <Switch
-            value={isDark}
-            onValueChange={setDarkMode}
+            value={toggle.value}
+            onValueChange={toggle.onChange}
+            disabled={toggle.disabled}
             trackColor={{ false: Colors.gray300, true: Colors.primaryDark }}
             thumbColor={Colors.white}
             accessibilityLabel={item.label}
@@ -172,7 +222,7 @@ export function UserProfileScreen() {
       <TouchableOpacity
         style={[styles.menuRow, isDark && styles.menuRowDark]}
         activeOpacity={0.6}
-        onPress={MENU_ACTIONS[item.id as Exclude<MenuId, 'darkMode'>]}
+        onPress={MENU_ACTIONS[item.id]}
         accessibilityRole="button"
         accessibilityLabel={badge !== null ? `${item.label}, ${badge} non lu${badge > 1 ? 's' : ''}` : item.label}
       >
@@ -197,9 +247,20 @@ export function UserProfileScreen() {
       ListHeaderComponent={
         <View style={[styles.profileHeader, { paddingTop: insets.top + Spacing.lg }, isDark && styles.profileHeaderDark]}>
           <View style={styles.avatarWrap}>
-            <View style={[styles.avatar, isDark && styles.avatarDark]}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            <TouchableOpacity
+              style={[styles.avatar, isDark && styles.avatarDark]}
+              onPress={() => void changeAvatar()}
+              disabled={isUploadingAvatar}
+              accessibilityRole="button"
+              accessibilityLabel="Changer la photo de profil"
+              accessibilityState={{ busy: isUploadingAvatar }}
+            >
+              {isUploadingAvatar && <ActivityIndicator color={Colors.primaryDark} />}
+              {!isUploadingAvatar && user?.avatar_url && (
+                <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} accessibilityIgnoresInvertColors />
+              )}
+              {!isUploadingAvatar && !user?.avatar_url && <Text style={styles.avatarText}>{initials}</Text>}
+            </TouchableOpacity>
             <IconButton
               icon="pencil"
               label="Modifier mon profil"
@@ -252,6 +313,7 @@ const styles = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primaryLight,
     justifyContent: 'center', alignItems: 'center',
   },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
   avatarText: { fontSize: 28, fontFamily: Fonts.title, color: Colors.primaryDark },
   avatarEdit: {
     position: 'absolute', bottom: -8, right: -14,

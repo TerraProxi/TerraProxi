@@ -53,6 +53,14 @@ const config: ExpoConfig = {
   plugins: [
     'expo-location',
     'expo-secure-store',
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'TerraProxi accède à vos photos pour choisir votre photo de profil.',
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
     ['expo-notifications', { icon: './assets/notification-icon.png', color: BRAND_GREEN }],
     ['@stripe/stripe-react-native', { merchantIdentifier: 'merchant.fr.terraproxi' }],
   ],
